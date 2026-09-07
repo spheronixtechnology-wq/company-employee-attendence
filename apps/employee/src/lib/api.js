@@ -1,0 +1,47 @@
+import axios from 'axios';
+import { getDeviceFingerprint, getCachedDeviceFingerprint } from './fingerprint';
+
+// Eagerly initiate fingerprint calculation in background
+getDeviceFingerprint().catch(() => {});
+
+const api = axios.create({
+  baseURL: '/api',
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json', 'x-portal-role': 'employee' },
+  timeout: 30000,
+});
+
+api.interceptors.request.use(async (config) => {
+  const token = localStorage.getItem('deviceToken');
+  if (token) {
+    config.headers['x-device-token'] = token;
+  }
+
+  // Attach device fingerprint header (use cached if available, or await computation)
+  let fp = getCachedDeviceFingerprint();
+  if (!fp) {
+    try {
+      fp = await getDeviceFingerprint();
+    } catch {}
+  }
+  if (fp) {
+    config.headers['x-device-fingerprint'] = fp;
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear any local state and redirect to login if not already there
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;

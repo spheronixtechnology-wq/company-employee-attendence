@@ -1,0 +1,899 @@
+const Attendance = require('../models/Attendance');
+const DailyLog = require('../models/DailyLog');
+const LeaveRequest = require('../models/LeaveRequest');
+const Notification = require('../models/Notification');
+const LeaveBalance = require('../models/LeaveBalance');
+const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
+const RegisteredDevice = require('../models/RegisteredDevice');
+const GeofenceSetting = require('../models/GeofenceSetting');
+const DeviceRequest = require('../models/DeviceRequest');
+const User = require('../models/User');
+const OfficeLocation = require('../models/OfficeLocation');
+
+const { success, badRequest } = require('../utils/response');
+const { getTodayDateString, getCurrentYear, calcNetWorkMinutes, calcAttendanceStatus, finalizeAttendanceCheckout } = require('../utils/dateUtils');
+const { isWithinGeofence } = require('../utils/haversine');
+const dailyLogService = require('../services/dailyLog.service');
+const leaveService = require('../services/leave.service');
+const { createNotification } = require('../services/notification.service');
+const { UAParser } = require('ua-parser-js');
+const { getClientIp } = require('../utils/ipUtils');
+const { emitToTeam, emitToManagers, emitToUser } = require('../socket');
+const crypto = require('crypto');
+
+// In-memory active checkout sessions: Map<userIdStr, { token: string, expiresAt: number }>
+const activeCheckoutSessions = new Map();
+
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Builds a human-readable device label from the User-Agent string.
+ * e.g. "Samsung SM-G991B · Chrome 124 · Android 14"
+ */
+const buildDeviceLabel = (uaString) => {
+
+  
+  try {
+    const parser = new UAParser(uaString);
+    const result = parser.getResult();
+    const deviceModel = result.device.model || result.device.vendor || null;
+    const browserName = result.browser.name || null;
+    const osName = result.os.name || null;
+    const osVersion = result.os.version || null;
+    const parts = [
+      deviceModel,
+      browserName,
+      osName && osVersion ? `${osName} ${osVersion}` : osName
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'Unknown Device';
+  } catch {
+    return 'Unknown Device';
+  }
+};
+
+/**
+ * Notifies ALL active managers (plus admins as fallback if there are no
+ * managers) that a request needs attention. Any manager can then act on it.
+ * Silent on failure — approval flow must not break because of a notification.
+ */
+const notifyRequestSubmitted = async ({ type, title, message, relatedId }) => {
+  try {
+    const recipients = await User.find(
+      { role: { $in: ['manager', 'admin'] }, isActive: true },
+      '_id role'
+    ).lean();
+
+    let recipientIds = recipients.filter((r) => r.role === 'manager').map((r) => r._id);
+
+    // No active managers at all — fall back to admins
+    if (recipientIds.length === 0) {
+      recipientIds = recipients.filter((r) => r.role === 'admin').map((r) => r._id);
+    }
+
+    for (const recipientId of recipientIds) {
+      await createNotification({ userId: recipientId, type, title, message, relatedId });
+    }
+  } catch (err) {
+    console.error('[notifyRequestSubmitted] Failed:', err.message);
+  }
+};
+
+/**
+ * Throttles alert notifications to managers when an unapproved device attempt occurs.
+ * Limits alerts to at most 1 notification per employee per 60 minutes.
+ */
+const throttleUnregisteredDeviceAlert = async ({ employee, deviceLabel, ipAddress }) => {
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentAlert = await Notification.findOne({
+      type: 'device_unregistered_attempt',
+      relatedId: employee._id,
+      createdAt: { $gte: oneHourAgo },
+    });
+
+    if (recentAlert) {
+      console.log(`[Alert Throttled] Skipping unregistered device alert for ${employee.name} (already alerted within 60m)`);
+      return;
+    }
+
+    const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    await notifyRequestSubmitted({
+      type: 'device_unregistered_attempt',
+      title: 'Unregistered Device Attempt',
+      message: `${employee.name} tried to mark attendance from an unregistered device (${deviceLabel}, IP: ${ipAddress}, Time: ${timeStr}).`,
+      relatedId: employee._id,
+    });
+  } catch (err) {
+    console.error('[throttleUnregisteredDeviceAlert] Failed:', err.message);
+  }
+};
+
+/**
+ * Extracts device status for a given userId.
+ * Shared by getDashboard and getDeviceStatus.
+ */
+const computeDeviceStatus = async (userId) => {
+  const registeredDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
+  const pendingRequest = await DeviceRequest.findOne({ userId, status: 'pending' });
+
+  let deviceStatus = { statusType: 'none', statusLabel: 'No Device' };
+
+  if (pendingRequest) {
+    deviceStatus = { statusType: 'pending', statusLabel: 'Approval Pending', device: { status: 'PENDING' } };
+  } else if (registeredDevice) {
+    if (registeredDevice.temporaryUntil && new Date() > new Date(registeredDevice.temporaryUntil)) {
+      deviceStatus = { statusType: 'none', statusLabel: 'Temporary Access Expired', device: registeredDevice };
+    } else {
+      deviceStatus = {
+        statusType: registeredDevice.temporaryUntil ? 'temporary' : 'active',
+        statusLabel: registeredDevice.temporaryUntil ? 'Temporary Access' : 'Active Device',
+        device: registeredDevice
+      };
+    }
+  }
+
+  return { deviceStatus, pendingRequest };
+};
+
+const getStatus = async (req, res) => {
+  res.status(200).json({ success: true, message: 'Employee controller is running' });
+};
+
+const getDashboard = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = getTodayDateString();
+    
+    const attendanceRecord = await Attendance.findOne({ userId, date: today });
+    
+    // Compute work minutes and duration metrics
+    let totalWorkMinutes = 0;
+    let totalDurationMinutes = 0;
+    let totalBreakMinutes = 0;
+
+    if (attendanceRecord && attendanceRecord.checkInTime) {
+      if (attendanceRecord.checkOutTime) {
+        totalBreakMinutes = attendanceRecord.totalBreakMinutes ?? (attendanceRecord.completedBreakMinutes || 0);
+        totalDurationMinutes = attendanceRecord.totalDurationMinutes ?? Math.max(0, Math.floor((new Date(attendanceRecord.checkOutTime) - new Date(attendanceRecord.checkInTime)) / 60000));
+        totalWorkMinutes = attendanceRecord.actualWorkMinutes ?? Math.max(0, totalDurationMinutes - totalBreakMinutes);
+      } else {
+        // Still checked in: live duration and completed breaks
+        totalBreakMinutes = attendanceRecord.completedBreakMinutes || 0;
+        totalDurationMinutes = Math.max(0, Math.floor((new Date() - new Date(attendanceRecord.checkInTime)) / 60000));
+        totalWorkMinutes = Math.max(0, totalDurationMinutes - totalBreakMinutes);
+      }
+    }
+    
+    const formattedAttendance = attendanceRecord ? {
+      ...attendanceRecord.toObject(),
+      totalWorkMinutes,
+      totalDurationMinutes,
+      totalBreakMinutes,
+      actualWorkMinutes: totalWorkMinutes,
+      checkInMethod: 'device_fingerprint', // mock or default method if not in schema
+    } : null;
+
+    const dailyLogCount = await DailyLog.countDocuments({ userId, logDate: today });
+    const dailyLogSubmitted = dailyLogCount > 0;
+
+    const pendingLeaves = await LeaveRequest.countDocuments({ userId, status: 'pending' });
+    const unreadNotifications = await Notification.countDocuments({ userId, isRead: false });
+
+    const leaveBalances = await LeaveBalance.find({ userId, year: getCurrentYear() }).populate('leaveTypeId');
+
+    const activeMethodSetting = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
+    const activeMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
+
+    const { deviceStatus, pendingRequest } = await computeDeviceStatus(userId);
+
+    // Calculate active break and completed break minutes
+    let activeBreak = null;
+    let completedBreakMinutes = 0;
+    if (attendanceRecord) {
+      completedBreakMinutes = attendanceRecord.totalBreakMinutes ?? (attendanceRecord.completedBreakMinutes || 0);
+      if (attendanceRecord.breaks && attendanceRecord.breaks.length > 0 && !attendanceRecord.checkOutTime) {
+        const lastBreak = attendanceRecord.breaks[attendanceRecord.breaks.length - 1];
+        if (!lastBreak.endedAt) {
+          activeBreak = lastBreak;
+        }
+      }
+    }
+
+    return success(res, 'Dashboard data fetched', {
+      attendance: {
+        attendance: formattedAttendance,
+        activeBreak,
+        completedBreakMinutes,
+        breaks: attendanceRecord?.breaks || []
+      },
+      dailyLogSubmitted,
+      activeMethod,
+      deviceStatus,
+      pendingLeaves,
+      unreadNotifications,
+      leaveBalances
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard:', error);
+    return badRequest(res, 'Failed to load dashboard data');
+  }
+};
+
+const checkIn = async (req, res) => {
+  try {
+    const { lat, lng, qrCodeValue } = req.body;
+    const userId = req.user._id;
+    const today = getTodayDateString();
+
+    const existingAttendance = await Attendance.findOne({ userId, date: today });
+    if (existingAttendance && existingAttendance.checkInTime) {
+      return badRequest(res, 'Attendance already marked for today.');
+    }
+
+    // Strict Geofencing Validation
+    if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+      return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
+    }
+    
+    const activeOffices = await OfficeLocation.find({ status: 'active' });
+    let passedGeofence = false;
+    let minDistance = Infinity;
+
+    if (activeOffices.length > 0) {
+      for (const office of activeOffices) {
+        const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+        if (geoCheck.inside) {
+          passedGeofence = true;
+          break;
+        }
+        if (geoCheck.distanceMeters < minDistance) {
+          minDistance = geoCheck.distanceMeters;
+        }
+      }
+      
+      if (!passedGeofence) {
+        return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
+      }
+    } else {
+      // Fallback to legacy GeofenceSetting
+      const geofence = await GeofenceSetting.findOne({ isActive: true });
+      if (geofence) {
+        const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters);
+        if (!geoCheck.inside) {
+          return badRequest(res, 'Outside Office Location — you must be within the authorized office to mark attendance.');
+        }
+      }
+    }
+
+    // Strict Device Verification
+    const registeredDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
+    if (!registeredDevice) {
+      return badRequest(res, 'Use Your Registered Mobile — this device is not authorized for attendance.');
+    }
+    if (registeredDevice.temporaryUntil && new Date() > new Date(registeredDevice.temporaryUntil)) {
+      return badRequest(res, 'Use Your Registered Mobile — temporary access has expired.');
+    }
+
+    const currentFingerprint = req.body.deviceFingerprint || req.headers['x-device-fingerprint'] || null;
+    const clientIp = getClientIp(req);
+    const rawUA = req.headers['user-agent'] || '';
+    const currentDeviceLabel = buildDeviceLabel(rawUA);
+
+    // Rollout: Self-enroll existing active devices that do not yet have a fingerprint stored
+    if (!registeredDevice.deviceFingerprint) {
+      if (currentFingerprint) {
+        registeredDevice.deviceFingerprint = currentFingerprint;
+        registeredDevice.ipAddress = registeredDevice.ipAddress || clientIp;
+        registeredDevice.userAgent = registeredDevice.userAgent || rawUA;
+        registeredDevice.lastSeenIp = clientIp;
+        registeredDevice.lastSeenAt = new Date();
+        await registeredDevice.save();
+        console.log(`[Device Enrollment] Silently enrolled device for ${req.user.name} (${currentDeviceLabel})`);
+      }
+    } else {
+      // Device has an enrolled fingerprint — enforce hard lock
+      if (!currentFingerprint || currentFingerprint !== registeredDevice.deviceFingerprint) {
+        // Trigger throttled manager alert (at most 1 per 60 mins)
+        await throttleUnregisteredDeviceAlert({
+          employee: req.user,
+          deviceLabel: currentDeviceLabel,
+          ipAddress: clientIp,
+        });
+
+        return badRequest(
+          res,
+          'Use Your Registered Mobile — this device is not authorized for attendance. If you cleared your browser data or switched devices, please request a device replacement from the Device Status page.'
+        );
+      }
+
+      // Fingerprint matches! Silently update IP and last seen timestamp
+      if (registeredDevice.lastSeenIp !== clientIp) {
+        registeredDevice.lastSeenIp = clientIp;
+      }
+      registeredDevice.lastSeenAt = new Date();
+      await registeredDevice.save();
+    }
+
+    const activeMethodSetting = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
+    const activeMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
+    
+    // QR code validation 
+    if (activeMethod === 'qr_code') {
+      if (!qrCodeValue) {
+        return badRequest(res, 'Invalid QR Code — please scan today\'s office QR code.');
+      }
+    }
+
+    const newAttendance = new Attendance({
+      userId,
+      date: today,
+      checkInTime: new Date(),
+      status: 'present'
+    });
+
+    await newAttendance.save();
+
+    const populatedAttendance = await Attendance.findById(newAttendance._id)
+      .populate('userId', 'name designation email');
+
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    if (teamId) {
+      emitToTeam(teamId, 'attendance:update', {
+        type: 'check_in',
+        userId: req.user._id,
+        userName: req.user.name,
+        teamId,
+        attendance: populatedAttendance || newAttendance,
+      });
+    }
+    emitToManagers('attendance:update', {
+      type: 'check_in',
+      userId: req.user._id,
+      userName: req.user.name,
+      teamId,
+      attendance: populatedAttendance || newAttendance,
+    });
+
+    return success(res, 'Checked in successfully');
+  } catch (error) {
+    console.error('Check-in error:', error);
+    return badRequest(res, 'Check-in failed');
+  }
+};
+
+const initiateCheckout = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userIdStr = userId.toString();
+    const today = getTodayDateString();
+
+    const attendance = await Attendance.findOne({ userId, date: today });
+    if (!attendance || !attendance.checkInTime) {
+      return badRequest(res, 'No active check-in found for today.');
+    }
+    if (attendance.checkOutTime) {
+      return badRequest(res, 'Already checked out today.');
+    }
+
+    // Daily log check
+    const dailyLog = await DailyLog.findOne({ userId, logDate: today });
+    if (!dailyLog) {
+      return badRequest(res, 'Please submit your daily log before checking out.');
+    }
+
+    // Generate short-lived token (90 seconds)
+    const token = crypto.randomBytes(16).toString('hex');
+    const expiresAt = Date.now() + 90 * 1000;
+    activeCheckoutSessions.set(userIdStr, { token, expiresAt });
+
+    // Emit to user's mobile room via socket
+    emitToUser(userId, 'checkout:initiate_scan', {
+      token,
+      expiresAt: new Date(expiresAt).toISOString(),
+    });
+
+    return success(res, 'Checkout session initiated', {
+      token,
+      expiresAt: new Date(expiresAt).toISOString(),
+    });
+  } catch (error) {
+    console.error('initiateCheckout error:', error);
+    return badRequest(res, 'Failed to initiate checkout.');
+  }
+};
+
+const checkOut = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userIdStr = userId.toString();
+    const today = getTodayDateString();
+    const { lat, lng, token, deviceFingerprint } = req.body;
+
+    const attendance = await Attendance.findOne({ userId, date: today });
+    if (!attendance || !attendance.checkInTime) {
+      return badRequest(res, 'No active check-in found for today.');
+    }
+    if (attendance.checkOutTime) {
+      return badRequest(res, 'Already checked out today.');
+    }
+
+    // Daily Log Verification
+    const dailyLog = await DailyLog.findOne({ userId, logDate: today });
+    if (!dailyLog) {
+      return badRequest(res, 'Please submit your daily log before checking out.');
+    }
+
+    // Strict Geofencing Validation (same gate as check-in)
+    if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+      return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
+    }
+
+    const activeOffices = await OfficeLocation.find({ status: 'active' });
+    let passedGeofence = false;
+    let minDistance = Infinity;
+
+    if (activeOffices.length > 0) {
+      for (const office of activeOffices) {
+        const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+        if (geoCheck.inside) {
+          passedGeofence = true;
+          break;
+        }
+        if (geoCheck.distanceMeters < minDistance) {
+          minDistance = geoCheck.distanceMeters;
+        }
+      }
+
+      if (!passedGeofence) {
+        return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
+      }
+    } else {
+      // Fallback to legacy GeofenceSetting
+      const geofence = await GeofenceSetting.findOne({ isActive: true });
+      if (geofence) {
+        const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters);
+        if (!geoCheck.inside) {
+          return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
+        }
+      }
+    }
+
+    // Token verification if provided (QR scan flow)
+    if (token) {
+      const session = activeCheckoutSessions.get(userIdStr);
+      if (!session || session.token !== token || Date.now() > session.expiresAt) {
+        return badRequest(res, 'Invalid or expired checkout session. Please scan the newly generated QR code.');
+      }
+    }
+
+    // Always invalidate any active checkout session token upon successful checkout (or PC location fallback)
+    activeCheckoutSessions.delete(userIdStr);
+
+    // Strict Device Verification if device fingerprint is supplied
+    const currentFingerprint = deviceFingerprint || req.headers['x-device-fingerprint'] || null;
+    const registeredDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
+    if (registeredDevice && registeredDevice.deviceFingerprint && currentFingerprint) {
+      if (registeredDevice.deviceFingerprint !== currentFingerprint) {
+        return badRequest(res, 'Use Your Registered Mobile — this device is not authorized for attendance.');
+      }
+    }
+
+    const checkOutTime = new Date();
+    const metrics = finalizeAttendanceCheckout(attendance, checkOutTime);
+    attendance.status = calcAttendanceStatus(metrics.actualWorkMinutes);
+    attendance.checkOutTime = checkOutTime;
+    await attendance.save();
+
+    const populatedAttendance = await Attendance.findById(attendance._id)
+      .populate('userId', 'name designation email');
+
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    if (teamId) {
+      emitToTeam(teamId, 'attendance:update', {
+        type: 'check_out',
+        userId: req.user._id,
+        userName: req.user.name,
+        teamId,
+        attendance: populatedAttendance || attendance,
+      });
+    }
+    emitToManagers('attendance:update', {
+      type: 'check_out',
+      userId: req.user._id,
+      userName: req.user.name,
+      teamId,
+      attendance: populatedAttendance || attendance,
+    });
+
+    // Notify user's personal room (e.g. PC browser) that checkout succeeded
+    emitToUser(userId, 'attendance:checked_out', {
+      attendance: populatedAttendance || attendance,
+      summary: {
+        checkInTime: attendance.checkInTime,
+        checkOutTime: attendance.checkOutTime,
+        totalDurationMinutes: metrics.totalDurationMinutes,
+        totalBreakMinutes: metrics.totalBreakMinutes,
+        actualWorkMinutes: metrics.actualWorkMinutes,
+        breaks: attendance.breaks,
+        status: attendance.status,
+        dailyLog,
+      }
+    });
+
+    return success(res, 'Checked out successfully', {
+      attendance: populatedAttendance || attendance,
+      summary: {
+        checkInTime: attendance.checkInTime,
+        checkOutTime: attendance.checkOutTime,
+        totalDurationMinutes: metrics.totalDurationMinutes,
+        totalBreakMinutes: metrics.totalBreakMinutes,
+        actualWorkMinutes: metrics.actualWorkMinutes,
+        breaks: attendance.breaks,
+        status: attendance.status,
+        dailyLog,
+      }
+    });
+  } catch (error) {
+    console.error('Check-out error:', error);
+    return badRequest(res, 'Check-out failed');
+  }
+};
+
+const getCurrentQrCode = async (req, res) => {
+  try {
+    // In a full implementation, this might fetch from a central rotating Redis key 
+    // or database value generated by an admin device. For now, return a static/mock value.
+    const qrData = {
+      codeValue: 'OFFICE_QR_DEFAULT',
+      expiresAt: new Date(Date.now() + 60000).toISOString() // Valid for 1 min
+    };
+    
+    return success(res, 'QR code fetched successfully', { qr: qrData });
+  } catch (error) {
+    console.error('Error fetching QR code:', error);
+    return badRequest(res, 'Failed to fetch QR code');
+  }
+};
+
+const requestDeviceApproval = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { requestType, reason, requestedDeviceLabel, requestedUntil } = req.body;
+    const rawUA = req.headers['user-agent'] || '';
+
+    // GUARD 1: Block if already has an active registered device (force replacement flow)
+    if (requestType === 'register' || !requestType) {
+      const activeDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
+      if (activeDevice && !(activeDevice.temporaryUntil && new Date() > new Date(activeDevice.temporaryUntil))) {
+        return badRequest(res, 'You already have an active registered device. To switch devices, please submit a replacement request from the Device Status page.');
+      }
+    }
+
+    // GUARD 2: Block duplicate pending request
+    const existingRequest = await DeviceRequest.findOne({ userId, status: 'pending' });
+    if (existingRequest) {
+      return badRequest(res, 'You already have a pending device request. Please wait for it to be approved or rejected.');
+    }
+
+    // Auto-build device label from User-Agent if client didn't send one
+    const autoLabel = buildDeviceLabel(rawUA);
+    const finalLabel = (requestedDeviceLabel && requestedDeviceLabel.trim()) ? requestedDeviceLabel.trim() : autoLabel;
+
+    const newRequest = new DeviceRequest({
+      userId,
+      status: 'pending',
+      requestType: requestType || 'register',
+      reason: reason || '',
+      requestedDeviceLabel: finalLabel,
+      requestedUntil: requestedUntil ? new Date(requestedUntil) : null,
+      deviceFingerprint: req.body.deviceFingerprint || req.headers['x-device-fingerprint'] || null,
+      ipAddress: getClientIp(req),
+      userAgent: rawUA,
+    });
+
+    await newRequest.save();
+
+    const populatedRequest = await DeviceRequest.findById(newRequest._id).populate('userId', 'name email');
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    if (teamId) {
+      emitToTeam(teamId, 'device:request_created', {
+        request: populatedRequest || newRequest,
+        userName: req.user.name,
+        teamId,
+      });
+    }
+    emitToManagers('device:request_created', {
+      request: populatedRequest || newRequest,
+      userName: req.user.name,
+      teamId,
+    });
+
+    // Auto-reflect to all managers (or admins if none) so any manager can act
+    await notifyRequestSubmitted({
+      type: 'device_request_submitted',
+      title: 'New Device Request',
+      message: `${req.user.name} submitted a ${newRequest.requestType} request for ${finalLabel}.${reason ? ' Reason: ' + reason : ''}`,
+      relatedId: newRequest._id,
+    });
+
+    return success(res, 'Device approval requested successfully', { request: newRequest });
+  } catch (error) {
+    console.error('Error requesting device approval:', error);
+    return badRequest(res, 'Failed to request device approval');
+  }
+};
+
+const getDeviceStatus = async (req, res) => {
+  try {
+    const { deviceStatus, pendingRequest } = await computeDeviceStatus(req.user._id);
+    return success(res, 'Device status fetched', { deviceStatus, pendingRequest });
+  } catch (error) {
+    console.error('getDeviceStatus error:', error);
+    return badRequest(res, 'Failed to fetch device status');
+  }
+};
+
+const getMyDeviceRequests = async (req, res) => {
+  try {
+    const requests = await DeviceRequest.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    return success(res, 'Device requests fetched', { requests });
+  } catch (error) {
+    console.error('getMyDeviceRequests error:', error);
+    return badRequest(res, 'Failed to fetch device requests');
+  }
+};
+
+const startBreak = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = getTodayDateString();
+    const { breakType } = req.body;
+
+    const attendance = await Attendance.findOne({ userId, date: today });
+    if (!attendance || !attendance.checkInTime) {
+      return badRequest(res, 'You must be checked in to start a break.');
+    }
+    if (attendance.checkOutTime) {
+      return badRequest(res, 'You have already checked out for today.');
+    }
+
+    const hasActiveBreak = attendance.breaks.some(b => !b.endedAt);
+    if (hasActiveBreak) {
+      return badRequest(res, 'You are already on an active break.');
+    }
+
+    attendance.breaks.push({
+      type: breakType || 'personal',
+      startedAt: new Date()
+    });
+
+    await attendance.save();
+
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    const activeBreak = attendance.breaks[attendance.breaks.length - 1];
+    if (teamId) {
+      emitToTeam(teamId, 'break:update', {
+        type: 'start',
+        userId: req.user._id,
+        userName: req.user.name,
+        teamId,
+        activeBreak,
+      });
+    }
+    emitToManagers('break:update', {
+      type: 'start',
+      userId: req.user._id,
+      userName: req.user.name,
+      teamId,
+      activeBreak,
+    });
+
+    return success(res, 'Break started successfully');
+  } catch (error) {
+    console.error('Start break error:', error);
+    return badRequest(res, 'Failed to start break');
+  }
+};
+
+const endBreak = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = getTodayDateString();
+
+    const attendance = await Attendance.findOne({ userId, date: today });
+    if (!attendance) {
+      return badRequest(res, 'No attendance record found.');
+    }
+
+    const activeBreakIndex = attendance.breaks.findIndex(b => !b.endedAt);
+    if (activeBreakIndex === -1) {
+      return badRequest(res, 'No active break to end.');
+    }
+
+    const now = new Date();
+    attendance.breaks[activeBreakIndex].endedAt = now;
+    
+    // Compute duration in minutes
+    const breakDurationMs = now - attendance.breaks[activeBreakIndex].startedAt;
+    const breakDurationMinutes = Math.floor(breakDurationMs / 60000);
+    attendance.completedBreakMinutes = (attendance.completedBreakMinutes || 0) + breakDurationMinutes;
+    attendance.totalBreakMinutes = attendance.completedBreakMinutes;
+
+    await attendance.save();
+
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    if (teamId) {
+      emitToTeam(teamId, 'break:update', {
+        type: 'end',
+        userId: req.user._id,
+        userName: req.user.name,
+        teamId,
+        activeBreak: null,
+      });
+    }
+    emitToManagers('break:update', {
+      type: 'end',
+      userId: req.user._id,
+      userName: req.user.name,
+      teamId,
+      activeBreak: null,
+    });
+
+    return success(res, 'Break ended successfully');
+  } catch (error) {
+    console.error('End break error:', error);
+    return badRequest(res, 'Failed to end break');
+  }
+};
+
+const getDailyLog = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = getTodayDateString();
+    
+    const log = await DailyLog.findOne({ userId, logDate: today });
+    return success(res, 'Daily log fetched', { log });
+  } catch (error) {
+    console.error('Fetch daily log error:', error);
+    return badRequest(res, 'Failed to fetch daily log');
+  }
+};
+
+const submitDailyLog = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = getTodayDateString();
+    const logData = { ...(req.body || {}) };
+
+    // Auto-compute hoursSpent if omitted, falsy, or not a number
+    if (!logData.hoursSpent || isNaN(Number(logData.hoursSpent))) {
+      const attendance = await Attendance.findOne({ userId, date: today });
+      let computedHours = 1;
+      if (attendance && attendance.checkInTime) {
+        const completedBreaks = attendance.completedBreakMinutes || 0;
+        const grossMinutes = Math.max(0, Math.floor((Date.now() - new Date(attendance.checkInTime).getTime()) / 60000));
+        const netMinutes = Math.max(0, grossMinutes - completedBreaks);
+        computedHours = Math.max(0.5, +(netMinutes / 60).toFixed(1));
+      }
+      logData.hoursSpent = computedHours;
+    } else {
+      logData.hoursSpent = Math.max(0.5, Number(logData.hoursSpent));
+    }
+
+    const log = await dailyLogService.submitDailyLog({
+      user: req.user,
+      logData,
+      file: req.file,
+    });
+
+    return success(res, 'Daily log submitted successfully', { log });
+  } catch (error) {
+    console.error('Submit daily log error:', error);
+    return badRequest(res, error.message || 'Failed to submit daily log');
+  }
+};
+
+const sendDailyReport = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = getTodayDateString();
+
+    const attendance = await Attendance.findOne({ userId, date: today });
+    const log = await DailyLog.findOne({ userId, logDate: today });
+
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    const reportData = {
+      userId: req.user._id,
+      userName: req.user.name,
+      teamId,
+      date: today,
+      attendance,
+      log,
+    };
+
+    // Consolidated single socket event to managers and team
+    if (teamId) {
+      emitToTeam(teamId, 'daily_log:submitted', reportData);
+      emitToTeam(teamId, 'attendance:update', {
+        type: 'report_sent',
+        userId: req.user._id,
+        userName: req.user.name,
+        teamId,
+        attendance,
+      });
+    }
+    emitToManagers('daily_log:submitted', reportData);
+    emitToManagers('attendance:update', {
+      type: 'report_sent',
+      userId: req.user._id,
+      userName: req.user.name,
+      teamId,
+      attendance,
+    });
+
+    return success(res, 'Daily report sent to manager successfully', { report: reportData });
+  } catch (error) {
+    console.error('sendDailyReport error:', error);
+    return badRequest(res, 'Failed to send daily report');
+  }
+};
+
+const getLeaveBalance = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const year = getCurrentYear();
+    const balances = await LeaveBalance.find({ userId, year }).populate('leaveTypeId');
+    
+    return success(res, 'Leave balance fetched', { balances });
+  } catch (error) {
+    console.error('Fetch leave balance error:', error);
+    return badRequest(res, 'Failed to fetch leave balance');
+  }
+};
+
+const getMyLeaveRequests = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const requests = await LeaveRequest.find({ userId }).populate('leaveTypeId').sort({ createdAt: -1 });
+    
+    return success(res, 'Leave requests fetched', { requests });
+  } catch (error) {
+    console.error('Fetch leave requests error:', error);
+    return badRequest(res, 'Failed to fetch leave requests');
+  }
+};
+
+const applyForLeave = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const leaveData = req.body;
+    
+    const request = await leaveService.applyLeave(userId, leaveData);
+    
+    return success(res, 'Leave request submitted successfully', { request });
+  } catch (error) {
+    console.error('Apply leave error:', error);
+    return badRequest(res, error.message || 'Failed to submit leave request');
+  }
+};
+
+module.exports = {
+  getStatus,
+  getDashboard,
+  checkIn,
+  initiateCheckout,
+  checkOut,
+  sendDailyReport,
+  getCurrentQrCode,
+  requestDeviceApproval,
+  getDeviceStatus,
+  getMyDeviceRequests,
+  startBreak,
+  endBreak,
+  getDailyLog,
+  submitDailyLog,
+  getLeaveBalance,
+  getMyLeaveRequests,
+  applyForLeave
+};

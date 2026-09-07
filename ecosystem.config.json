@@ -1,0 +1,20 @@
+{
+  "apps": [
+    {
+      "name": "attendance-api",
+      "script": "server.js",
+      "cwd": "/home/ubuntu/attendance-system/apps/api",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "512M",
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": 5000
+      },
+      "error_file": "/var/log/pm2/attendance-api-error.log",
+      "out_file": "/var/log/pm2/attendance-api-out.log",
+      "time": true
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "attendance-system-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spheronix Technology — Employee Attendance & Performance Tracking System",
+  "scripts": {
+    "dev:api": "npm run dev --prefix apps/api",
+    "dev:admin": "npm run dev --prefix apps/admin",
+    "dev:manager": "npm run dev --prefix apps/manager",
+    "dev:employee": "npm run dev --prefix apps/employee",
+    "build:admin": "npm run build --prefix apps/admin",
+    "build:manager": "npm run build --prefix apps/manager",
+    "build:employee": "npm run build --prefix apps/employee",
+    "build:all": "npm run build:admin && npm run build:manager && npm run build:employee",
+    "seed": "node apps/api/src/scripts/seed.js",
+    "install:all": "npm install --prefix apps/api && npm install --prefix apps/admin && npm install --prefix apps/manager && npm install --prefix apps/employee"
+  }
+}
