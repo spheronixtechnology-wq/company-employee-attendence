@@ -194,6 +194,7 @@ const getDashboard = async (req, res) => {
         completedBreakMinutes,
         breaks: attendanceRecord?.breaks || []
       },
+      teamName: req.user.teamId?.name || null,
       dailyLogSubmitted,
       activeMethod,
       deviceStatus,

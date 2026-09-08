@@ -6,8 +6,9 @@ import { Sparkles } from 'lucide-react';
  */
 export default function DailyLogFields({ form, onChange, teamName = '' }) {
   const normalizedTeam = (teamName || '').toLowerCase();
-  const isTechnical = normalizedTeam.includes('tech') || normalizedTeam.includes('dev') || normalizedTeam.includes('engineering');
   const isMarketing = normalizedTeam.includes('market') || normalizedTeam.includes('growth') || normalizedTeam.includes('sales');
+  // Default to Technical team layout if not explicitly a marketing/growth team
+  const isTechnical = normalizedTeam.includes('tech') || normalizedTeam.includes('dev') || normalizedTeam.includes('engineering') || !isMarketing;
 
   return (
     <div className="space-y-4">
@@ -17,7 +18,7 @@ export default function DailyLogFields({ form, onChange, teamName = '' }) {
         <span>Work hours will be calculated automatically based on your active shift duration and breaks.</span>
       </div>
 
-      {/* Technical Team Fields */}
+      {/* Technical / Engineering Team Fields (Default) */}
       {isTechnical && (
         <>
           <div>
@@ -108,36 +109,6 @@ export default function DailyLogFields({ form, onChange, teamName = '' }) {
               id="field-output-summary"
               rows={3}
               placeholder="Key creatives published, engagement metrics, or outreach completed..."
-              className="input text-sm resize-none"
-              value={form.outputSummary || ''}
-              onChange={(e) => onChange('outputSummary', e.target.value)}
-            />
-          </div>
-        </>
-      )}
-
-      {/* Generic / Other Teams */}
-      {!isTechnical && !isMarketing && (
-        <>
-          <div>
-            <label className="label text-xs">Task Title *</label>
-            <input
-              type="text"
-              id="field-task-title"
-              required
-              placeholder="Primary task completed today..."
-              className="input text-sm"
-              value={form.taskTitle || ''}
-              onChange={(e) => onChange('taskTitle', e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="label text-xs">Work Summary</label>
-            <textarea
-              id="field-output-summary"
-              rows={3}
-              placeholder="Describe tasks completed, meetings attended, or deliverables shipped..."
               className="input text-sm resize-none"
               value={form.outputSummary || ''}
               onChange={(e) => onChange('outputSummary', e.target.value)}

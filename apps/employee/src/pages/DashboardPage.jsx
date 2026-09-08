@@ -1502,7 +1502,7 @@ export default function EmployeeDashboard() {
         isOpen={showDailyLogModal}
         onClose={() => setShowDailyLogModal(false)}
         onSuccess={handleDailyLogSuccess}
-        teamName={user?.teamId?.name || ''}
+        teamName={dashboard?.teamName || user?.teamName || user?.teamId?.name || (typeof user?.teamId === 'object' ? user?.teamId?.name : '') || ''}
       />
 
       {/* ── Desktop Checkout QR Modal ── */}

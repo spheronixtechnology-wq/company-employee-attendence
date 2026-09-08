@@ -34,12 +34,14 @@ const getCookieOptions = () => {
  * Includes manager permissions if role is manager.
  */
 const buildUserPayload = async (user) => {
+  const teamObj = user.teamId && typeof user.teamId === 'object' && user.teamId.name ? user.teamId : null;
   const payload = {
     id: user._id,
     name: user.name,
     email: user.email,
     role: user.role,
     teamId: user.teamId,
+    teamName: teamObj ? teamObj.name : null,
     isActive: user.isActive,
     phone: user.phone || null,
     designation: user.designation,
@@ -58,8 +60,10 @@ const buildUserPayload = async (user) => {
  * Login — validates credentials, checks mobile device binding for employees, and sets JWT cookie.
  */
 const login = async ({ email, password, deviceFingerprint, deviceLabel, isMobile, ipAddress, userAgent }) => {
-  // Explicitly select passwordHash since it's hidden by default
-  const user = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
+  // Explicitly select passwordHash since it's hidden by default, and populate teamId
+  const user = await User.findOne({ email: email.toLowerCase() })
+    .select('+passwordHash')
+    .populate('teamId', 'name');
 
   if (!user) {
     throw { statusCode: 401, message: 'Invalid email or password' };
