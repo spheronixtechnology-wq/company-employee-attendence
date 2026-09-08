@@ -9,15 +9,17 @@ const LocationRequest = require('../models/LocationRequest');
 const Notification = require('../models/Notification');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const EmployeeLocation = require('../models/EmployeeLocation');
+const BiometricCredential = require('../models/BiometricCredential');
 
 const leaveService = require('../services/leave.service');
 const { writeAuditLog } = require('../services/audit.service');
 const { createNotification } = require('../services/notification.service');
 const { AUDIT_ACTIONS } = require('../../../../packages/shared/auditActions');
-const { emitToUser, emitToTeam, emitToManagers } = require('../socket');
+const { emitToUser, emitToTeam, emitToManagers, emitToAdmins, emitToDeviceRequest } = require('../socket');
 
 const { success, badRequest, forbidden, notFound } = require('../utils/response');
 const { getTodayDateString } = require('../utils/dateUtils');
+const { formatDeviceLabel } = require('../utils/deviceUtils');
 
 // --- Helpers ---
 
@@ -353,9 +355,21 @@ const getDeviceRequests = async (req, res) => {
     const query = { userId: { $in: memberIds } };
     if (status !== 'all') query.status = status;
 
-    const requests = await DeviceRequest.find(query)
+    const rawRequests = await DeviceRequest.find(query)
       .populate('userId', 'name email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const requests = rawRequests.map((r) => ({
+      ...r,
+      requestedDeviceLabel: formatDeviceLabel(r.requestedDeviceLabel),
+    }));
+
+    // Mark notifications for device requests as read for this manager
+    await Notification.updateMany(
+      { userId: req.user._id, isRead: false, type: { $in: ['device_request', 'new_device_request'] } },
+      { $set: { isRead: true } }
+    );
 
     return success(res, 'Fetched device requests', { requests });
   } catch (error) {
@@ -398,13 +412,16 @@ const handleDeviceRequestDecision = async (req, res) => {
     if (action === 'approve') {
       // Deactivate existing device
       await RegisteredDevice.updateMany({ userId: request.userId }, { isActive: false, status: 'REVOKED' });
+
+      // Invalidate all previous biometric credentials tied to revoked devices
+      await BiometricCredential.updateMany({ userId: request.userId }, { isActive: false });
       
       const newDevice = new RegisteredDevice({
         userId: request.userId,
         status: 'ACTIVE',
         isActive: true,
         temporaryUntil: request.requestedUntil || null,
-        deviceLabel: request.requestedDeviceLabel || null,
+        deviceLabel: formatDeviceLabel(request.requestedDeviceLabel) || null,
         userAgent: request.userAgent || null,
         deviceFingerprint: request.deviceFingerprint || null,
         ipAddress: request.ipAddress || null,
@@ -412,6 +429,9 @@ const handleDeviceRequestDecision = async (req, res) => {
         lastSeenAt: new Date(),
       });
       await newDevice.save();
+
+      // Invalidate old device sessions immediately
+      await User.findByIdAndUpdate(request.userId, { $inc: { tokenVersion: 1 } });
     }
 
     await createNotification({
@@ -422,7 +442,13 @@ const handleDeviceRequestDecision = async (req, res) => {
       relatedId: request._id
     });
 
-    // Real-time WebSocket emission to the employee & managers
+    // Mark manager notifications related to this request as read
+    await Notification.updateMany(
+      { relatedId: request._id, isRead: false },
+      { $set: { isRead: true } }
+    );
+
+    // Real-time WebSocket emission to the employee, managers, admins, and guest login socket
     emitToUser(request.userId, 'device:request_resolved', {
       requestId: request._id,
       action,
@@ -434,6 +460,19 @@ const handleDeviceRequestDecision = async (req, res) => {
       requestId: request._id,
       action,
       status: newStatus,
+      userId: request.userId,
+    });
+    emitToAdmins('device:request_resolved', {
+      requestId: request._id,
+      action,
+      status: newStatus,
+      userId: request.userId,
+    });
+    emitToDeviceRequest(request._id, 'device:request_resolved', {
+      requestId: request._id,
+      action,
+      status: newStatus,
+      decisionNote,
       userId: request.userId,
     });
 
@@ -536,11 +575,19 @@ const handleLocationRequestDecision = async (req, res) => {
 
 /**
  * GET /manager/notifications/unread-count
- * Count of unread notifications for the signed-in manager (badge in sidebar).
+ * Count of pending items requiring manager attention (badge in sidebar for Device Requests).
  */
 const getUnreadNotificationCount = async (req, res) => {
   try {
-    const count = await Notification.countDocuments({ userId: req.user._id, isRead: false });
+    const teams = await getManagedTeams(req.user);
+    if (!teams || teams.length === 0) return success(res, 'Unread notification count fetched', { count: 0 });
+
+    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const count = await DeviceRequest.countDocuments({
+      userId: { $in: memberIds },
+      status: 'pending'
+    });
+
     return success(res, 'Unread notification count fetched', { count });
   } catch (error) {
     console.error('getUnreadNotificationCount error:', error);

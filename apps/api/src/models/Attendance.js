@@ -10,6 +10,11 @@ const attendanceSchema = new mongoose.Schema({
     enum: ['present', 'half_day', 'absent', 'leave', 'manual_pending', 'incomplete'],
     default: 'incomplete',
   },
+  checkInMethod: {
+    type: String,
+    enum: ['qr_code', 'wifi_ip', 'device_fingerprint', 'biometric'],
+    default: 'qr_code',
+  },
   breaks: [
     {
       type: {

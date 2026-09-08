@@ -50,17 +50,21 @@ export default function ManagerLayout({ children }) {
     };
   }, [fetchUnread, location.pathname]);
 
-  // Real-time WebSocket listener for instant badge counter bumps
+  // Real-time WebSocket listener for instant badge counter bumps and clears
   useEffect(() => {
     if (!socket) return;
     const onNewEvent = () => fetchUnread();
     socket.on('notification:new', onNewEvent);
     socket.on('device:request_created', onNewEvent);
+    socket.on('device:request_resolved', onNewEvent);
     socket.on('leave:request_created', onNewEvent);
+    socket.on('leave:request_resolved', onNewEvent);
     return () => {
       socket.off('notification:new', onNewEvent);
       socket.off('device:request_created', onNewEvent);
+      socket.off('device:request_resolved', onNewEvent);
       socket.off('leave:request_created', onNewEvent);
+      socket.off('leave:request_resolved', onNewEvent);
     };
   }, [socket, fetchUnread]);
 

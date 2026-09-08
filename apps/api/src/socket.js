@@ -58,30 +58,47 @@ const initSocket = (server) => {
       }
 
       if (!token) {
-        return next(new Error('Authentication error: No session token provided'));
+        // Allow unauthenticated guest sockets (e.g. login screen awaiting device request approval)
+        socket.isGuest = true;
+        return next();
       }
 
       let decoded;
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET);
       } catch (err) {
-        return next(new Error('Authentication error: Invalid or expired token'));
+        socket.isGuest = true;
+        return next();
       }
 
       const user = await User.findById(decoded.id).populate('teamId', 'name leadUserId');
       if (!user || !user.isActive) {
-        return next(new Error('Authentication error: User inactive or not found'));
+        socket.isGuest = true;
+        return next();
       }
 
       socket.user = user;
       next();
     } catch (err) {
       console.error('[Socket Auth Error]:', err.message);
-      next(new Error('Authentication error: Server failure during handshake'));
+      socket.isGuest = true;
+      next();
     }
   });
 
   io.on('connection', async (socket) => {
+    // 0. Handle Unauthenticated / Guest Sockets
+    if (socket.isGuest || !socket.user) {
+      socket.on('join:device_request', (requestId) => {
+        if (requestId) {
+          const reqIdStr = requestId.toString();
+          socket.join(`device_req:${reqIdStr}`);
+          console.log(`[Socket] Guest joined device request room: device_req:${reqIdStr}`);
+        }
+      });
+      return;
+    }
+
     const user = socket.user;
     const userIdStr = user._id.toString();
 
@@ -158,6 +175,23 @@ const emitToManagers = (event, data) => {
 };
 
 /**
+ * Emit event to all admins.
+ */
+const emitToAdmins = (event, data) => {
+  if (!io) return;
+  io.to('admins').emit(event, data);
+};
+
+/**
+ * Emit event to a specific device request room (guest/login listener).
+ */
+const emitToDeviceRequest = (requestId, event, data) => {
+  if (!io || !requestId) return;
+  const reqIdStr = requestId?._id ? requestId._id.toString() : requestId.toString();
+  io.to(`device_req:${reqIdStr}`).emit(event, data);
+};
+
+/**
  * Emit event to all connected sockets.
  */
 const emitToAll = (event, data) => {
@@ -171,5 +205,7 @@ module.exports = {
   emitToUser,
   emitToTeam,
   emitToManagers,
+  emitToAdmins,
+  emitToDeviceRequest,
   emitToAll,
 };

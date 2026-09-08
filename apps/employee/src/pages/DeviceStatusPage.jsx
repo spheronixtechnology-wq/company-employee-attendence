@@ -8,6 +8,7 @@ import {
   RefreshCw, ChevronRight, Loader2, Shield, Calendar,
   ArrowLeft, Send, Trash2
 } from 'lucide-react';
+import { getDeviceInfo } from '../lib/deviceNames';
 
 const STATUS_CONFIG = {
   active:    { label: 'Trusted Device', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/40', dot: 'bg-emerald-400' },
@@ -77,10 +78,14 @@ export default function DeviceStatusPage() {
     setSubmitting(true);
     try {
       const fp = await getDeviceFingerprint();
+      const devInfo = await getDeviceInfo();
+      const fullLabel = devInfo.model ? `${devInfo.model} · ${devInfo.os}`.slice(0, 80) : devInfo.os.slice(0, 80);
+
       const payload = {
         requestType: showRequestForm,
         reason: finalReason,
         deviceFingerprint: fp,
+        requestedDeviceLabel: fullLabel,
       };
       if (showRequestForm === 'temporary' && formData.requestedUntil) {
         payload.requestedUntil = new Date(formData.requestedUntil).toISOString();

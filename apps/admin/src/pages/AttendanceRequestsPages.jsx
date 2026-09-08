@@ -6,52 +6,107 @@ import api from '../lib/api';
 export const DeviceRequestsPage = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [processing, setProcessing] = useState(null);
+  const [message, setMessage] = useState(null);
 
   const fetchRequests = async () => {
+    setLoading(true);
     try {
-      // Mocking fetch as per API structure
-      const res = await api.get('/admin/device-requests?status=pending').catch(() => ({ data: { data: { requests: [
-        { _id: '1', userId: { name: 'Alice Smith', email: 'alice@example.com' }, requestedUntil: '2026-10-01', requestType: 'temporary' },
-        { _id: '2', userId: { name: 'Bob Jones', email: 'bob@example.com' }, requestedUntil: '2026-09-10', requestType: 'permanent' }
-      ] } } }));
+      const res = await api.get(`/admin/device-requests?status=${statusFilter}`);
       setRequests(res.data?.data?.requests || []);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading device requests:', err);
+      setMessage({ type: 'error', text: 'Failed to load device requests from server.' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchRequests(); }, []);
+  useEffect(() => {
+    fetchRequests();
+  }, [statusFilter]);
 
-  const handleDecision = async (id, decision) => {
-    setRequests(prev => prev.filter(r => r._id !== id));
-    // In real app: await api.post(`/admin/device-requests/${id}/decision`, { decision });
+  const handleDecision = async (id, action) => {
+    setProcessing(id + action);
+    try {
+      await api.patch(`/admin/device-requests/${id}/decision`, { action });
+      setMessage({ type: 'success', text: `Device request ${action}d successfully.` });
+      // Remove or refresh list
+      fetchRequests();
+    } catch (err) {
+      setMessage({ type: 'error', text: err.response?.data?.message || `Failed to ${action} request.` });
+    } finally {
+      setProcessing(null);
+    }
   };
-
-  if (loading) return <LoadingScreen />;
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      <Header title="Device Requests" desc="Review and approve employee device fingerprint registrations." />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {requests.length === 0 ? <EmptyState msg="No pending device requests." /> : 
-          requests.map(req => (
-            <RequestCard 
-              key={req._id}
-              icon={<Smartphone className="text-blue-400" size={24} />}
-              title={req.userId?.name}
-              subtitle={req.userId?.email}
-              details={[
-                { label: 'Type', value: req.requestType },
-                { label: 'Requested Until', value: req.requestedUntil || 'Indefinite' }
-              ]}
-              onApprove={() => handleDecision(req._id, 'approved')}
-              onReject={() => handleDecision(req._id, 'rejected')}
-            />
-          ))
-        }
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <Header
+          title="Device Requests"
+          desc="Review and approve employee mobile device registrations and replacement requests."
+        />
+        <div className="flex gap-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700/60">
+          {['pending', 'approved', 'rejected', 'all'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+                statusFilter === s
+                  ? 'bg-primary-500 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {message && (
+        <div
+          className={`p-3.5 rounded-xl border text-sm font-medium ${
+            message.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
+      {loading ? (
+        <LoadingScreen />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {requests.length === 0 ? (
+            <EmptyState msg={`No ${statusFilter} device requests found.`} />
+          ) : (
+            requests.map((req) => (
+              <RequestCard
+                key={req._id}
+                icon={<Smartphone className="text-primary-400" size={24} />}
+                title={req.userId?.name || 'Unknown Employee'}
+                subtitle={req.userId?.email || '—'}
+                details={[
+                  { label: 'Device Model', value: req.requestedDeviceLabel || 'Unknown' },
+                  { label: 'Type', value: req.requestType || 'replacement' },
+                  { label: 'Reason', value: req.reason || '—' },
+                  { label: 'Status', value: req.status },
+                  {
+                    label: 'Requested',
+                    value: req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '—',
+                  },
+                ]}
+                onApprove={req.status === 'pending' ? () => handleDecision(req._id, 'approve') : null}
+                onReject={req.status === 'pending' ? () => handleDecision(req._id, 'reject') : null}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 };

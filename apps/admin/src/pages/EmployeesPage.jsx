@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Users, Plus, Search, Loader2, UserCheck, UserX, Pencil, X } from 'lucide-react';
+import { Users, Plus, Search, Loader2, UserCheck, UserX, Pencil, X, Eye, EyeOff } from 'lucide-react';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState([]);
@@ -12,6 +12,7 @@ export default function EmployeesPage() {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '' });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -44,6 +45,7 @@ export default function EmployeesPage() {
       }
       setShowForm(false);
       setEditUser(null);
+      setShowPassword(false);
       setForm({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '' });
       fetchData();
     } catch (err) {
@@ -72,6 +74,7 @@ export default function EmployeesPage() {
       teamId: user.teamId?._id || '',
       designation: user.designation || '',
     });
+    setShowPassword(false);
     setShowForm(true);
   };
 
@@ -84,7 +87,7 @@ export default function EmployeesPage() {
           </h1>
           <p className="text-slate-400 text-sm">Manage all employee accounts</p>
         </div>
-        <button id="add-user-btn" onClick={() => { setShowForm(true); setEditUser(null); }} className="btn-primary">
+        <button id="add-user-btn" onClick={() => { setShowForm(true); setEditUser(null); setShowPassword(false); }} className="btn-primary">
           <Plus size={16} /> Add User
         </button>
       </div>
@@ -126,7 +129,25 @@ export default function EmployeesPage() {
               </div>
               <div>
                 <label className="label">{editUser ? 'New Password (leave blank to keep)' : 'Password *'}</label>
-                <input type="password" className="input" required={!editUser} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className="input pr-12"
+                    required={!editUser}
+                    placeholder={editUser ? 'Enter new password' : 'Enter password'}
+                    value={form.password}
+                    onChange={e => setForm({ ...form, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

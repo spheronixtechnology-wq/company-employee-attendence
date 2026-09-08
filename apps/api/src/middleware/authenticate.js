@@ -37,6 +37,13 @@ const authenticate = async (req, res, next) => {
       return unauthorized(res, 'Your account has been deactivated. Contact admin.');
     }
 
+    // Immediate session revocation check (e.g. when new device approved)
+    const userVersion = user.tokenVersion || 0;
+    const tokenVersion = decoded.tokenVersion !== undefined ? decoded.tokenVersion : 0;
+    if (tokenVersion !== userVersion) {
+      return unauthorized(res, 'Session terminated. This device was replaced or access was revoked. Please log in again.');
+    }
+
     req.user = user;
     next();
   } catch (err) {

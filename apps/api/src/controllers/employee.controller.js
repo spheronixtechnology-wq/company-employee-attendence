@@ -15,42 +15,19 @@ const { getTodayDateString, getCurrentYear, calcNetWorkMinutes, calcAttendanceSt
 const { isWithinGeofence } = require('../utils/haversine');
 const dailyLogService = require('../services/dailyLog.service');
 const leaveService = require('../services/leave.service');
+const authService = require('../services/auth.service');
 const { createNotification } = require('../services/notification.service');
 const { UAParser } = require('ua-parser-js');
 const { getClientIp } = require('../utils/ipUtils');
+const { buildDeviceLabel, formatDeviceLabel } = require('../utils/deviceUtils');
 const { emitToTeam, emitToManagers, emitToUser } = require('../socket');
 const crypto = require('crypto');
+const webauthnService = require('../services/webauthn.service');
 
 // In-memory active checkout sessions: Map<userIdStr, { token: string, expiresAt: number }>
 const activeCheckoutSessions = new Map();
 
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Builds a human-readable device label from the User-Agent string.
- * e.g. "Samsung SM-G991B · Chrome 124 · Android 14"
- */
-const buildDeviceLabel = (uaString) => {
-
-  
-  try {
-    const parser = new UAParser(uaString);
-    const result = parser.getResult();
-    const deviceModel = result.device.model || result.device.vendor || null;
-    const browserName = result.browser.name || null;
-    const osName = result.os.name || null;
-    const osVersion = result.os.version || null;
-    const parts = [
-      deviceModel,
-      browserName,
-      osName && osVersion ? `${osName} ${osVersion}` : osName
-    ].filter(Boolean);
-    return parts.length ? parts.join(' · ') : 'Unknown Device';
-  } catch {
-    return 'Unknown Device';
-  }
-};
 
 /**
  * Notifies ALL active managers (plus admins as fallback if there are no
@@ -120,17 +97,27 @@ const computeDeviceStatus = async (userId) => {
   let deviceStatus = { statusType: 'none', statusLabel: 'No Device' };
 
   if (pendingRequest) {
+    const pendObj = pendingRequest.toObject ? pendingRequest.toObject() : { ...pendingRequest };
+    if (pendObj.requestedDeviceLabel) {
+      pendObj.requestedDeviceLabel = formatDeviceLabel(pendObj.requestedDeviceLabel);
+    }
     deviceStatus = { statusType: 'pending', statusLabel: 'Approval Pending', device: { status: 'PENDING' } };
+    return { deviceStatus, pendingRequest: pendObj };
   } else if (registeredDevice) {
+    const devObj = registeredDevice.toObject ? registeredDevice.toObject() : { ...registeredDevice };
+    if (devObj.deviceLabel) {
+      devObj.deviceLabel = formatDeviceLabel(devObj.deviceLabel);
+    }
     if (registeredDevice.temporaryUntil && new Date() > new Date(registeredDevice.temporaryUntil)) {
-      deviceStatus = { statusType: 'none', statusLabel: 'Temporary Access Expired', device: registeredDevice };
+      deviceStatus = { statusType: 'none', statusLabel: 'Temporary Access Expired', device: devObj };
     } else {
       deviceStatus = {
         statusType: registeredDevice.temporaryUntil ? 'temporary' : 'active',
         statusLabel: registeredDevice.temporaryUntil ? 'Temporary Access' : 'Active Device',
-        device: registeredDevice
+        device: devObj
       };
     }
+    return { deviceStatus, pendingRequest: null };
   }
 
   return { deviceStatus, pendingRequest };
@@ -171,7 +158,7 @@ const getDashboard = async (req, res) => {
       totalDurationMinutes,
       totalBreakMinutes,
       actualWorkMinutes: totalWorkMinutes,
-      checkInMethod: 'device_fingerprint', // mock or default method if not in schema
+      checkInMethod: attendanceRecord.checkInMethod || 'qr_code',
     } : null;
 
     const dailyLogCount = await DailyLog.countDocuments({ userId, logDate: today });
@@ -325,11 +312,24 @@ const checkIn = async (req, res) => {
       }
     }
 
+    // Biometric validation
+    if (activeMethod === 'biometric') {
+      const { biometricToken } = req.body;
+      if (!biometricToken) {
+        return badRequest(res, 'Biometric verification required — please authenticate with your fingerprint, Face ID, or PIN.');
+      }
+      const decoded = webauthnService.verifyAndConsumeBiometricToken(biometricToken, userId);
+      if (!decoded) {
+        return badRequest(res, 'Invalid or expired biometric verification. Please authenticate again.');
+      }
+    }
+
     const newAttendance = new Attendance({
       userId,
       date: today,
       checkInTime: new Date(),
-      status: 'present'
+      status: 'present',
+      checkInMethod: activeMethod,
     });
 
     await newAttendance.save();
@@ -376,10 +376,10 @@ const initiateCheckout = async (req, res) => {
       return badRequest(res, 'Already checked out today.');
     }
 
-    // Daily log check
+    // Daily log check (mandatory before check-out)
     const dailyLog = await DailyLog.findOne({ userId, logDate: today });
     if (!dailyLog) {
-      return badRequest(res, 'Please submit your daily log before checking out.');
+      return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
     }
 
     // Generate short-lived token (90 seconds)
@@ -418,10 +418,10 @@ const checkOut = async (req, res) => {
       return badRequest(res, 'Already checked out today.');
     }
 
-    // Daily Log Verification
+    // Daily Log Verification (mandatory before check-out)
     const dailyLog = await DailyLog.findOne({ userId, logDate: today });
     if (!dailyLog) {
-      return badRequest(res, 'Please submit your daily log before checking out.');
+      return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
     }
 
     // Strict Geofencing Validation (same gate as check-in)
@@ -578,7 +578,11 @@ const requestDeviceApproval = async (req, res) => {
 
     // Auto-build device label from User-Agent if client didn't send one
     const autoLabel = buildDeviceLabel(rawUA);
-    const finalLabel = (requestedDeviceLabel && requestedDeviceLabel.trim()) ? requestedDeviceLabel.trim() : autoLabel;
+    let finalLabel = (requestedDeviceLabel && requestedDeviceLabel.trim()) ? requestedDeviceLabel.trim() : autoLabel;
+    finalLabel = formatDeviceLabel(finalLabel);
+    if (finalLabel.length > 80) {
+      finalLabel = finalLabel.slice(0, 80).trim();
+    }
 
     const newRequest = new DeviceRequest({
       userId,
@@ -878,6 +882,77 @@ const applyForLeave = async (req, res) => {
   }
 };
 
+const getMyAttendanceHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const records = await Attendance.find({ userId }).sort({ date: -1 }).lean();
+
+    const normalized = records.map(rec => {
+      const actualWork = rec.actualWorkMinutes ?? rec.totalWorkMinutes ?? 0;
+      return {
+        ...rec,
+        totalWorkMinutes: actualWork,
+        actualWorkMinutes: actualWork,
+      };
+    });
+
+    const totalDays = normalized.length;
+    const presentCount = normalized.filter(r => r.status === 'present').length;
+    const halfDayCount = normalized.filter(r => r.status === 'half_day').length;
+    const totalMinutes = normalized.reduce((acc, r) => acc + (r.actualWorkMinutes || 0), 0);
+
+    return success(res, 'Attendance history fetched successfully', {
+      attendance: normalized,
+      summary: {
+        totalDays,
+        presentCount,
+        halfDayCount,
+        totalHours: Math.round((totalMinutes / 60) * 10) / 10,
+      }
+    });
+  } catch (error) {
+    console.error('Fetch attendance history error:', error);
+    return badRequest(res, 'Failed to fetch attendance history');
+  }
+};
+
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { name, phone, designation } = req.body;
+
+    const updates = {};
+    if (name !== undefined) {
+      if (!name || !name.trim()) {
+        return badRequest(res, 'Name cannot be empty.');
+      }
+      updates.name = name.trim();
+    }
+    if (phone !== undefined) {
+      updates.phone = phone ? phone.trim() : null;
+    }
+    if (designation !== undefined) {
+      updates.designation = designation ? designation.trim() : null;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).populate('teamId', 'name');
+
+    if (!updatedUser) {
+      return badRequest(res, 'User not found');
+    }
+
+    const userPayload = await authService.buildUserPayload(updatedUser);
+    return success(res, 'Profile updated successfully', { user: userPayload });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return badRequest(res, error.message || 'Failed to update profile');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -895,5 +970,7 @@ module.exports = {
   submitDailyLog,
   getLeaveBalance,
   getMyLeaveRequests,
-  applyForLeave
+  applyForLeave,
+  getMyAttendanceHistory,
+  updateProfile
 };

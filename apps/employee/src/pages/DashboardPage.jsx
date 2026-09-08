@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
@@ -7,75 +7,184 @@ import {
   LogIn, LogOut, Coffee, Timer, FileText, Bell,
   CheckCircle, XCircle, Clock, Wifi, Smartphone, QrCode,
   AlertTriangle, Loader2, MapPin, Shield,
-  ChevronRight, Camera, Info, Monitor, X
+  ChevronRight, Camera, Info, Monitor, X, Lock, Fingerprint
 } from 'lucide-react';
-import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
+import {
+  isBiometricSupported,
+  getBiometricStatus,
+  enrollBiometric,
+  authenticateBiometric,
+  formatWebAuthnError
+} from '../lib/webauthn';
+import { Html5Qrcode } from 'html5-qrcode';
 import QRCode from 'qrcode';
 import { useSocket } from '../contexts/SocketContext';
 import DailyLogModal from '../components/checkout/DailyLogModal';
 import CheckoutQrModal from '../components/checkout/CheckoutQrModal';
 import AttendanceReportModal from '../components/checkout/AttendanceReportModal';
+import CheckInPermissionsModal, { checkCameraAndLocationPermissions } from '../components/CheckInPermissionsModal';
 
 
-// ── Camera-Only QR Scanner ─────────────────────────────────────────────────────
-// Uses Html5QrcodeScanner with SCAN_TYPE_CAMERA only — no image upload, no drag-drop.
-// This is the most reliable approach for rear-camera scanning on Android & iOS.
-const CameraQrScanner = ({ onScan, onCancel }) => {
-  const scannerId = 'qr-office-reader';
+// ── Headless Camera QR Scanner ────────────────────────────────────────────────
+// Uses Html5Qrcode directly to bypass all intermediate library buttons
+// and starts the live camera video viewfinder immediately upon mount.
+const CameraQrScanner = ({ onScan, onCancel, scannerId = 'qr-office-reader' }) => {
+  const [starting, setStarting] = useState(true);
+  const [cameraError, setCameraError] = useState(null);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
 
   useEffect(() => {
-    // Small delay to ensure DOM element is mounted before starting camera
-    const timer = setTimeout(() => {
-      let scanner;
+    let html5QrCode = null;
+    let isCancelled = false;
+
+    const startScanner = async () => {
       try {
-        scanner = new Html5QrcodeScanner(
-          scannerId,
+        const el = document.getElementById(scannerId);
+        if (!el || isCancelled) return;
+
+        // Wipe any leftovers from previous attempts
+        el.innerHTML = '';
+
+        html5QrCode = new Html5Qrcode(scannerId);
+        el.__html5QrCode = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: 'environment' }, // prefer rear camera
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            // CRITICAL: camera-only mode — removes all image upload / drag-drop UI
-            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-            videoConstraints: { facingMode: { ideal: 'environment' } }, // prefer rear camera
-            rememberLastUsedCamera: true,
-            showTorchButtonIfSupported: false,
+            fps: 15,
+            qrbox: { width: 220, height: 220 },
+            aspectRatio: 1.0,
           },
-          /* verbose= */ false
-        );
-        scanner.render(
-          (decodedText) => {
-            try { scanner.clear(); } catch {}
-            onScan(decodedText);
+          async (decodedText) => {
+            if (isCancelled) return;
+            isCancelled = true;
+            try {
+              if (html5QrCode?.isScanning) {
+                await html5QrCode.stop();
+              }
+            } catch (err) {
+              console.warn('Scanner stop err:', err);
+            }
+            onScanRef.current?.(decodedText);
           },
-          () => {} // suppress per-frame decode errors
+          () => {} // suppress per-frame misses
         );
+
+        if (isCancelled) {
+          try {
+            if (html5QrCode?.isScanning) {
+              await html5QrCode.stop();
+            }
+          } catch {}
+          return;
+        }
+
+        setStarting(false);
       } catch (err) {
-        console.error('QR scanner init error:', err);
-      }
-
-      // Store scanner reference on the DOM node for cleanup
-      const el = document.getElementById(scannerId);
-      if (el) el.__scanner = scanner;
-    }, 100); // 100ms delay ensures element is in the DOM
-
-    return () => {
-      clearTimeout(timer);
-      const el = document.getElementById(scannerId);
-      if (el?.__scanner) {
-        try { el.__scanner.clear(); } catch {}
+        if (isCancelled) return;
+        console.error('Camera start error:', err);
+        setStarting(false);
+        setCameraError(err.message || 'Unable to start camera viewfinder.');
       }
     };
-  }, [onScan]);
+
+    startScanner();
+
+    return () => {
+      isCancelled = true;
+      const el = document.getElementById(scannerId);
+      const instance = el?.__html5QrCode || html5QrCode;
+      if (instance) {
+        try {
+          if (instance.isScanning) {
+            instance.stop().catch(() => {});
+          }
+        } catch {}
+      }
+    };
+  }, [scannerId]);
 
   return (
-    <div>
-      {/* The scanner renders a camera feed here. No image upload shown. */}
-      <div id={scannerId} className="w-full" />
-      <button
-        onClick={onCancel}
-        className="btn-ghost w-full mt-3 text-xs py-2.5"
-      >
-        <X size={14} /> Cancel Scanning
-      </button>
+    <div className="relative flex flex-col items-center">
+      {/* Scoped CSS to enforce single video, hide duplicate canvas, and prevent layout jumps */}
+      <style>{`
+        #${scannerId} {
+          position: relative !important;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: hidden !important;
+          border-radius: 1rem !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background-color: #000000 !important;
+        }
+        #${scannerId} video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          border-radius: 1rem !important;
+          display: block !important;
+        }
+        #${scannerId} canvas {
+          display: none !important;
+        }
+        #${scannerId} img {
+          display: none !important;
+        }
+        #${scannerId} #qr-shaded-region {
+          border-radius: 1rem !important;
+        }
+        @keyframes qrScanLaser {
+          0% { top: 12%; opacity: 0.9; }
+          50% { top: 86%; opacity: 1; }
+          100% { top: 12%; opacity: 0.9; }
+        }
+        .qr-laser-beam {
+          animation: qrScanLaser 2s ease-in-out infinite;
+        }
+      `}</style>
+
+      {/* Frame Container - strictly square and contained */}
+      <div className="relative w-full max-w-[280px] sm:max-w-[300px] aspect-square rounded-2xl overflow-hidden border border-slate-700/80 bg-black shadow-2xl">
+        {/* Loading Overlay */}
+        {starting && !cameraError && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs text-center p-4">
+            <Loader2 size={36} className="animate-spin text-primary-400 mb-3" />
+            <p className="text-white font-semibold text-sm">Starting Camera...</p>
+            <p className="text-slate-400 text-xs mt-1">Opening rear camera viewfinder</p>
+          </div>
+        )}
+
+        {/* Animated Laser Scan Line */}
+        {!starting && !cameraError && (
+          <div className="qr-laser-beam absolute inset-x-4 h-0.5 bg-gradient-to-r from-transparent via-primary-400 to-transparent shadow-[0_0_10px_rgba(56,189,248,0.9)] z-10 pointer-events-none" />
+        )}
+
+        {/* Live Camera Viewfinder Target */}
+        <div id={scannerId} className="w-full h-full" />
+      </div>
+
+      {cameraError && (
+        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-center my-3 w-full max-w-[280px]">
+          <AlertCircle size={24} className="text-red-400 mx-auto mb-1.5" />
+          <p className="text-white font-semibold text-xs">Camera Error</p>
+          <p className="text-red-300 text-[11px] mt-0.5 mb-2">{cameraError}</p>
+          <button onClick={onCancel} className="btn-ghost text-xs py-1.5 px-3 w-full">
+            Close
+          </button>
+        </div>
+      )}
+
+      {!cameraError && (
+        <button
+          onClick={onCancel}
+          className="btn-ghost w-full max-w-[280px] mt-4 text-xs py-2.5 flex items-center justify-center gap-1.5 text-slate-300 hover:text-white"
+        >
+          <X size={15} /> Cancel Scanning
+        </button>
+      )}
     </div>
   );
 };
@@ -392,6 +501,23 @@ export default function EmployeeDashboard() {
   const [showCheckoutScanner, setShowCheckoutScanner] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [todayDailyLog, setTodayDailyLog] = useState(null);
+  const [showPermissionsGate, setShowPermissionsGate] = useState(false);
+  const [cachedLocation, setCachedLocation] = useState(null);
+  const [biometricStatus, setBiometricStatus] = useState(null);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+
+  useEffect(() => {
+    isBiometricSupported().then(setBiometricSupported).catch(() => setBiometricSupported(false));
+  }, []);
+
+  const fetchBiometricStatus = useCallback(async () => {
+    try {
+      const status = await getBiometricStatus();
+      setBiometricStatus(status);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // ── Defined BEFORE the effects below (they depend on these) ────────────────
   const showMessage = useCallback((type, text) => {
@@ -472,16 +598,23 @@ export default function EmployeeDashboard() {
   // Fetch on mount, every 30s, and on tab focus
   useEffect(() => {
     fetchDashboard();
-    const intervalId = setInterval(fetchDashboard, 30000);
+    fetchBiometricStatus();
+    const intervalId = setInterval(() => {
+      fetchDashboard();
+      fetchBiometricStatus();
+    }, 30000);
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') fetchDashboard();
+      if (document.visibilityState === 'visible') {
+        fetchDashboard();
+        fetchBiometricStatus();
+      }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [fetchDashboard]);
+  }, [fetchDashboard, fetchBiometricStatus]);
 
   // Redirect mobile with no device to onboarding
   useEffect(() => {
@@ -494,7 +627,24 @@ export default function EmployeeDashboard() {
   }, [dashboard, navigate]);
 
 
-  const handleCheckIn = async (scannedQrValue = null) => {
+  const handleStartScanClick = async () => {
+    try {
+      const { camera, location } = await checkCameraAndLocationPermissions();
+      if (camera === 'granted' && location === 'granted') {
+        setShowScanner(true);
+        return;
+      }
+    } catch {}
+    setShowPermissionsGate(true);
+  };
+
+  const handlePermissionsGranted = (coords) => {
+    if (coords) setCachedLocation(coords);
+    setShowPermissionsGate(false);
+    setShowScanner(true);
+  };
+
+  const handleCheckIn = async (scannedQrValue = null, extraPayload = {}) => {
     const finalQrValue = typeof scannedQrValue === 'string' ? scannedQrValue : null;
     setActionLoading('checkin');
     setShowScanner(false);
@@ -502,18 +652,24 @@ export default function EmployeeDashboard() {
       if (dashboard?.activeMethod === 'qr_code' && !finalQrValue) {
         throw new Error('Please scan the office QR code to check in.');
       }
-      const loc = await getLocation();
+      let loc = cachedLocation;
+      if (!loc) {
+        loc = await getLocation();
+      }
       const fp = await getDeviceFingerprint();
       const payload = {
         lat: loc.lat,
         lng: loc.lng,
         deviceFingerprint: fp,
+        ...extraPayload,
       };
       if (dashboard?.activeMethod === 'qr_code') payload.qrCodeValue = finalQrValue;
 
       await api.post('/employee/attendance/check-in', payload);
       showMessage('success', '✅ Attendance Marked Successfully! You are checked in.');
+      setCachedLocation(null);
       fetchDashboard();
+      fetchBiometricStatus();
     } catch (err) {
       const raw = err.response?.data?.message || err.message || 'Check-in failed.';
       showMessage('error', formatAttendanceError(raw));
@@ -522,10 +678,35 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const handleEnrollBiometric = async () => {
+    setActionLoading('biometric-enroll');
+    try {
+      await enrollBiometric();
+      showMessage('success', '✅ Biometric authentication enabled successfully on this device!');
+      fetchBiometricStatus();
+    } catch (err) {
+      showMessage('error', formatWebAuthnError(err));
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleBiometricCheckIn = async () => {
+    setActionLoading('biometric-checkin');
+    try {
+      const { biometricToken } = await authenticateBiometric();
+      await handleCheckIn(null, { biometricToken });
+    } catch (err) {
+      showMessage('error', formatWebAuthnError(err));
+      setActionLoading('');
+    }
+  };
+
   const handleCheckOutClick = () => {
-    const isLogSubmitted = dashboard?.dailyLogSubmitted || !!todayDailyLog;
+    const isLogSubmitted = Boolean(dashboard?.dailyLogSubmitted || todayDailyLog);
 
     if (!isLogSubmitted) {
+      showMessage('error', '⚠️ Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
       setShowDailyLogModal(true);
       return;
     }
@@ -540,16 +721,10 @@ export default function EmployeeDashboard() {
 
   const handleDailyLogSuccess = (savedLog) => {
     setTodayDailyLog(savedLog);
+    setDashboard((prev) => prev ? { ...prev, dailyLogSubmitted: true } : prev);
     setShowDailyLogModal(false);
-    showMessage('success', 'Daily log saved!');
+    showMessage('success', '✅ Daily Log Sheet submitted! Check-out is now unlocked.');
     fetchDashboard();
-
-    if (isMobileDevice()) {
-      // Direct mobile checkout immediately after log
-      executeCheckout();
-    } else {
-      setShowCheckoutQrModal(true);
-    }
   };
 
   const executeCheckout = async (extraPayload = {}) => {
@@ -633,7 +808,8 @@ export default function EmployeeDashboard() {
   const isCheckedIn = !!(todayAtt?.checkInTime);
   const isCheckedOut = !!(todayAtt?.checkOutTime);
   const hasActiveBreak = !!(att?.activeBreak);
-  const dailyLogMissing = isCheckedIn && !isCheckedOut && !dashboard?.dailyLogSubmitted;
+  const isLogSubmitted = Boolean(dashboard?.dailyLogSubmitted || todayDailyLog);
+  const dailyLogMissing = isCheckedIn && !isCheckedOut && !isLogSubmitted;
   const activeMethod = dashboard?.activeMethod;
   const deviceStatus = dashboard?.deviceStatus;
 
@@ -758,6 +934,7 @@ export default function EmployeeDashboard() {
                   {activeMethod === 'qr_code' && <><QrCode size={12} className="text-primary-400" /> QR Code</>}
                   {activeMethod === 'wifi_ip' && <><Wifi size={12} className="text-primary-400" /> WiFi / IP</>}
                   {activeMethod === 'device_fingerprint' && <><Smartphone size={12} className="text-primary-400" /> Device</>}
+                  {activeMethod === 'biometric' && <><Fingerprint size={12} className="text-primary-400" /> Biometric</>}
                 </div>
               </div>
 
@@ -831,58 +1008,33 @@ export default function EmployeeDashboard() {
               {activeMethod === 'qr_code' && (
                 <>
                   {isMobile ? (
-                    /* MOBILE: Show scanner button */
+                    /* MOBILE: Show scanner trigger button */
                     <div>
-                      {/* QR info header */}
-                      {!showScanner && (
-                        <>
-                          <div className="flex items-center gap-3 p-3 bg-slate-800/40 rounded-xl border border-slate-700/50 mb-4">
-                            <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center flex-shrink-0">
-                              <QrCode size={18} className="text-primary-400" />
-                            </div>
-                            <div>
-                              <p className="text-white font-semibold text-sm">Office QR Code</p>
-                              <p className="text-slate-400 text-xs">Scan the QR code displayed at your office entrance using your registered mobile.</p>
-                            </div>
-                          </div>
-                          <button
-                            id="scan-qr-btn"
-                            onClick={() => setShowScanner(true)}
-                            disabled={!!actionLoading || geoLoading}
-                            className="btn-primary btn-lg w-full shadow-lg shadow-primary-500/20"
-                          >
-                            <Camera size={20} /> Scan Office QR Code to Check In
-                          </button>
-                        </>
-                      )}
-
-                      {/* Inline scanner — renders inside the card, no full-page replace */}
-                      {showScanner && (
-                        <div className="card border border-primary-500/30 bg-slate-900/60">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center flex-shrink-0">
-                              <QrCode size={18} className="text-primary-400" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-white text-sm">Scan Office QR Code</p>
-                              <p className="text-xs text-slate-400">Point your rear camera at the QR code at the office</p>
-                            </div>
-                          </div>
-
-                          {actionLoading === 'checkin' ? (
-                            <div className="flex flex-col items-center justify-center py-10 text-center">
-                              <Loader2 size={36} className="animate-spin text-primary-400 mb-4" />
-                              <p className="text-white font-semibold text-sm">QR Code Scanned!</p>
-                              <p className="text-slate-400 text-xs mt-1">Verifying your location and device…</p>
-                            </div>
-                          ) : (
-                            <CameraQrScanner
-                              onScan={(text) => handleCheckIn(text)}
-                              onCancel={() => setShowScanner(false)}
-                            />
-                          )}
+                      <div className="flex items-center gap-3 p-3 bg-slate-800/40 rounded-xl border border-slate-700/50 mb-4">
+                        <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center flex-shrink-0">
+                          <QrCode size={18} className="text-primary-400" />
                         </div>
-                      )}
+                        <div>
+                          <p className="text-white font-semibold text-sm">Office QR Code</p>
+                          <p className="text-slate-400 text-xs">Scan the QR code displayed at your office entrance using your registered mobile.</p>
+                        </div>
+                      </div>
+                      <button
+                        id="scan-qr-btn"
+                        onClick={handleStartScanClick}
+                        disabled={!!actionLoading || geoLoading}
+                        className="btn-primary btn-lg w-full shadow-lg shadow-primary-500/20"
+                      >
+                        {actionLoading === 'checkin' ? (
+                          <>
+                            <Loader2 size={20} className="animate-spin" /> Verifying Attendance…
+                          </>
+                        ) : (
+                          <>
+                            <Camera size={20} /> Scan Office QR Code to Check In
+                          </>
+                        )}
+                      </button>
                     </div>
                   ) : (
                     /* DESKTOP: Render the actual Office QR Code to be scanned */
@@ -939,13 +1091,71 @@ export default function EmployeeDashboard() {
                   </div>
                   <button
                     id="check-in-btn"
-                    onClick={handleCheckIn}
+                    onClick={() => handleCheckIn()}
                     disabled={!!actionLoading || geoLoading}
                     className="btn-success btn-lg w-full shadow-lg shadow-success-500/20"
                   >
                     {actionLoading === 'checkin' ? <Loader2 size={20} className="animate-spin" /> : <Shield size={20} />}
                     {actionLoading === 'checkin' ? 'Verifying Device…' : 'Verify Device & Check In'}
                   </button>
+                </div>
+              )}
+
+              {/* ── Biometric Attendance Method ── */}
+              {activeMethod === 'biometric' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3.5 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                    <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center flex-shrink-0 border border-violet-500/30">
+                      <Fingerprint size={22} />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm">Biometric Attendance</p>
+                      <p className="text-slate-400 text-xs mt-0.5">Verify with fingerprint, Face ID, or device PIN</p>
+                    </div>
+                  </div>
+
+                  {biometricStatus?.isBiometricEnrolled ? (
+                    <div>
+                      <button
+                        id="verify-biometric-checkin-btn"
+                        onClick={handleBiometricCheckIn}
+                        disabled={!!actionLoading || geoLoading}
+                        className="btn-primary btn-lg w-full shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500"
+                      >
+                        {actionLoading === 'biometric-checkin' ? (
+                          <>
+                            <Loader2 size={20} className="animate-spin" /> Verifying Biometric…
+                          </>
+                        ) : (
+                          <>
+                            <Fingerprint size={20} /> Verify Biometric & Check In
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-violet-500/10 border border-violet-500/30 rounded-2xl text-center space-y-2.5">
+                      <p className="text-xs text-violet-300 font-medium">
+                        Device biometric is not set up yet. Enable it once on this registered phone to mark attendance.
+                      </p>
+                      <button
+                        id="enable-biometric-btn"
+                        onClick={handleEnrollBiometric}
+                        disabled={!!actionLoading}
+                        className="btn-primary w-full py-3 text-xs font-semibold flex items-center justify-center gap-2 shadow-md shadow-violet-500/20 bg-violet-600 hover:bg-violet-500"
+                      >
+                        {actionLoading === 'biometric-enroll' ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" /> Enrolling Biometric…
+                          </>
+                        ) : (
+                          <>
+                            <Fingerprint size={16} /> Enable Biometric Attendance
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -996,29 +1206,120 @@ export default function EmployeeDashboard() {
             </div>
           )}
 
-              {/* Check Out Button */}
+              {/* ── MANDATORY LOG SHEET & CHECK-OUT PROGRESSION ── */}
               {isCheckedIn && (
-                <button
-                  id="check-out-btn"
-                  onClick={handleCheckOutClick}
-                  disabled={!!actionLoading || geoLoading}
-                  className="btn-danger btn-lg w-full mt-4 shadow-lg shadow-danger-500/20 flex items-center justify-center gap-2"
-                >
-                  {actionLoading === 'checkout' ? <Loader2 size={20} className="animate-spin" /> : <LogOut size={20} />}
-                  {actionLoading === 'checkout' ? 'Checking Out…' : 'Check Out'}
-                </button>
-              )}
+                <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+                  {/* Step 1: Daily Log Sheet */}
+                  <div className={`p-4 rounded-2xl border transition-all ${
+                    isLogSubmitted 
+                      ? 'bg-emerald-500/10 border-emerald-500/30' 
+                      : 'bg-amber-500/10 border-amber-500/30'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className={isLogSubmitted ? 'text-emerald-400' : 'text-amber-400'} />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                          Step 1: Daily Log Sheet
+                        </span>
+                      </div>
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                        isLogSubmitted 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      }`}>
+                        {isLogSubmitted ? (
+                          <>
+                            <CheckCircle size={12} /> Submitted
+                          </>
+                        ) : (
+                          <>
+                            <XCircle size={12} /> Mandatory Before Check-Out
+                          </>
+                        )}
+                      </span>
+                    </div>
 
-              {/* Mobile Fallback Scan Button */}
-              {isMobile && isCheckedIn && (
-                <button
-                  id="manual-scan-checkout-btn"
-                  onClick={() => setShowCheckoutScanner(true)}
-                  className="btn-ghost text-xs w-full mt-2 py-2 flex items-center justify-center gap-1.5 border border-slate-700/80 text-slate-300 hover:text-white"
-                >
-                  <Camera size={14} className="text-primary-400" />
-                  Scan PC Screen to Check Out
-                </button>
+                    <p className="text-xs text-slate-400 mb-3">
+                      {isLogSubmitted 
+                        ? '✅ Today’s work summary is submitted. Check-out is unlocked.' 
+                        : 'You must fill and submit your daily work log sheet before check-out is unlocked.'}
+                    </p>
+
+                    {!isLogSubmitted ? (
+                      <button
+                        id="open-daily-log-btn"
+                        onClick={() => setShowDailyLogModal(true)}
+                        className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-md shadow-primary-500/10"
+                      >
+                        <FileText size={15} /> Fill & Submit Daily Log Sheet
+                      </button>
+                    ) : (
+                      <button
+                        id="view-daily-log-btn"
+                        onClick={() => setShowDailyLogModal(true)}
+                        className="btn-ghost w-full py-1.5 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 border border-slate-700/60"
+                      >
+                        <FileText size={13} /> Update Submitted Daily Log
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Step 2: Check Out */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Step 2: Check-Out
+                      </span>
+                      <span className={`text-[11px] font-semibold ${isLogSubmitted ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {isLogSubmitted ? '🟢 Unlocked' : '🔒 Locked'}
+                      </span>
+                    </div>
+
+                    {!isLogSubmitted ? (
+                      /* BLOCKED STATE */
+                      <div>
+                        <button
+                          id="check-out-btn-blocked"
+                          disabled={true}
+                          onClick={() => {
+                            showMessage('error', '⚠️ Log sheet is mandatory before check-out. Please complete Step 1 first.');
+                            setShowDailyLogModal(true);
+                          }}
+                          className="w-full py-3.5 px-4 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-500 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-75 shadow-inner"
+                        >
+                          <Lock size={16} className="text-slate-500" />
+                          Check-Out Blocked (Submit Log Sheet First)
+                        </button>
+                        <p className="text-[11px] text-slate-500 text-center mt-1.5">
+                          ⚠️ Check-out remains blocked until Step 1 (Log Sheet) is submitted.
+                        </p>
+                      </div>
+                    ) : (
+                      /* UNLOCKED STATE */
+                      <div>
+                        <button
+                          id="check-out-btn"
+                          onClick={handleCheckOutClick}
+                          disabled={!!actionLoading || geoLoading}
+                          className="btn-danger btn-lg w-full shadow-lg shadow-danger-500/20 flex items-center justify-center gap-2 animate-in fade-in"
+                        >
+                          {actionLoading === 'checkout' ? <Loader2 size={20} className="animate-spin" /> : <LogOut size={20} />}
+                          {actionLoading === 'checkout' ? 'Checking Out…' : 'Check Out'}
+                        </button>
+                        {isMobile && (
+                          <button
+                            id="manual-scan-checkout-btn"
+                            onClick={() => setShowCheckoutScanner(true)}
+                            className="btn-ghost text-xs w-full mt-2 py-2 flex items-center justify-center gap-1.5 border border-slate-700/80 text-slate-300 hover:text-white"
+                          >
+                            <Camera size={14} className="text-primary-400" />
+                            Scan PC Screen to Check Out
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* Break Controls */}
@@ -1113,7 +1414,9 @@ export default function EmployeeDashboard() {
             </div>
           </div>
           {!dashboard?.dailyLogSubmitted && (
-            <a href="/daily-log" id="submit-log-link" className="btn-primary text-xs px-3 py-2">Submit</a>
+            <button onClick={() => setShowDailyLogModal(true)} id="submit-log-link" className="btn-primary text-xs px-3 py-2">
+              Submit
+            </button>
           )}
         </div>
 
@@ -1148,6 +1451,37 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
+      {/* ── Mobile Camera Scanner Overlay for Office QR Check-In ── */}
+      {showScanner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-2xl relative text-center">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5 text-left">
+                <div className="w-9 h-9 rounded-xl bg-primary-500/20 text-primary-400 flex items-center justify-center flex-shrink-0">
+                  <QrCode size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">Scan Office QR Code</h3>
+                  <p className="text-[11px] text-slate-400">Point at the QR code at your office entrance</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowScanner(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <CameraQrScanner
+              scannerId="qr-office-reader"
+              onScan={(text) => handleCheckIn(text)}
+              onCancel={() => setShowScanner(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile Camera Scanner Overlay for PC QR ── */}
       {showCheckoutScanner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm animate-in fade-in">
@@ -1155,6 +1489,7 @@ export default function EmployeeDashboard() {
             <h3 className="text-base font-bold text-white mb-1">Scan PC Screen</h3>
             <p className="text-xs text-slate-400 mb-4">Point your camera at the QR code displayed on your PC to complete check-out.</p>
             <CameraQrScanner
+              scannerId="qr-checkout-reader"
               onScan={handleMobileCheckoutScan}
               onCancel={() => setShowCheckoutScanner(false)}
             />
@@ -1191,6 +1526,13 @@ export default function EmployeeDashboard() {
         onReportSent={() => {
           fetchDashboard();
         }}
+      />
+
+      {/* ── Check-In Permissions Gate Modal ── */}
+      <CheckInPermissionsModal
+        isOpen={showPermissionsGate}
+        onClose={() => setShowPermissionsGate(false)}
+        onPermissionsGranted={handlePermissionsGranted}
       />
     </div>
   );

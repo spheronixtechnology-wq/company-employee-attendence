@@ -10,7 +10,7 @@ const attendanceMethodSettingSchema = new mongoose.Schema(
     activeMethod: {
       type: String,
       enum: {
-        values: ['qr_code', 'wifi_ip', 'device_fingerprint'],
+        values: ['qr_code', 'wifi_ip', 'device_fingerprint', 'biometric'],
         message: 'Invalid attendance method',
       },
       required: true,

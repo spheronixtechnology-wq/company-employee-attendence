@@ -211,13 +211,14 @@ const AttendanceMethodPage = () => {
     { key: 'qr_code', label: 'QR Code', desc: 'Daily rotating QR code. Employees scan at check-in.' },
     { key: 'wifi_ip', label: 'WiFi / IP', desc: 'Validates employee is on office network by IP address.' },
     { key: 'device_fingerprint', label: 'Device Fingerprint', desc: 'Pre-registered and approved device required.' },
+    { key: 'biometric', label: 'Biometric Attendance', desc: 'Device-owner authentication using phone biometric sensor (fingerprint, Face ID, or PIN).' },
   ];
 
   return (
     <div className="p-6 space-y-5 animate-fade-in">
       <h1 className="text-2xl font-bold text-white">Attendance Method</h1>
       <p className="text-slate-400 text-sm">Only one method can be active at a time. All methods require geofence validation.</p>
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {methods.map(m => (
           <div key={m.key} className={`card cursor-pointer transition-all ${current === m.key ? 'border-primary-500 bg-primary-500/10' : 'hover:border-slate-500'}`}>
             <div className="flex items-center justify-between mb-3">

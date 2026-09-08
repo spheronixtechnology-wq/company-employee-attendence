@@ -4,6 +4,16 @@ const { success, badRequest } = require('../utils/response');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const OfficeLocation = require('../models/OfficeLocation');
+const DeviceRequest = require('../models/DeviceRequest');
+const RegisteredDevice = require('../models/RegisteredDevice');
+const Notification = require('../models/Notification');
+const { createNotification } = require('../services/notification.service');
+const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest } = require('../socket');
+const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
+const BiometricCredential = require('../models/BiometricCredential');
+const { writeAuditLog } = require('../services/audit.service');
+const { getClientIp } = require('../utils/ipUtils');
+const { formatDeviceLabel } = require('../utils/deviceUtils');
 
 const getStatus = (req, res) => {
   return success(res, 'Admin portal backend is active');
@@ -250,6 +260,179 @@ const deleteOfficeLocation = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/device-requests
+ * Returns all company device requests, filtered by status.
+ */
+const getDeviceRequests = async (req, res) => {
+  try {
+    const status = req.query.status || 'pending';
+    const query = {};
+    if (status !== 'all') {
+      query.status = status;
+    }
+
+    const requests = await DeviceRequest.find(query)
+      .populate('userId', 'name email role designation teamId avatarUrl')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return success(res, 'Fetched device requests', { requests });
+  } catch (error) {
+    console.error('getDeviceRequests error:', error);
+    return badRequest(res, 'Failed to fetch device requests');
+  }
+};
+
+/**
+ * PATCH /api/admin/device-requests/:id/decision
+ * Admin approves or rejects any employee device replacement request.
+ */
+const handleDeviceRequestDecision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, decisionNote, approvedUntil } = req.body;
+
+    if (!['approve', 'reject'].includes(action)) {
+      return badRequest(res, 'Action must be approve or reject');
+    }
+
+    const request = await DeviceRequest.findById(id);
+    if (!request) return badRequest(res, 'Device request not found');
+
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    request.status = newStatus;
+    request.decisionNote = decisionNote || null;
+    if (action === 'approve' && approvedUntil) {
+      request.requestedUntil = approvedUntil;
+    }
+    await request.save();
+
+    if (action === 'approve') {
+      // Revoke all previous devices
+      await RegisteredDevice.updateMany({ userId: request.userId }, { isActive: false, status: 'REVOKED' });
+
+      // Invalidate all previous biometric credentials tied to revoked devices
+      await BiometricCredential.updateMany({ userId: request.userId }, { isActive: false });
+
+      // Create new active device
+      const newDevice = new RegisteredDevice({
+        userId: request.userId,
+        status: 'ACTIVE',
+        isActive: true,
+        temporaryUntil: request.requestedUntil || null,
+        deviceLabel: formatDeviceLabel(request.requestedDeviceLabel) || null,
+        userAgent: request.userAgent || null,
+        deviceFingerprint: request.deviceFingerprint || null,
+        ipAddress: request.ipAddress || null,
+        lastSeenIp: request.ipAddress || null,
+        lastSeenAt: new Date(),
+      });
+      await newDevice.save();
+
+      // Invalidate old device sessions immediately
+      await User.findByIdAndUpdate(request.userId, { $inc: { tokenVersion: 1 } });
+    }
+
+    await createNotification({
+      userId: request.userId,
+      type: action === 'approve' ? 'device_approved' : 'device_rejected',
+      title: 'Device Request ' + (action === 'approve' ? 'Approved by Admin ✅' : 'Rejected by Admin ❌'),
+      message: `Your device request has been ${action}d by Admin.` + (decisionNote ? ` Note: ${decisionNote}` : ''),
+      relatedId: request._id,
+    });
+
+    // Mark notifications related to this request as read
+    await Notification.updateMany(
+      { relatedId: request._id, isRead: false },
+      { $set: { isRead: true } }
+    );
+
+    // Real-time WebSocket emission to all channels
+    emitToUser(request.userId, 'device:request_resolved', {
+      requestId: request._id,
+      action,
+      status: newStatus,
+      decisionNote,
+      userId: request.userId,
+    });
+    emitToManagers('device:request_resolved', {
+      requestId: request._id,
+      action,
+      status: newStatus,
+      userId: request.userId,
+    });
+    emitToAdmins('device:request_resolved', {
+      requestId: request._id,
+      action,
+      status: newStatus,
+      userId: request.userId,
+    });
+    emitToDeviceRequest(request._id, 'device:request_resolved', {
+      requestId: request._id,
+      action,
+      status: newStatus,
+      decisionNote,
+      userId: request.userId,
+    });
+
+    return success(res, `Device request ${action}d successfully`, { request });
+  } catch (error) {
+    console.error('admin handleDeviceRequestDecision error:', error);
+    return badRequest(res, 'Failed to handle device request decision');
+  }
+};
+
+const getActiveAttendanceMethod = async (req, res) => {
+  try {
+    const latest = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
+    const activeMethod = latest ? latest.activeMethod : 'qr_code';
+    return success(res, 'Active attendance method fetched', { activeMethod });
+  } catch (error) {
+    console.error('getActiveAttendanceMethod error:', error);
+    return badRequest(res, 'Failed to fetch active attendance method');
+  }
+};
+
+const switchAttendanceMethod = async (req, res) => {
+  try {
+    const { method, reason } = req.body;
+    const validMethods = ['qr_code', 'wifi_ip', 'device_fingerprint', 'biometric'];
+    if (!method || !validMethods.includes(method)) {
+      return badRequest(res, `Invalid method. Must be one of: ${validMethods.join(', ')}`);
+    }
+    if (!reason || !reason.trim()) {
+      return badRequest(res, 'Reason is required when switching attendance method');
+    }
+    if (reason.trim().length > 300) {
+      return badRequest(res, 'Reason cannot exceed 300 characters');
+    }
+
+    const newSetting = new AttendanceMethodSetting({
+      activeMethod: method,
+      changedBy: req.user._id,
+      reason: reason.trim(),
+      changedAt: new Date(),
+    });
+    await newSetting.save();
+
+    await writeAuditLog({
+      action: 'ATTENDANCE_METHOD_SWITCHED',
+      performedBy: req.user,
+      targetCollection: 'AttendanceMethodSetting',
+      targetId: newSetting._id,
+      reason: reason.trim(),
+      metadata: { newMethod: method },
+      ipAddress: getClientIp(req),
+    });
+
+    return success(res, 'Attendance method switched successfully', { activeMethod: method });
+  } catch (error) {
+    console.error('switchAttendanceMethod error:', error);
+    return badRequest(res, 'Failed to switch attendance method');
+  }
+};
+
 module.exports = { 
   getStatus, 
   getDashboard, 
@@ -262,5 +445,9 @@ module.exports = {
   getOfficeLocations,
   createOfficeLocation,
   updateOfficeLocation,
-  deleteOfficeLocation
+  deleteOfficeLocation,
+  getDeviceRequests,
+  handleDeviceRequestDecision,
+  getActiveAttendanceMethod,
+  switchAttendanceMethod,
 };

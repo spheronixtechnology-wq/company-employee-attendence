@@ -4,38 +4,14 @@ import { ShieldAlert, Loader2, CheckCircle, AlertTriangle, Smartphone, Monitor }
 import api from '../lib/api';
 import { getDeviceFingerprint } from '../lib/fingerprint';
 import { useSocket } from '../contexts/SocketContext';
-
-// Build a readable device label from navigator info (client-side)
-const getDeviceLabel = async () => {
-  try {
-    // Chrome/Android: use high-entropy UA data for precise model
-    if (navigator.userAgentData?.getHighEntropyValues) {
-      const hints = await navigator.userAgentData.getHighEntropyValues(['model', 'platform', 'platformVersion']);
-      const model = hints.model || '';
-      const platform = hints.platform || '';
-      const version = hints.platformVersion || '';
-      const parts = [model, platform && version ? `${platform} ${version}` : platform].filter(Boolean);
-      if (parts.length) return parts.join(' · ');
-    }
-  } catch {}
-  // Fallback: parse the classic UA string
-  const ua = navigator.userAgent;
-  if (/iPhone/i.test(ua)) return 'iPhone · Safari · iOS';
-  if (/iPad/i.test(ua)) return 'iPad · Safari · iPadOS';
-  if (/Android/i.test(ua)) {
-    const match = ua.match(/Android ([0-9.]+)/);
-    return `Android Device${match ? ' · Android ' + match[1] : ''}`;
-  }
-  if (/Windows/i.test(ua)) return 'Windows · Desktop';
-  if (/Mac/i.test(ua)) return 'macOS · Desktop';
-  return 'Unknown Device';
-};
+import { getDeviceInfo } from '../lib/deviceNames';
 
 const DeviceOnboardingPage = () => {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [message, setMessage] = useState(null);
   const [deviceLabel, setDeviceLabel] = useState('');
+  const [isMobile, setIsMobile] = useState(true);
   const [currentStatus, setCurrentStatus] = useState(null); // 'pending' | 'active' | 'rejected' | null
   const { socket } = useSocket();
   const navigate = useNavigate();
@@ -43,9 +19,10 @@ const DeviceOnboardingPage = () => {
   useEffect(() => {
     const init = async () => {
       setChecking(true);
-      // Detect device name
-      const label = await getDeviceLabel();
-      setDeviceLabel(label);
+      // Automatically detect device name & model
+      const info = await getDeviceInfo();
+      setDeviceLabel(info.fullLabel || 'Mobile Device');
+      setIsMobile(info.isMobile);
 
       // Check current device status — don't show the form if already pending/active
       try {
@@ -88,8 +65,14 @@ const DeviceOnboardingPage = () => {
     setMessage(null);
     try {
       const fp = await getDeviceFingerprint();
-      await api.post('/employee/device/request', { requestedDeviceLabel: deviceLabel, deviceFingerprint: fp });
-      setMessage({ type: 'success', text: 'Device approval requested successfully. You will be notified once your manager approves.' });
+      await api.post('/employee/device/request', {
+        requestedDeviceLabel: deviceLabel,
+        deviceFingerprint: fp
+      });
+      setMessage({
+        type: 'success',
+        text: 'Device approval requested successfully. You will be notified once your manager approves.'
+      });
       setCurrentStatus('pending');
       setTimeout(() => navigate('/dashboard'), 3000);
     } catch (err) {
@@ -99,11 +82,9 @@ const DeviceOnboardingPage = () => {
     }
   };
 
-  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
         <Loader2 size={32} className="animate-spin text-violet-400" />
       </div>
     );
@@ -143,9 +124,9 @@ const DeviceOnboardingPage = () => {
               Register this device with your manager to mark attendance.
             </p>
 
-            {/* Device confirmation card */}
+            {/* Device confirmation card — 100% automated */}
             <div className="p-4 rounded-2xl bg-slate-700/50 border border-slate-600/60 mb-6 text-left">
-              <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-medium">Device to Register</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-2">Device to Register</p>
               <div className="flex items-center gap-3">
                 {isMobile ? (
                   <Smartphone size={28} className="text-violet-400 flex-shrink-0" />
@@ -153,8 +134,8 @@ const DeviceOnboardingPage = () => {
                   <Monitor size={28} className="text-violet-400 flex-shrink-0" />
                 )}
                 <div>
-                  <p className="text-white font-semibold text-sm">{deviceLabel}</p>
-                  <p className="text-slate-500 text-xs">This info will be visible to your manager</p>
+                  <p className="text-white font-semibold text-base">{deviceLabel}</p>
+                  <p className="text-slate-400 text-xs mt-0.5">This info will be visible to your manager</p>
                 </div>
               </div>
             </div>
@@ -188,4 +169,3 @@ const DeviceOnboardingPage = () => {
 };
 
 export default DeviceOnboardingPage;
-

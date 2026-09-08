@@ -12,10 +12,15 @@ router.get('/status', employeeController.getStatus);
 router.get('/dashboard', isEmployee, employeeController.getDashboard);
 
 // Attendance
+router.get('/attendance/me', isEmployee, employeeController.getMyAttendanceHistory);
 router.post('/attendance/check-in', isEmployee, employeeController.checkIn);
 router.post('/attendance/initiate-checkout', isEmployee, employeeController.initiateCheckout);
 router.post('/attendance/check-out', isEmployee, employeeController.checkOut);
 router.post('/attendance/send-report', isEmployee, employeeController.sendDailyReport);
+
+// Profile
+router.put('/profile', isEmployee, employeeController.updateProfile);
+router.patch('/profile', isEmployee, employeeController.updateProfile);
 
 // Breaks
 router.post('/break/start', isEmployee, employeeController.startBreak);
@@ -38,5 +43,9 @@ router.post('/device/request', isEmployee, employeeController.requestDeviceAppro
 router.get('/device-status', isEmployee, employeeController.getDeviceStatus);
 router.get('/device-requests', isEmployee, employeeController.getMyDeviceRequests);
 router.post('/device-requests', isEmployee, employeeController.requestDeviceApproval); // DeviceStatusPage uses this URL
+
+// Biometric
+const biometricRoutes = require('./biometric.routes');
+router.use('/biometric', isEmployee, biometricRoutes);
 
 module.exports = router;

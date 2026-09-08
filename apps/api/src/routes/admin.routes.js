@@ -23,4 +23,12 @@ router.post('/office-locations', isAdmin, adminController.createOfficeLocation);
 router.patch('/office-locations/:id', isAdmin, adminController.updateOfficeLocation);
 router.delete('/office-locations/:id', isAdmin, adminController.deleteOfficeLocation);
 
+// Device Requests
+router.get('/device-requests', isAdmin, adminController.getDeviceRequests);
+router.patch('/device-requests/:id/decision', isAdmin, adminController.handleDeviceRequestDecision);
+
+// Attendance Method Settings
+router.get('/attendance-method/active', isAdmin, adminController.getActiveAttendanceMethod);
+router.patch('/attendance-method/switch', isAdmin, adminController.switchAttendanceMethod);
+
 module.exports = router;

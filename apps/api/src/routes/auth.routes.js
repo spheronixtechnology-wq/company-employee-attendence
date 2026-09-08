@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { login, logout, getMe } = require('../controllers/auth.controller');
+const { login, logout, getMe, requestDeviceAccess } = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
 const { body, validationResult } = require('express-validator');
 const { badRequest } = require('../utils/response');
@@ -25,6 +25,13 @@ const validateLogin = [
  * @access  Public
  */
 router.post('/login', validateLogin, login);
+
+/**
+ * @route   POST /api/auth/device-access-request
+ * @desc    Submit device replacement/access request from login screen
+ * @access  Public (credential-verified)
+ */
+router.post('/device-access-request', requestDeviceAccess);
 
 /**
  * @route   POST /api/auth/logout
