@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Smartphone, MapPin, CheckCircle, XCircle, Plus } from 'lucide-react';
+import { Loader2, Smartphone, MapPin, CheckCircle, XCircle, Plus, Wifi, AlertCircle } from 'lucide-react';
 import api from '../lib/api';
 
 // --- 1. Device Requests Page ---
@@ -119,7 +119,16 @@ export const OfficeLocationsPage = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [detecting, setDetecting] = useState(false);
-  const [form, setForm] = useState({ officeName: '', latitude: '', longitude: '', radiusMeters: 200 });
+  const [detectingIp, setDetectingIp] = useState(false);
+  const [detectedIpInfo, setDetectedIpInfo] = useState(null);
+  const [form, setForm] = useState({
+    officeName: '',
+    latitude: '',
+    longitude: '',
+    radiusMeters: 200,
+    wifiSsid: '',
+    allowedIps: '',
+  });
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
 
   const fetchLocations = async () => {
@@ -137,19 +146,52 @@ export const OfficeLocationsPage = () => {
 
   const handleSave = async () => {
     if (!form.officeName || !form.latitude || !form.longitude || !form.radiusMeters) {
-      return alert('All fields are required');
+      return alert('Office name, latitude, longitude, and radius are required');
     }
     setSaving(true);
     try {
       await api.post('/admin/office-locations', form);
       setShowAdd(false);
-      setForm({ officeName: '', latitude: '', longitude: '', radiusMeters: 200 });
+      setForm({
+        officeName: '',
+        latitude: '',
+        longitude: '',
+        radiusMeters: 200,
+        wifiSsid: '',
+        allowedIps: '',
+      });
       setGpsAccuracy(null);
+      setDetectedIpInfo(null);
       fetchLocations();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to save location');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAutoDetectIp = async () => {
+    setDetectingIp(true);
+    try {
+      const res = await api.get('/admin/current-ip');
+      const detected = res.data?.data?.ip;
+      if (detected) {
+        setDetectedIpInfo(detected);
+        setForm((prev) => {
+          const existing = prev.allowedIps
+            ? prev.allowedIps.split(',').map((s) => s.trim()).filter(Boolean)
+            : [];
+          if (!existing.includes(detected)) {
+            const updated = [...existing, detected].join(', ');
+            return { ...prev, allowedIps: updated };
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to detect current IP');
+    } finally {
+      setDetectingIp(false);
     }
   };
 
@@ -217,7 +259,7 @@ export const OfficeLocationsPage = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
               <label className="label">Location Name</label>
               <input placeholder="e.g. Headquarters" className="input" value={form.officeName} onChange={e => setForm({...form, officeName: e.target.value})} />
@@ -235,6 +277,70 @@ export const OfficeLocationsPage = () => {
               <input type="number" placeholder="Radius (m)" className="input" value={form.radiusMeters} onChange={e => setForm({...form, radiusMeters: e.target.value})} />
             </div>
           </div>
+
+          <div className="border-t border-slate-700/60 pt-4 mb-4 space-y-4">
+            <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Wifi size={16} className="text-primary-400" /> Authorized Office Network Configuration
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Office WiFi Name (SSID)</label>
+                <input
+                  placeholder="e.g. Spheronix-Office-5G"
+                  className="input"
+                  value={form.wifiSsid}
+                  onChange={e => setForm({...form, wifiSsid: e.target.value})}
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Display guidance label telling employees which network to join.</p>
+              </div>
+
+              <div>
+                <label className="label">Allowed Public IP(s) / CIDR Subnets</label>
+                <input
+                  placeholder="e.g. 103.5.135.77, 103.5.135.64/28"
+                  className="input font-mono text-xs"
+                  value={form.allowedIps}
+                  onChange={e => setForm({...form, allowedIps: e.target.value})}
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Authorized office router public egress IP(s) or CIDRs (comma-separated).</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-900/60 rounded-xl border border-slate-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Wifi size={16} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Auto-Detect Office Public IP</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Captures the public egress IP of your current internet connection and appends it to Allowed IPs.
+                </p>
+                {detectedIpInfo && (
+                  <p className="text-xs text-emerald-400 font-medium mt-1">
+                    ✅ Detected Public IP: <span className="font-mono text-white">{detectedIpInfo}</span>
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoDetectIp}
+                disabled={detectingIp}
+                className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap"
+              >
+                {detectingIp ? <Loader2 size={14} className="animate-spin" /> : <Wifi size={14} />}
+                {detectingIp ? 'Detecting...' : 'Detect Current IP'}
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-amber-400" />
+              <span>
+                <strong>Warning:</strong> Make sure you are connected to the official office network before using auto-detect. If configuring remotely from home, enter your office static public IP manually.
+              </span>
+            </div>
+          </div>
+
           <div className="mt-6 flex justify-end gap-3">
             <button onClick={() => setShowAdd(false)} className="btn-ghost">Cancel</button>
             <button className="btn-primary" onClick={handleSave} disabled={saving}>
@@ -267,9 +373,16 @@ export const OfficeLocationsPage = () => {
                   </button>
                 </div>
                 <div className="space-y-2 text-sm text-slate-400 bg-slate-900/50 p-3 rounded-lg">
-                  <div className="flex justify-between"><span>Latitude:</span> <span className="text-white">{loc.latitude}</span></div>
-                  <div className="flex justify-between"><span>Longitude:</span> <span className="text-white">{loc.longitude}</span></div>
+                  <div className="flex justify-between"><span>Latitude:</span> <span className="text-white font-mono">{loc.latitude}</span></div>
+                  <div className="flex justify-between"><span>Longitude:</span> <span className="text-white font-mono">{loc.longitude}</span></div>
                   <div className="flex justify-between"><span>Radius:</span> <span className="text-white">{loc.radiusMeters}m</span></div>
+                  <div className="flex justify-between border-t border-slate-800 pt-1.5"><span>WiFi SSID:</span> <span className="text-primary-300 font-medium">{loc.wifiSsid || 'Not set'}</span></div>
+                  <div className="flex flex-col border-t border-slate-800 pt-1.5">
+                    <span className="text-xs text-slate-500 mb-0.5">Allowed Public IPs:</span>
+                    <span className="text-xs font-mono text-emerald-400 break-all">
+                      {loc.allowedIps && loc.allowedIps.length > 0 ? loc.allowedIps.join(', ') : 'None configured'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -15,6 +15,14 @@ const attendanceSchema = new mongoose.Schema({
     enum: ['qr_code', 'wifi_ip', 'device_fingerprint', 'biometric'],
     default: 'qr_code',
   },
+  checkInIp: {
+    type: String,
+    default: null,
+  },
+  checkOutIp: {
+    type: String,
+    default: null,
+  },
   breaks: [
     {
       type: {

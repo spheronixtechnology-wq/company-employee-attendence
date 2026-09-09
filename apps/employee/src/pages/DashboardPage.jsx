@@ -6,7 +6,7 @@ import { getDeviceFingerprint } from '../lib/fingerprint';
 import {
   LogIn, LogOut, Coffee, Timer, FileText, Bell,
   CheckCircle, XCircle, Clock, Wifi, Smartphone, QrCode,
-  AlertTriangle, Loader2, MapPin, Shield,
+  AlertTriangle, AlertCircle, Loader2, MapPin, Shield,
   ChevronRight, Camera, Info, Monitor, X, Lock, Fingerprint
 } from 'lucide-react';
 import {
@@ -393,7 +393,15 @@ const useGeolocation = () => {
     if (!navigator.geolocation) { reject(new Error('Geolocation not supported.')); return; }
     setLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setGeoError(null); setLoading(false); resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+      (pos) => {
+        setGeoError(null);
+        setLoading(false);
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        });
+      },
       (err) => {
         const msg = err.code === 1
           ? 'Location Access Required — please allow location access to verify your work location.'
@@ -467,6 +475,9 @@ const isMobileDevice = () => {
 const formatAttendanceError = (rawMessage) => {
   if (!rawMessage) return 'An error occurred. Please try again.';
   const msg = rawMessage.toLowerCase();
+  if (msg.includes('unauthorized network') || msg.includes('outside office location') || msg.includes('gps accuracy')) {
+    return rawMessage;
+  }
   if (msg.includes('device replacement')) return rawMessage;
   if (msg.includes('already checked in') || msg.includes('already marked')) return '⚠️ Attendance Already Marked for today.';
   if (msg.includes('expired') || msg.includes('qr code has expired')) return '⏱️ QR Code Expired — please scan the current QR code at the office.';
@@ -505,10 +516,25 @@ export default function EmployeeDashboard() {
   const [cachedLocation, setCachedLocation] = useState(null);
   const [biometricStatus, setBiometricStatus] = useState(null);
   const [biometricSupported, setBiometricSupported] = useState(false);
+  const [networkStatus, setNetworkStatus] = useState(null);
+  const [networkLoading, setNetworkLoading] = useState(false);
 
   useEffect(() => {
     isBiometricSupported().then(setBiometricSupported).catch(() => setBiometricSupported(false));
   }, []);
+
+  const fetchNetworkStatus = useCallback(async () => {
+    if (dashboard?.activeMethod !== 'wifi_ip') return;
+    setNetworkLoading(true);
+    try {
+      const res = await api.get('/employee/network-status');
+      setNetworkStatus(res.data?.data || null);
+    } catch {
+      // Ignore network status fetch errors
+    } finally {
+      setNetworkLoading(false);
+    }
+  }, [dashboard?.activeMethod]);
 
   const fetchBiometricStatus = useCallback(async () => {
     try {
@@ -599,14 +625,17 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     fetchDashboard();
     fetchBiometricStatus();
+    fetchNetworkStatus();
     const intervalId = setInterval(() => {
       fetchDashboard();
       fetchBiometricStatus();
+      fetchNetworkStatus();
     }, 30000);
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchDashboard();
         fetchBiometricStatus();
+        fetchNetworkStatus();
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -614,7 +643,7 @@ export default function EmployeeDashboard() {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [fetchDashboard, fetchBiometricStatus]);
+  }, [fetchDashboard, fetchBiometricStatus, fetchNetworkStatus]);
 
   // Redirect mobile with no device to onboarding
   useEffect(() => {
@@ -660,6 +689,7 @@ export default function EmployeeDashboard() {
       const payload = {
         lat: loc.lat,
         lng: loc.lng,
+        accuracy: loc.accuracy,
         deviceFingerprint: fp,
         ...extraPayload,
       };
@@ -670,6 +700,7 @@ export default function EmployeeDashboard() {
       setCachedLocation(null);
       fetchDashboard();
       fetchBiometricStatus();
+      fetchNetworkStatus();
     } catch (err) {
       const raw = err.response?.data?.message || err.message || 'Check-in failed.';
       showMessage('error', formatAttendanceError(raw));
@@ -1063,21 +1094,58 @@ export default function EmployeeDashboard() {
                 </>
               )}
 
-              {/* ── WiFi / IP Method ── */}
+              {/* ── Authorized Office Network (WiFi / IP) Method ── */}
               {activeMethod === 'wifi_ip' && (
-                <div>
-                  <div className="p-3 bg-slate-800/60 rounded-xl text-xs text-slate-400 text-center mb-4 flex items-center justify-center gap-2">
-                    <Wifi size={14} className="text-primary-400" />
-                    Ensure you are connected to the office WiFi before checking in.
-                  </div>
+                <div className="space-y-3">
+                  {networkLoading && !networkStatus ? (
+                    <div className="p-3.5 bg-slate-800/40 rounded-xl border border-slate-700/50 flex items-center justify-center gap-2 text-xs text-slate-400">
+                      <Loader2 size={14} className="animate-spin text-primary-400" />
+                      Checking office network connectivity…
+                    </div>
+                  ) : networkStatus?.isOfficeNetwork ? (
+                    <div className="p-3.5 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs">
+                          <CheckCircle size={15} />
+                          Connected to Authorized Office Network
+                        </div>
+                        {networkStatus.maskedIp && (
+                          <span className="text-[10px] font-mono text-emerald-400/90 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                            {networkStatus.maskedIp}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Gateway verified for <strong className="text-slate-300">{networkStatus.officeName || 'Office'}</strong>. Ensure GPS is enabled to verify physical location.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-amber-500/10 rounded-xl border border-amber-500/30 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                          <AlertCircle size={15} />
+                          Not on Authorized Office Network
+                        </div>
+                        {networkStatus?.maskedIp && (
+                          <span className="text-[10px] font-mono text-amber-400/90 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            {networkStatus.maskedIp}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-300">
+                        Please connect to office WiFi: <strong className="text-primary-300 font-semibold">{networkStatus?.targetSsid || 'Office WiFi'}</strong> before checking in.
+                      </p>
+                    </div>
+                  )}
+
                   <button
                     id="check-in-btn"
-                    onClick={handleCheckIn}
+                    onClick={() => handleCheckIn()}
                     disabled={!!actionLoading || geoLoading}
-                    className="btn-success btn-lg w-full shadow-lg shadow-success-500/20"
+                    className="btn-success btn-lg w-full shadow-lg shadow-success-500/20 flex items-center justify-center gap-2"
                   >
                     {actionLoading === 'checkin' ? <Loader2 size={20} className="animate-spin" /> : <LogIn size={20} />}
-                    {actionLoading === 'checkin' ? 'Verifying Network…' : 'Verify Network & Check In'}
+                    {actionLoading === 'checkin' ? 'Verifying Network & GPS…' : 'Verify Network & Check In'}
                   </button>
                 </div>
               )}

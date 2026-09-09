@@ -12,8 +12,9 @@ const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest } = requir
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
 const { writeAuditLog } = require('../services/audit.service');
-const { getClientIp } = require('../utils/ipUtils');
+const { getClientIp, getActiveLocalInterfaces } = require('../utils/ipUtils');
 const { formatDeviceLabel } = require('../utils/deviceUtils');
+const ipaddr = require('ipaddr.js');
 
 const getStatus = (req, res) => {
   return success(res, 'Admin portal backend is active');
@@ -201,10 +202,17 @@ const getOfficeLocations = async (req, res) => {
 
 const createOfficeLocation = async (req, res) => {
   try {
-    const { officeName, latitude, longitude, radiusMeters, status } = req.body;
+    const { officeName, latitude, longitude, radiusMeters, status, wifiSsid, allowedIps } = req.body;
     
     if (!officeName || latitude == null || longitude == null || radiusMeters == null) {
       return badRequest(res, 'Name, latitude, longitude, and radius are required.');
+    }
+
+    let normalizedAllowedIps = [];
+    if (Array.isArray(allowedIps)) {
+      normalizedAllowedIps = allowedIps.map((ip) => String(ip).trim()).filter(Boolean);
+    } else if (typeof allowedIps === 'string') {
+      normalizedAllowedIps = allowedIps.split(',').map((ip) => ip.trim()).filter(Boolean);
     }
 
     const newLocation = new OfficeLocation({
@@ -212,8 +220,10 @@ const createOfficeLocation = async (req, res) => {
       latitude,
       longitude,
       radiusMeters,
+      wifiSsid: wifiSsid ? wifiSsid.trim() : null,
+      allowedIps: normalizedAllowedIps,
       status: status || 'active',
-      createdBy: req.user._id
+      createdBy: req.user._id,
     });
 
     await newLocation.save();
@@ -227,7 +237,7 @@ const createOfficeLocation = async (req, res) => {
 const updateOfficeLocation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { officeName, latitude, longitude, radiusMeters, status } = req.body;
+    const { officeName, latitude, longitude, radiusMeters, status, wifiSsid, allowedIps } = req.body;
     
     const location = await OfficeLocation.findById(id);
     if (!location) return badRequest(res, 'Office location not found');
@@ -237,6 +247,16 @@ const updateOfficeLocation = async (req, res) => {
     if (longitude !== undefined) location.longitude = longitude;
     if (radiusMeters !== undefined) location.radiusMeters = radiusMeters;
     if (status !== undefined) location.status = status;
+    if (wifiSsid !== undefined) location.wifiSsid = wifiSsid ? wifiSsid.trim() : null;
+
+    if (allowedIps !== undefined) {
+      if (Array.isArray(allowedIps)) {
+        location.allowedIps = allowedIps.map((ip) => String(ip).trim()).filter(Boolean);
+      } else if (typeof allowedIps === 'string') {
+        location.allowedIps = allowedIps.split(',').map((ip) => ip.trim()).filter(Boolean);
+      }
+    }
+
     location.updatedBy = req.user._id;
 
     await location.save();
@@ -244,6 +264,95 @@ const updateOfficeLocation = async (req, res) => {
   } catch (error) {
     console.error('Error updating office location:', error);
     return badRequest(res, error.message || 'Failed to update office location');
+  }
+};
+
+const fetchEgressIpv4 = () => {
+  return new Promise((resolve) => {
+    const https = require('https');
+    const req = https.get('https://api4.ipify.org', { timeout: 3000 }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve(data.trim() || null));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+};
+
+const fetchEgressIpv6 = () => {
+  return new Promise((resolve) => {
+    const https = require('https');
+    const req = https.get('https://api6.ipify.org', { timeout: 3000 }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve(data.trim() || null));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+};
+
+const { execSync } = require('child_process');
+
+const getConnectedSsid = () => {
+  if (process.platform !== 'win32') return null;
+  try {
+    const out = execSync('netsh wlan show interfaces', { encoding: 'utf8', timeout: 2000 });
+    const match = out.match(/^\s*SSID\s*:\s*(.+)$/m);
+    return match ? match[1].trim() : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const getCurrentIp = async (req, res) => {
+  try {
+    const connectionIp = getClientIp(req);
+    const [publicIpv4, publicIpv6] = await Promise.all([
+      fetchEgressIpv4(),
+      fetchEgressIpv6(),
+    ]);
+
+    let ipv6Subnet = null;
+    if (publicIpv6) {
+      try {
+        const parsed = ipaddr.IPv6.parse(publicIpv6);
+        const normalizedParts = [...parsed.parts.slice(0, 4), 0, 0, 0, 0];
+        ipv6Subnet = new ipaddr.IPv6(normalizedParts).toString() + '/64';
+      } catch (e) {
+        console.error('Failed to parse IPv6 subnet:', e);
+      }
+    }
+
+    const localInterfaces = getActiveLocalInterfaces();
+    const primaryLocal =
+      localInterfaces.find((i) => i.adapterName.toLowerCase().includes('wi-fi') || i.adapterName.toLowerCase().includes('wifi')) ||
+      localInterfaces[0] ||
+      null;
+
+    const detectedSsid = getConnectedSsid();
+    const requiredIps = [];
+    if (ipv6Subnet) requiredIps.push(ipv6Subnet);
+    if (publicIpv4 && !requiredIps.includes(publicIpv4)) requiredIps.push(publicIpv4);
+    if (primaryLocal?.subnet && !requiredIps.includes(primaryLocal.subnet)) requiredIps.push(primaryLocal.subnet);
+
+    return success(res, 'Current network IP addresses detected', {
+      ip: connectionIp,
+      clientIp: connectionIp,
+      publicIp: publicIpv4 || publicIpv6 || connectionIp,
+      publicIpv4: publicIpv4 || null,
+      publicIpv6: publicIpv6 || null,
+      ipv6Subnet: ipv6Subnet || null,
+      localWifi: primaryLocal || null,
+      localInterfaces,
+      connectionIp,
+      wifiSsid: detectedSsid || null,
+      requiredIps,
+    });
+  } catch (error) {
+    console.error('Error detecting current IP:', error);
+    return badRequest(res, 'Failed to detect current IP');
   }
 };
 
@@ -396,7 +505,8 @@ const getActiveAttendanceMethod = async (req, res) => {
 
 const switchAttendanceMethod = async (req, res) => {
   try {
-    const { method, reason } = req.body;
+    const method = req.body.method || req.body.activeMethod;
+    const { reason } = req.body;
     const validMethods = ['qr_code', 'wifi_ip', 'device_fingerprint', 'biometric'];
     if (!method || !validMethods.includes(method)) {
       return badRequest(res, `Invalid method. Must be one of: ${validMethods.join(', ')}`);
@@ -450,4 +560,5 @@ module.exports = {
   handleDeviceRequestDecision,
   getActiveAttendanceMethod,
   switchAttendanceMethod,
+  getCurrentIp,
 };

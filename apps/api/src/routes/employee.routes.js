@@ -17,6 +17,7 @@ router.post('/attendance/check-in', isEmployee, employeeController.checkIn);
 router.post('/attendance/initiate-checkout', isEmployee, employeeController.initiateCheckout);
 router.post('/attendance/check-out', isEmployee, employeeController.checkOut);
 router.post('/attendance/send-report', isEmployee, employeeController.sendDailyReport);
+router.get('/network-status', isEmployee, employeeController.getNetworkStatus);
 
 // Profile
 router.put('/profile', isEmployee, employeeController.updateProfile);

@@ -7,6 +7,7 @@ import EmployeesPage from './pages/EmployeesPage';
 import ManagerPermissionsPage from './pages/ManagerPermissionsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import { DeviceRequestsPage, OfficeLocationsPage, LocationRequestsPage } from './pages/AttendanceRequestsPages';
+import WifiSettingsPage from './pages/WifiSettingsPage';
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from './lib/api';
@@ -281,7 +282,7 @@ function AppRoutes() {
               <Route path="/performance-notes" element={<PlaceholderPage title="Performance Notes" />} />
               <Route path="/attendance-method" element={<AttendanceMethodPage />} />
               <Route path="/qr-code" element={<QrCodePage />} />
-              <Route path="/wifi-settings" element={<PlaceholderPage title="WiFi / IP Settings" />} />
+              <Route path="/wifi-settings" element={<WifiSettingsPage />} />
               <Route path="/geofence" element={<GeofencePage />} />
 
               <Route path="/device-requests" element={<DeviceRequestsPage />} />

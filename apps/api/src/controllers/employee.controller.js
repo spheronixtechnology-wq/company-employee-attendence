@@ -18,7 +18,7 @@ const leaveService = require('../services/leave.service');
 const authService = require('../services/auth.service');
 const { createNotification } = require('../services/notification.service');
 const { UAParser } = require('ua-parser-js');
-const { getClientIp } = require('../utils/ipUtils');
+const { getClientIp, isIpInAllowedList, maskIp } = require('../utils/ipUtils');
 const { buildDeviceLabel, formatDeviceLabel } = require('../utils/deviceUtils');
 const { emitToTeam, emitToManagers, emitToUser } = require('../socket');
 const crypto = require('crypto');
@@ -210,7 +210,7 @@ const getDashboard = async (req, res) => {
 
 const checkIn = async (req, res) => {
   try {
-    const { lat, lng, qrCodeValue } = req.body;
+    const { lat, lng, accuracy, qrCodeValue } = req.body;
     const userId = req.user._id;
     const today = getTodayDateString();
 
@@ -306,23 +306,89 @@ const checkIn = async (req, res) => {
     const activeMethodSetting = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
     const activeMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
     
-    // QR code validation 
-    if (activeMethod === 'qr_code') {
-      if (!qrCodeValue) {
-        return badRequest(res, 'Invalid QR Code — please scan today\'s office QR code.');
-      }
-    }
+    // ============================================================================
+    // METHOD-SPECIFIC AUTHENTICATION GATES
+    // Strict Isolation: WiFi / IP network verification occurs ONLY in 'wifi_ip'.
+    // QR Code, Biometric, and Device Fingerprint methods NEVER check IP addresses.
+    // ============================================================================
+    switch (activeMethod) {
+      case 'wifi_ip': {
+        // ONLY the wifi_ip method inspects the employee's network IP address
+        if (accuracy !== undefined && accuracy !== null && !isNaN(Number(accuracy))) {
+          if (Number(accuracy) > 300) {
+            return badRequest(res, `GPS accuracy is too low (${Math.round(accuracy)}m). Please enable high-accuracy location and try again.`);
+          }
+        }
 
-    // Biometric validation
-    if (activeMethod === 'biometric') {
-      const { biometricToken } = req.body;
-      if (!biometricToken) {
-        return badRequest(res, 'Biometric verification required — please authenticate with your fingerprint, Face ID, or PIN.');
+        // 1. Identify which active office matches client's public egress IP
+        const matchingOffices = activeOffices.filter((office) =>
+          isIpInAllowedList(clientIp, office.allowedIps)
+        );
+
+        if (matchingOffices.length === 0) {
+          const officeWithSsid = activeOffices.find((o) => o.wifiSsid);
+          const targetSsid = officeWithSsid ? officeWithSsid.wifiSsid : 'Office WiFi';
+          return badRequest(
+            res,
+            `Unauthorized Network — You must be connected to the authorized office network (${targetSsid}). Detected IP: ${maskIp(clientIp)}.`
+          );
+        }
+
+        // 2. Strict Paired Geofence Check: Verify device GPS against THAT SAME matching office
+        let pairedGeofencePassed = false;
+        let nearestDistance = Infinity;
+        let targetOfficeName = matchingOffices[0].officeName;
+
+        for (const office of matchingOffices) {
+          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+          if (geoCheck.inside) {
+            pairedGeofencePassed = true;
+            targetOfficeName = office.officeName;
+            break;
+          }
+          if (geoCheck.distanceMeters < nearestDistance) {
+            nearestDistance = geoCheck.distanceMeters;
+            targetOfficeName = office.officeName;
+          }
+        }
+
+        if (!pairedGeofencePassed) {
+          return badRequest(
+            res,
+            `Outside Office Location — You are connected to ${targetOfficeName}'s network, but you are outside its physical perimeter (${nearestDistance}m away).`
+          );
+        }
+        break;
       }
-      const decoded = webauthnService.verifyAndConsumeBiometricToken(biometricToken, userId);
-      if (!decoded) {
-        return badRequest(res, 'Invalid or expired biometric verification. Please authenticate again.');
+
+      case 'qr_code': {
+        // STRICT ISOLATION: Zero IP check. Only validates daily HMAC QR code.
+        if (!qrCodeValue) {
+          return badRequest(res, 'Invalid QR Code — please scan today\'s office QR code.');
+        }
+        break;
       }
+
+      case 'biometric': {
+        // STRICT ISOLATION: Zero IP check. Only validates WebAuthn cryptographic passkey.
+        const { biometricToken } = req.body;
+        if (!biometricToken) {
+          return badRequest(res, 'Biometric verification required — please authenticate with your fingerprint, Face ID, or PIN.');
+        }
+        const decoded = webauthnService.verifyAndConsumeBiometricToken(biometricToken, userId);
+        if (!decoded) {
+          return badRequest(res, 'Invalid or expired biometric verification. Please authenticate again.');
+        }
+        break;
+      }
+
+      case 'device_fingerprint': {
+        // STRICT ISOLATION: Zero IP check. Covered by strict device verification gate.
+        break;
+      }
+
+      default:
+        return badRequest(res, `Unknown attendance method: ${activeMethod}`);
     }
 
     const newAttendance = new Attendance({
@@ -331,6 +397,7 @@ const checkIn = async (req, res) => {
       checkInTime: new Date(),
       status: 'present',
       checkInMethod: activeMethod,
+      checkInIp: clientIp,
     });
 
     await newAttendance.save();
@@ -425,37 +492,65 @@ const checkOut = async (req, res) => {
       return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
     }
 
-    // Strict Geofencing Validation (same gate as check-in)
-    if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
-      return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
-    }
+    const clientIp = getClientIp(req);
+    attendance.checkOutIp = clientIp;
 
-    const activeOffices = await OfficeLocation.find({ status: 'active' });
-    let passedGeofence = false;
-    let minDistance = Infinity;
+    // Strict paired Office Network & Geofence Verification if checked in via wifi_ip
+    if (attendance.checkInMethod === 'wifi_ip') {
+      const activeOffices = await OfficeLocation.find({ status: 'active' });
+      const matchingOffice = activeOffices.find((office) => isIpInAllowedList(clientIp, office.allowedIps));
 
-    if (activeOffices.length > 0) {
-      for (const office of activeOffices) {
-        const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
-        if (geoCheck.inside) {
-          passedGeofence = true;
-          break;
-        }
-        if (geoCheck.distanceMeters < minDistance) {
-          minDistance = geoCheck.distanceMeters;
-        }
+      if (!matchingOffice) {
+        return badRequest(
+          res,
+          'Unauthorized Network — You must be connected to the authorized office network to check out.'
+        );
       }
 
-      if (!passedGeofence) {
-        return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
+      if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+        return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
+      }
+
+      const geoCheck = isWithinGeofence(lat, lng, matchingOffice.latitude, matchingOffice.longitude, matchingOffice.radiusMeters);
+      if (!geoCheck.inside) {
+        return badRequest(
+          res,
+          `Outside Office Location — You are connected to ${matchingOffice.officeName}'s network, but you are outside its physical perimeter (${geoCheck.distanceMeters}m away).`
+        );
       }
     } else {
-      // Fallback to legacy GeofenceSetting
-      const geofence = await GeofenceSetting.findOne({ isActive: true });
-      if (geofence) {
-        const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters);
-        if (!geoCheck.inside) {
-          return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
+      // Standard Geofencing Validation for other check-in methods (QR, biometric)
+      if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+        return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
+      }
+
+      const activeOffices = await OfficeLocation.find({ status: 'active' });
+      let passedGeofence = false;
+      let minDistance = Infinity;
+
+      if (activeOffices.length > 0) {
+        for (const office of activeOffices) {
+          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+          if (geoCheck.inside) {
+            passedGeofence = true;
+            break;
+          }
+          if (geoCheck.distanceMeters < minDistance) {
+            minDistance = geoCheck.distanceMeters;
+          }
+        }
+
+        if (!passedGeofence) {
+          return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
+        }
+      } else {
+        // Fallback to legacy GeofenceSetting
+        const geofence = await GeofenceSetting.findOne({ isActive: true });
+        if (geofence) {
+          const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters);
+          if (!geoCheck.inside) {
+            return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
+          }
         }
       }
     }
@@ -954,6 +1049,29 @@ const updateProfile = async (req, res) => {
   }
 };
 
+const getNetworkStatus = async (req, res) => {
+  try {
+    const clientIp = getClientIp(req);
+    const activeOffices = await OfficeLocation.find({ status: 'active' });
+
+    const matchingOffice = activeOffices.find((office) =>
+      isIpInAllowedList(clientIp, office.allowedIps)
+    );
+
+    const primaryOffice = activeOffices[0];
+
+    return success(res, 'Network status fetched', {
+      isOfficeNetwork: Boolean(matchingOffice),
+      targetSsid: matchingOffice?.wifiSsid || primaryOffice?.wifiSsid || null,
+      officeName: matchingOffice?.officeName || primaryOffice?.officeName || null,
+      maskedIp: maskIp(clientIp),
+    });
+  } catch (error) {
+    console.error('getNetworkStatus error:', error);
+    return badRequest(res, 'Failed to determine network status');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -973,5 +1091,6 @@ module.exports = {
   getMyLeaveRequests,
   applyForLeave,
   getMyAttendanceHistory,
-  updateProfile
+  updateProfile,
+  getNetworkStatus,
 };

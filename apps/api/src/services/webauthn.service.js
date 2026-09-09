@@ -79,6 +79,7 @@ const generateEnrollmentOptionsForUser = async (user, registeredDevice, req) => 
     userDisplayName: user.name,
     attestationType: 'none',
     excludeCredentials,
+    timeout: 300000,
     authenticatorSelection: {
       authenticatorAttachment: 'platform',
       userVerification: 'required',
@@ -92,7 +93,7 @@ const generateEnrollmentOptionsForUser = async (user, registeredDevice, req) => 
     rpID,
     expectedOrigin,
     registeredDeviceId: registeredDevice._id,
-    expiresAt: Date.now() + 60000,
+    expiresAt: Date.now() + 300000,
   });
 
   return options;
@@ -124,9 +125,12 @@ const verifyEnrollmentResponseForUser = async (user, response, req) => {
     throw new Error('Biometric registration verification failed.');
   }
 
-  // SimpleWebAuthn v10 shape: verification.registrationInfo.credential
-  const { credential } = verification.registrationInfo;
-  if (!credential) {
+  const regInfo = verification.registrationInfo;
+  const credentialID = regInfo.credentialID || regInfo.credential?.id;
+  const credentialPublicKey = regInfo.credentialPublicKey || regInfo.credential?.publicKey;
+  const counter = regInfo.counter ?? regInfo.credential?.counter ?? 0;
+
+  if (!credentialID || !credentialPublicKey) {
     throw new Error('No credential returned by platform authenticator.');
   }
 
@@ -139,12 +143,12 @@ const verifyEnrollmentResponseForUser = async (user, response, req) => {
   const newCredential = new BiometricCredential({
     userId: user._id,
     registeredDeviceId: stored.registeredDeviceId,
-    credentialID: credential.id,
-    credentialPublicKey: Buffer.from(credential.publicKey),
-    counter: credential.counter || 0,
+    credentialID,
+    credentialPublicKey: Buffer.from(credentialPublicKey),
+    counter,
     rpID: stored.rpID,
     expectedOrigin: stored.expectedOrigin,
-    transports: credential.transports || ['internal'],
+    transports: response.response?.transports || ['internal'],
     isActive: true,
     lastUsedAt: new Date(),
   });
@@ -157,7 +161,7 @@ const verifyEnrollmentResponseForUser = async (user, response, req) => {
     targetCollection: 'BiometricCredential',
     targetId: newCredential._id,
     metadata: {
-      credentialID: credential.id,
+      credentialID,
       rpID: stored.rpID,
       registeredDeviceId: stored.registeredDeviceId,
     },
@@ -196,13 +200,14 @@ const generateAuthOptionsForUser = async (user, activeDeviceId, req) => {
     rpID,
     allowCredentials,
     userVerification: 'required',
+    timeout: 300000,
   });
 
   challengeStore.set(userIdStr, {
     challenge: options.challenge,
     type: 'authentication',
     activeDeviceId,
-    expiresAt: Date.now() + 60000,
+    expiresAt: Date.now() + 300000,
   });
 
   return options;
@@ -239,9 +244,9 @@ const verifyAuthResponseForUser = async (user, response, activeDeviceId, req) =>
     expectedChallenge: stored.challenge,
     expectedOrigin: credential.expectedOrigin,
     expectedRPID: credential.rpID,
-    credential: {
-      id: credential.credentialID,
-      publicKey: credential.credentialPublicKey,
+    authenticator: {
+      credentialID: credential.credentialID,
+      credentialPublicKey: credential.credentialPublicKey,
       counter: credential.counter,
       transports: credential.transports,
     },

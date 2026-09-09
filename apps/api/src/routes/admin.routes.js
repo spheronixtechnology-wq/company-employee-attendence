@@ -22,6 +22,7 @@ router.get('/office-locations', isAdmin, adminController.getOfficeLocations);
 router.post('/office-locations', isAdmin, adminController.createOfficeLocation);
 router.patch('/office-locations/:id', isAdmin, adminController.updateOfficeLocation);
 router.delete('/office-locations/:id', isAdmin, adminController.deleteOfficeLocation);
+router.get('/current-ip', isAdmin, adminController.getCurrentIp);
 
 // Device Requests
 router.get('/device-requests', isAdmin, adminController.getDeviceRequests);

@@ -37,6 +37,18 @@ const officeLocationSchema = new mongoose.Schema(
       min: [10, 'Minimum radius is 10 meters'],
       max: [50000, 'Maximum radius is 50000 meters'],
     },
+    wifiSsid: {
+      type: String,
+      trim: true,
+      default: null,
+      maxlength: [100, 'WiFi SSID cannot exceed 100 characters'],
+    },
+    allowedIps: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     status: {
       type: String,
       enum: ['active', 'inactive'],
