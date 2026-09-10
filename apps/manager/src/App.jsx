@@ -530,6 +530,46 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
               )}
             </div>
 
+            {log.description && (
+              <div>
+                <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Description</p>
+                <p className="text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 whitespace-pre-line leading-relaxed">{log.description}</p>
+              </div>
+            )}
+
+            {log.githubLink && (
+              <div>
+                <p className="text-[11px] text-slate-400 font-semibold mb-0.5">GitHub Repository / PR</p>
+                <a
+                  href={log.githubLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-violet-400 hover:text-violet-300 font-mono flex items-center gap-1.5 underline bg-slate-900/60 p-2 rounded-lg border border-slate-800"
+                >
+                  <ExternalLink size={12} /> {log.githubLink}
+                </a>
+              </div>
+            )}
+
+            {Array.isArray(log.researchLinks) && log.researchLinks.length > 0 && (
+              <div>
+                <p className="text-[11px] text-slate-400 font-semibold mb-1">Research Links ({log.researchLinks.length})</p>
+                <div className="space-y-1">
+                  {log.researchLinks.map((rLink, rIdx) => (
+                    <a
+                      key={rIdx}
+                      href={rLink.startsWith('http') ? rLink : `https://${rLink}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1.5 underline truncate bg-slate-900/60 p-1.5 px-2.5 rounded-lg border border-slate-800"
+                    >
+                      <ExternalLink size={11} /> {rLink}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {log.campaignName && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>

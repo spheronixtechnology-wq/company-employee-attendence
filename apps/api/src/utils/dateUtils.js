@@ -6,8 +6,34 @@
  * Returns today's date as 'YYYY-MM-DD' string (UTC).
  * All attendance/daily-log date comparisons use this format.
  */
-const getTodayDateString = () => {
-  return new Date().toISOString().split('T')[0];
+const getTodayDateString = (timeZone = 'Asia/Kolkata') => {
+  return getBusinessDateString(new Date(), timeZone);
+};
+
+/**
+ * Returns a business date string 'YYYY-MM-DD' formatted in a specific timezone (default: Asia/Kolkata).
+ * @param {Date|string|number} [date=new Date()]
+ * @param {string} [timeZone='Asia/Kolkata']
+ * @returns {string} 'YYYY-MM-DD'
+ */
+const getBusinessDateString = (date = new Date(), timeZone = 'Asia/Kolkata') => {
+  const d = date instanceof Date ? date : new Date(date);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+};
+
+/**
+ * Returns a Date object representing 23:59:59.000 at the end of the specified business date in Asia/Kolkata.
+ * In Asia/Kolkata (UTC+5:30), 23:59:59 IST is 18:29:59 UTC on that same calendar day.
+ * @param {string} dateString - 'YYYY-MM-DD'
+ * @returns {Date}
+ */
+const getBusinessEndOfDay = (dateString) => {
+  return new Date(`${dateString}T23:59:59.000+05:30`);
 };
 
 /**
@@ -104,6 +130,8 @@ const finalizeAttendanceCheckout = (attendance, checkOutTime = new Date()) => {
 
 module.exports = {
   getTodayDateString,
+  getBusinessDateString,
+  getBusinessEndOfDay,
   toDateString,
   countDaysBetween,
   getCurrentYear,

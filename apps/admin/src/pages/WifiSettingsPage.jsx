@@ -680,7 +680,9 @@ export default function WifiSettingsPage() {
               </div>
 
               <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                When employees connect via mobile devices or Cloudflare Tunnel, IPv6 is used. Whitelisting the <strong className="text-slate-300">/64 subnet</strong> matches all office devices even when mobile OS privacy addresses rotate.
+                {ipv6Subnet
+                  ? <>Your network supports IPv6. Whitelisting the <strong className="text-slate-300">/64 subnet</strong> matches all office devices even when mobile OS privacy addresses rotate.</>
+                  : <>Your office network uses IPv4 (<span className="text-amber-400 font-medium">No IPv6 Route</span>). Simply whitelist the <strong className="text-slate-300">Public IPv4</strong> address below to allow all employees on this Wi-Fi to check in.</>}
               </p>
             </div>
 

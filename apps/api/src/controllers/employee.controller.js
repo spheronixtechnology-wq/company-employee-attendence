@@ -3,6 +3,7 @@ const DailyLog = require('../models/DailyLog');
 const LeaveRequest = require('../models/LeaveRequest');
 const Notification = require('../models/Notification');
 const LeaveBalance = require('../models/LeaveBalance');
+const LeaveType = require('../models/LeaveType');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const GeofenceSetting = require('../models/GeofenceSetting');
@@ -167,7 +168,11 @@ const getDashboard = async (req, res) => {
     const pendingLeaves = await LeaveRequest.countDocuments({ userId, status: 'pending' });
     const unreadNotifications = await Notification.countDocuments({ userId, isRead: false });
 
-    const leaveBalances = await LeaveBalance.find({ userId, year: getCurrentYear() }).populate('leaveTypeId');
+    let leaveBalances = await LeaveBalance.find({ userId, year: getCurrentYear() }).populate('leaveTypeId');
+    if (!leaveBalances || leaveBalances.length === 0) {
+      await leaveService.initializeLeaveBalances(userId);
+      leaveBalances = await LeaveBalance.find({ userId, year: getCurrentYear() }).populate('leaveTypeId');
+    }
 
     const activeMethodSetting = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
     const activeMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
@@ -939,13 +944,28 @@ const sendDailyReport = async (req, res) => {
   }
 };
 
+const getLeaveTypes = async (req, res) => {
+  try {
+    const leaveTypes = await LeaveType.find({ isActive: true }).select('name code description annualQuota isPaid');
+    return success(res, 'Leave types fetched', { leaveTypes });
+  } catch (error) {
+    console.error('Fetch leave types error:', error);
+    return badRequest(res, 'Failed to fetch leave types');
+  }
+};
+
 const getLeaveBalance = async (req, res) => {
   try {
     const userId = req.user._id;
     const year = getCurrentYear();
-    const balances = await LeaveBalance.find({ userId, year }).populate('leaveTypeId');
-    
-    return success(res, 'Leave balance fetched', { balances });
+    let balances = await LeaveBalance.find({ userId, year }).populate('leaveTypeId');
+    if (!balances || balances.length === 0) {
+      await leaveService.initializeLeaveBalances(userId);
+      balances = await LeaveBalance.find({ userId, year }).populate('leaveTypeId');
+    }
+    const leaveTypes = await LeaveType.find({ isActive: true }).select('name code description annualQuota isPaid');
+
+    return success(res, 'Leave balance fetched', { balances, leaveTypes });
   } catch (error) {
     console.error('Fetch leave balance error:', error);
     return badRequest(res, 'Failed to fetch leave balance');
@@ -969,7 +989,7 @@ const applyForLeave = async (req, res) => {
     const userId = req.user._id;
     const leaveData = req.body;
     
-    const request = await leaveService.applyLeave(userId, leaveData);
+    const request = await leaveService.applyLeave({ userId, ...leaveData });
     
     return success(res, 'Leave request submitted successfully', { request });
   } catch (error) {
@@ -1087,6 +1107,7 @@ module.exports = {
   endBreak,
   getDailyLog,
   submitDailyLog,
+  getLeaveTypes,
   getLeaveBalance,
   getMyLeaveRequests,
   applyForLeave,

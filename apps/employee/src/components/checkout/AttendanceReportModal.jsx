@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   CheckCircle, Clock, Coffee, Timer, Send, X,
-  FileText, Loader2, Award, ChevronRight
+  FileText, Loader2, Award, ChevronRight, ExternalLink, Link2
 } from 'lucide-react';
 import api from '../../lib/api';
 
@@ -175,7 +175,7 @@ export default function AttendanceReportModal({ isOpen, onClose, reportData, onR
 
               {/* Today's Daily Log Summary */}
               {dailyLog && (
-                <div className="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+                <div className="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-2 text-xs">
                   <span className="font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1.5 mb-1">
                     <FileText size={13} className="text-primary-400" /> Today's Daily Log
                   </span>
@@ -189,10 +189,44 @@ export default function AttendanceReportModal({ isOpen, onClose, reportData, onR
                       <span className="text-slate-500">Project:</span> <span className="text-white">{dailyLog.projectName}</span>
                     </p>
                   )}
-                  {dailyLog.campaignName && (
-                    <p className="text-slate-400">
-                      <span className="text-slate-500">Campaign:</span> <span className="text-white">{dailyLog.campaignName}</span>
+                  {dailyLog.description && (
+                    <div>
+                      <span className="text-slate-500 block mb-0.5">Description:</span>
+                      <p className="text-slate-200 bg-slate-900/60 p-2 rounded-lg border border-slate-800 whitespace-pre-line text-xs">
+                        {dailyLog.description}
+                      </p>
+                    </div>
+                  )}
+                  {dailyLog.githubLink && (
+                    <p className="text-slate-400 flex items-center gap-1.5">
+                      <span className="text-slate-500">GitHub:</span>
+                      <a
+                        href={dailyLog.githubLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-violet-400 hover:text-violet-300 underline flex items-center gap-1"
+                      >
+                        <ExternalLink size={11} /> {dailyLog.githubLink}
+                      </a>
                     </p>
+                  )}
+                  {Array.isArray(dailyLog.researchLinks) && dailyLog.researchLinks.length > 0 && (
+                    <div>
+                      <span className="text-slate-500 block mb-1">Research Links:</span>
+                      <div className="space-y-1">
+                        {dailyLog.researchLinks.map((link, lIdx) => (
+                          <a
+                            key={lIdx}
+                            href={link.startsWith('http') ? link : `https://${link}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary-400 hover:text-primary-300 underline text-[11px] flex items-center gap-1 truncate"
+                          >
+                            <Link2 size={11} /> {link}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {dailyLog.outputSummary && (
                     <p className="text-slate-400">

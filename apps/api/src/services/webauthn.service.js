@@ -87,6 +87,9 @@ const generateEnrollmentOptionsForUser = async (user, registeredDevice, req) => 
     },
   });
 
+  // WebAuthn L3 hint to prioritize local platform authenticator
+  options.hints = ['client-device'];
+
   challengeStore.set(userIdStr, {
     challenge: options.challenge,
     type: 'registration',
@@ -202,6 +205,9 @@ const generateAuthOptionsForUser = async (user, activeDeviceId, req) => {
     userVerification: 'required',
     timeout: 300000,
   });
+
+  // WebAuthn L3 hint to prioritize local platform authenticator
+  options.hints = ['client-device'];
 
   challengeStore.set(userIdStr, {
     challenge: options.challenge,

@@ -32,6 +32,7 @@ router.get('/daily-log/me', isEmployee, employeeController.getDailyLog);
 router.post('/daily-log/me', isEmployee, employeeController.submitDailyLog);
 
 // Leaves
+router.get('/leave/types', isEmployee, employeeController.getLeaveTypes);
 router.get('/leave/balance', isEmployee, employeeController.getLeaveBalance);
 router.get('/leave/requests/me', isEmployee, employeeController.getMyLeaveRequests);
 router.post('/leave/apply', isEmployee, employeeController.applyForLeave);

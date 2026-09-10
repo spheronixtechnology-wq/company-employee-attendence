@@ -49,6 +49,18 @@ const attendanceSchema = new mongoose.Schema({
   actualWorkMinutes: {
     type: Number,
     default: 0
+  },
+  dailyLogSubmitted: {
+    type: Boolean,
+    default: false
+  },
+  autoCheckedOut: {
+    type: Boolean,
+    default: false
+  },
+  autoCheckoutReason: {
+    type: String,
+    default: null
   }
 });
 

@@ -25,13 +25,13 @@ export const isBiometricSupported = async () => {
  */
 export const formatWebAuthnError = (err) => {
   console.error('[WebAuthn Error]:', err);
-  if (!err) return 'Biometric operation failed.';
+  if (!err) return 'Verification operation failed.';
 
   const name = err.name || '';
   const msg = (err.message || '').toLowerCase();
 
   if (name === 'NotAllowedError' || msg.includes('not allowed') || msg.includes('timed out') || msg.includes('canceled') || msg.includes('cancelled')) {
-    return err.message ? `Biometric prompt closed or not allowed: ${err.message}` : 'Biometric verification was canceled or timed out. Please try again.';
+    return 'Verification prompt was closed or timed out. If your fingerprint or face is unreadable, you can enter your device screen PIN/pattern on the prompt.';
   }
   if (name === 'SecurityError' || msg.includes('relying party id') || msg.includes('origin')) {
     return 'Security domain mismatch: WebAuthn requires accessing via an authorized domain name or localhost (raw IP addresses are blocked by browser security).';
@@ -40,10 +40,10 @@ export const formatWebAuthnError = (err) => {
     return 'This device authenticator is already enrolled.';
   }
   if (name === 'NotSupportedError' || msg.includes('not supported')) {
-    return 'Biometric platform authenticator is not supported on this browser. Please use Chrome on Android or Safari on iOS.';
+    return 'Biometric platform authenticator is not supported on this browser. Please use Chrome on Android or Safari on iOS with a screen lock enabled.';
   }
   if (name === 'AbortError') {
-    return 'Biometric request was aborted.';
+    return 'Verification request was aborted.';
   }
 
   return err.response?.data?.message || err.message || 'Biometric operation failed.';

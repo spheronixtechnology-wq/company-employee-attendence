@@ -1,27 +1,72 @@
 import { useState } from 'react';
 import { X, FileText, Send, Loader2, AlertCircle } from 'lucide-react';
-import DailyLogFields from '../DailyLogFields';
+import DailyLogFields, { isValidGitHubUrl, isValidWebUrl } from '../DailyLogFields';
 import api from '../../lib/api';
 
-export default function DailyLogModal({ isOpen, onClose, onSuccess, teamName }) {
-  const [form, setForm] = useState({});
+export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    taskTitle: '',
+    projectName: '',
+    description: '',
+    githubLink: '',
+    researchLinks: [''],
+  });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   if (!isOpen) return null;
 
   const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: null }));
+    }
     if (error) setError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+
+    // Validate required fields
+    const errors = {};
+    if (!form.taskTitle || !form.taskTitle.trim()) {
+      errors.taskTitle = 'Task Title is required';
+    }
+    if (!form.projectName || !form.projectName.trim()) {
+      errors.projectName = 'Project Name is required';
+    }
+    if (!form.description || !form.description.trim()) {
+      errors.description = 'Description is required';
+    }
+    if (form.githubLink && form.githubLink.trim() && !isValidGitHubUrl(form.githubLink.trim())) {
+      errors.githubLink = 'Invalid GitHub URL';
+    }
+
+    if (Array.isArray(form.researchLinks)) {
+      const invalidLink = form.researchLinks.find(
+        (l) => l.trim() && !isValidWebUrl(l.trim())
+      );
+      if (invalidLink) {
+        errors.researchLinks = 'One or more research links are invalid URLs';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError('Please fix the highlighted fields before submitting.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const res = await api.post('/employee/daily-log/me', form);
-      const savedLog = res.data?.data?.log || form;
+      const payload = {
+        ...form,
+        researchLinks: (form.researchLinks || []).map((l) => l.trim()).filter(Boolean),
+      };
+      const res = await api.post('/employee/daily-log/me', payload);
+      const savedLog = res.data?.data?.log || payload;
       if (onSuccess) onSuccess(savedLog);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to submit daily log.');
@@ -61,7 +106,7 @@ export default function DailyLogModal({ isOpen, onClose, onSuccess, teamName }) 
             </div>
           )}
 
-          <DailyLogFields form={form} onChange={handleChange} teamName={teamName} />
+          <DailyLogFields form={form} onChange={handleChange} errors={fieldErrors} />
 
           <div className="pt-2">
             <button

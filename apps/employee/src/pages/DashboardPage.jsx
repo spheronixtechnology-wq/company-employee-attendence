@@ -1177,13 +1177,13 @@ export default function EmployeeDashboard() {
                       <Fingerprint size={22} />
                     </div>
                     <div>
-                      <p className="text-white font-bold text-sm">Biometric Attendance</p>
-                      <p className="text-slate-400 text-xs mt-0.5">Verify with fingerprint, Face ID, or device PIN</p>
+                      <p className="text-white font-bold text-sm">Verify with Fingerprint, Face ID, or Device PIN</p>
+                      <p className="text-slate-400 text-xs mt-0.5">Platform authenticator allows biometrics or screen lock PIN</p>
                     </div>
                   </div>
 
                   {biometricStatus?.isBiometricEnrolled ? (
-                    <div>
+                    <div className="space-y-2">
                       <button
                         id="verify-biometric-checkin-btn"
                         onClick={handleBiometricCheckIn}
@@ -1192,7 +1192,7 @@ export default function EmployeeDashboard() {
                       >
                         {actionLoading === 'biometric-checkin' ? (
                           <>
-                            <Loader2 size={20} className="animate-spin" /> Verifying Biometric…
+                            <Loader2 size={20} className="animate-spin" /> Verifying Biometric / PIN…
                           </>
                         ) : (
                           <>
@@ -1200,6 +1200,9 @@ export default function EmployeeDashboard() {
                           </>
                         )}
                       </button>
+                      <p className="text-center text-[11px] text-slate-400">
+                        If fingerprint fails or is unreadable, tap <span className="text-violet-300 font-medium">"Use PIN / Screen Lock"</span> on your device prompt.
+                      </p>
                     </div>
                   ) : (
                     <div className="p-4 bg-violet-500/10 border border-violet-500/30 rounded-2xl text-center space-y-2.5">

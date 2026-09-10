@@ -4,19 +4,26 @@ const Attendance = require('../models/Attendance');
 const DailyLog = require('../models/DailyLog');
 const User = require('../models/User');
 const { createBulkNotifications } = require('../services/notification.service');
-const { getTodayDateString, toDateString, finalizeAttendanceCheckout } = require('../utils/dateUtils');
-
+const {
+  getTodayDateString,
+  getBusinessDateString,
+  getBusinessEndOfDay,
+  toDateString,
+  finalizeAttendanceCheckout,
+} = require('../utils/dateUtils');
+const { autoSubmitMissingDailyLog } = require('../services/dailyLog.service');
+const { writeAuditLog } = require('../services/audit.service');
 
 /**
- * Job 2: Daily Log Reminder
+ * Job 1: Daily Log Reminder
  * Runs at 6:00 PM IST every day.
  * Notifies all checked-in employees who haven't submitted a daily log.
  */
 const startDailyLogReminderJob = () => {
-  cron.schedule('0 12 * * *', async () => {  // 12:00 UTC = 17:30 IST, close enough
+  cron.schedule('0 18 * * *', async () => {
     console.log('[CRON] Running daily log reminder check...');
     try {
-      const today = getTodayDateString();
+      const today = getTodayDateString('Asia/Kolkata');
 
       // Find all employees who checked in today
       const checkedInAttendance = await Attendance.find({
@@ -56,50 +63,117 @@ const startDailyLogReminderJob = () => {
     } catch (err) {
       console.error('[CRON] Daily log reminder failed:', err.message);
     }
-  }, { timezone: 'UTC' });
+  }, { timezone: 'Asia/Kolkata' });
 
-  console.log('✅ Daily log reminder job scheduled (daily at 6PM IST)');
+  console.log('✅ Daily log reminder job scheduled (daily at 6:00 PM IST)');
 };
 
 /**
- * Job 3: Auto Checkout / Incomplete Day Marker
- * Runs at 11:59 PM IST every day.
- * Marks attendance as 'incomplete' for employees who didn't check out.
+ * Executes midnight auto-checkout and log completion for abandoned / incomplete sessions.
+ * Strictly ignores employees who already checked out and submitted their logs.
+ *
+ * @param {Date} [referenceDate=new Date()]
+ * @returns {Promise<{ processedCount: number, autoCheckedOutUsers: string[] }>}
  */
-const startAutoCheckoutJob = () => {
-  cron.schedule('59 18 * * *', async () => {  // 18:29 UTC = 23:59 IST
-    console.log('[CRON] Running auto-checkout / incomplete day marker...');
-    try {
-      const today = getTodayDateString();
+const runMidnightAutoCheckout = async (referenceDate = new Date()) => {
+  console.log('[CRON] Running midnight auto-checkout & logsheet closure...');
+  try {
+    const currentIstDate = getBusinessDateString(referenceDate, 'Asia/Kolkata');
+    // The concluded workday is yesterday relative to reference date in Asia/Kolkata
+    const yesterdayMs = new Date(referenceDate).getTime() - 24 * 60 * 60 * 1000;
+    const concludedWorkDate = getBusinessDateString(new Date(yesterdayMs), 'Asia/Kolkata');
 
-      // Find attendance records with check-in but no check-out
-      const incomplete = await Attendance.find({
-        date: today,
-        checkInTime: { $ne: null },
-        checkOutTime: null,
+    console.log(`[CRON] Current IST Date: ${currentIstDate} | Concluded Workday: ${concludedWorkDate}`);
+
+    // Query incomplete attendance records (checked-in, no checkout, date <= concludedWorkDate)
+    const incomplete = await Attendance.find({
+      date: { $lte: concludedWorkDate },
+      checkInTime: { $ne: null },
+      checkOutTime: null,
+    }).populate('userId');
+
+    if (incomplete.length === 0) {
+      console.log('[CRON] No incomplete attendance records to auto-checkout.');
+      return { processedCount: 0, autoCheckedOutUsers: [] };
+    }
+
+    const autoCheckedOutUsers = [];
+
+    for (const att of incomplete) {
+      const user = att.userId;
+      if (!user) continue;
+
+      // 1. Determine end of workday in Asia/Kolkata (23:59:59.000 IST)
+      const autoCheckOutTime = getBusinessEndOfDay(att.date);
+
+      // 2. Reuse single-source checkout duration & break calculation
+      finalizeAttendanceCheckout(att, autoCheckOutTime);
+      att.status = 'incomplete';
+      att.autoCheckedOut = true;
+      att.autoCheckoutReason = 'MIDNIGHT_AUTO_CHECKOUT';
+      await att.save();
+
+      // 3. Auto-complete missing daily log with "N/A"
+      await autoSubmitMissingDailyLog({
+        user,
+        attendance: att,
+        logDate: att.date,
       });
 
-      for (const att of incomplete) {
-        // Auto checkout at end of day and compute duration / break breakdown
-        const autoCheckOutTime = new Date(`${today}T23:59:00.000Z`);
-        finalizeAttendanceCheckout(att, autoCheckOutTime);
-        att.status = 'incomplete';
-        await att.save();
+      // 4. Invalidate user active session (forces clean login on next workday)
+      await User.updateOne(
+        { _id: user._id },
+        { $inc: { tokenVersion: 1 } }
+      );
+
+      // 5. Audit log
+      try {
+        await writeAuditLog({
+          action: 'MIDNIGHT_AUTO_CHECKOUT',
+          performedBy: user,
+          targetCollection: 'Attendance',
+          targetId: att._id,
+          targetUserId: user._id,
+          metadata: {
+            workDate: att.date,
+            autoCheckOutTime,
+            actualWorkMinutes: att.actualWorkMinutes,
+          },
+        });
+      } catch (auditErr) {
+        console.warn('[CRON] Audit log error for auto-checkout:', auditErr.message);
       }
 
-      if (incomplete.length > 0) {
-        console.log(`[CRON] Marked ${incomplete.length} attendance records as incomplete.`);
-      }
-    } catch (err) {
-      console.error('[CRON] Auto-checkout job failed:', err.message);
+      autoCheckedOutUsers.push(user.email || user.name || user._id.toString());
     }
-  }, { timezone: 'UTC' });
 
-  console.log('✅ Auto-checkout job scheduled (daily at 11:59 PM IST)');
+    console.log(`[CRON] Auto-checked out ${incomplete.length} employee(s) at midnight:`, autoCheckedOutUsers);
+    return { processedCount: incomplete.length, autoCheckedOutUsers };
+  } catch (err) {
+    console.error('[CRON] Midnight auto-checkout job failed:', err);
+    throw err;
+  }
 };
 
 /**
- * Job 4: Temporary Access Cleanup
+ * Job 2: Auto Checkout / Incomplete Day Marker
+ * Runs at 12:00 AM IST every day.
+ * Auto-closes abandoned sessions, submits missing logs with "N/A", and invalidates sessions.
+ */
+const startAutoCheckoutJob = () => {
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      await runMidnightAutoCheckout();
+    } catch (err) {
+      console.error('[CRON] Scheduled auto-checkout failed:', err.message);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+
+  console.log('✅ Auto-checkout job scheduled (daily at 12:00 AM IST)');
+};
+
+/**
+ * Job 3: Temporary Access Cleanup
  * Runs every hour to expire outdated device authorizations and location assignments.
  */
 const startTemporaryAccessCleanupJob = () => {
@@ -111,7 +185,7 @@ const startTemporaryAccessCleanupJob = () => {
     }
   });
   // Also run immediately on startup
-  cleanupExpiredTemporaryAccess().catch(err => console.error('[cleanup] Startup run error:', err.message));
+  cleanupExpiredTemporaryAccess().catch((err) => console.error('[cleanup] Startup run error:', err.message));
   console.log('✅ Temporary access cleanup job scheduled (every hour)');
 };
 
@@ -129,5 +203,6 @@ module.exports = {
   initCronJobs,
   startDailyLogReminderJob,
   startAutoCheckoutJob,
+  runMidnightAutoCheckout,
   startTemporaryAccessCleanupJob,
 };

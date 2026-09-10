@@ -28,13 +28,18 @@ const dailyLogSchema = new mongoose.Schema(
       max: [24, 'Cannot exceed 24 hours'],
     },
 
-    // ── Technical Team Fields ──────────────────────────
+    // ── Unified Fields ─────────────────────────────────
+    description: { type: String, trim: true, default: null },
+    githubLink: { type: String, trim: true, default: null },
+    researchLinks: [{ type: String, trim: true }],
+
+    // ── Legacy Technical Team Fields ───────────────────
     taskTitle: { type: String, trim: true, default: null },
     projectName: { type: String, trim: true, default: null },
     ticketId: { type: String, trim: true, default: null },
     blockers: { type: String, trim: true, default: null },
 
-    // ── Marketing Team Fields ──────────────────────────
+    // ── Legacy Marketing Team Fields ───────────────────
     campaignName: { type: String, trim: true, default: null },
     platform: { type: String, trim: true, default: null },
     outputSummary: { type: String, trim: true, default: null },

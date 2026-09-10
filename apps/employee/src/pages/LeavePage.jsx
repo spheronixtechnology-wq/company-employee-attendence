@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import api from '../lib/api';
-import { Calendar, Plus, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Calendar, Plus, Loader2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 
 const statusColors = {
   pending: 'badge-warning',
@@ -20,16 +20,31 @@ export default function LeavePage() {
 
   const fetchData = async () => {
     try {
-      const [balRes, reqRes] = await Promise.all([
+      const [balRes, reqRes, typesRes] = await Promise.all([
         api.get('/employee/leave/balance'),
         api.get('/employee/leave/requests/me'),
+        api.get('/employee/leave/types').catch(() => null),
       ]);
-      const bals = balRes.data.data.balances || [];
+      const bals = balRes.data?.data?.balances || [];
       setBalances(bals);
-      setLeaveTypes(bals.map(b => ({ _id: b.leaveTypeId?._id, name: b.leaveTypeId?.name, code: b.leaveTypeId?.code })));
-      setRequests(reqRes.data.data.requests || []);
+
+      const typesFromApi = typesRes?.data?.data?.leaveTypes || balRes.data?.data?.leaveTypes;
+      if (typesFromApi && typesFromApi.length > 0) {
+        setLeaveTypes(typesFromApi);
+      } else if (bals.length > 0) {
+        setLeaveTypes(
+          bals
+            .filter((b) => b.leaveTypeId && b.leaveTypeId._id)
+            .map((b) => ({
+              _id: b.leaveTypeId._id,
+              name: b.leaveTypeId.name,
+              code: b.leaveTypeId.code,
+            }))
+        );
+      }
+      setRequests(reqRes.data?.data?.requests || []);
     } catch (err) {
-      console.error(err);
+      console.error('LeavePage fetchData error:', err);
     }
   };
 
@@ -103,39 +118,91 @@ export default function LeavePage() {
             <h2 className="font-semibold text-white mb-4">Apply for Leave</h2>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
-                <label className="label">Leave Type *</label>
-                <select className="input" {...register('leaveTypeId', { required: true })}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="label text-xs !mb-0">Leave Type *</label>
+                  {errors.leaveTypeId && (
+                    <span className="text-[11px] text-rose-400 font-medium">{errors.leaveTypeId.message}</span>
+                  )}
+                </div>
+                <select
+                  className={`input text-sm ${errors.leaveTypeId ? 'border-rose-500/60 focus:border-rose-500' : ''}`}
+                  {...register('leaveTypeId', { required: 'Please select a leave type' })}
+                >
                   <option value="">Select leave type</option>
-                  {leaveTypes.map(lt => (
-                    <option key={lt._id} value={lt._id}>{lt.name} ({lt.code})</option>
+                  {leaveTypes.map((lt) => (
+                    <option key={lt._id} value={lt._id}>
+                      {lt.name} ({lt.code})
+                    </option>
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Start Date *</label>
-                  <input type="date" className="input" {...register('startDate', { required: true })} />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="label text-xs !mb-0">Start Date *</label>
+                    {errors.startDate && (
+                      <span className="text-[11px] text-rose-400 font-medium">{errors.startDate.message}</span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    className={`input text-sm ${errors.startDate ? 'border-rose-500/60 focus:border-rose-500' : ''}`}
+                    {...register('startDate', { required: 'Start date is required' })}
+                  />
                 </div>
                 <div>
-                  <label className="label">End Date *</label>
-                  <input type="date" className="input" {...register('endDate', { required: true })} />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="label text-xs !mb-0">End Date *</label>
+                    {errors.endDate && (
+                      <span className="text-[11px] text-rose-400 font-medium">{errors.endDate.message}</span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    className={`input text-sm ${errors.endDate ? 'border-rose-500/60 focus:border-rose-500' : ''}`}
+                    {...register('endDate', {
+                      required: 'End date is required',
+                      validate: (val, formValues) =>
+                        !formValues.startDate || val >= formValues.startDate || 'End date cannot be before start date',
+                    })}
+                  />
                 </div>
               </div>
+
               <div>
-                <label className="label">Reason *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="label text-xs !mb-0">Reason *</label>
+                  {errors.reason && (
+                    <span className="text-[11px] text-rose-400 font-medium">{errors.reason.message}</span>
+                  )}
+                </div>
                 <textarea
-                  className="input resize-none"
+                  className={`input text-sm resize-none ${errors.reason ? 'border-rose-500/60 focus:border-rose-500' : ''}`}
                   rows={3}
                   placeholder="Briefly describe your reason..."
-                  {...register('reason', { required: true, minLength: 10 })}
+                  {...register('reason', {
+                    required: 'Reason is required',
+                    minLength: { value: 3, message: 'Reason must be at least 3 characters' },
+                  })}
                 />
               </div>
-              <div className="flex gap-3">
-                <button type="submit" disabled={submitting} className="btn-primary flex-1">
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="submit"
+                  id="submit-leave-request-btn"
+                  disabled={submitting}
+                  className="btn-primary flex-1 py-2.5 flex items-center justify-center gap-2 font-medium"
+                >
+                  {submitting && <Loader2 size={16} className="animate-spin" />}
                   {submitting ? 'Submitting...' : 'Submit Request'}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-ghost flex-1">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="btn-ghost flex-1 py-2.5"
+                >
                   Cancel
                 </button>
               </div>

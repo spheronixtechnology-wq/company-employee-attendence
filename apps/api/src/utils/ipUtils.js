@@ -15,8 +15,13 @@ const ipaddr = require('ipaddr.js');
 const getClientIp = (req) => {
   if (!req) return 'Unknown IP';
 
+  // Check Cloudflare header first (for Cloudflare Tunnel or Cloudflare CDN proxy)
+  let ip = req.headers ? (req.headers['cf-connecting-ip'] || req.headers['x-real-ip']) : null;
+
   // Primary: Express computed req.ip via trust proxy
-  let ip = req.ip;
+  if (!ip) {
+    ip = req.ip;
+  }
 
   // Fallback: direct socket address if req.ip is not populated
   if (!ip) {

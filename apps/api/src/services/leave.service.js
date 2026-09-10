@@ -11,7 +11,12 @@ const { emitToTeam, emitToManagers } = require('../socket');
 /**
  * Employee applies for leave.
  */
-const applyLeave = async ({ userId, leaveTypeId, startDate, endDate, reason }) => {
+const applyLeave = async (paramsOrUserId, maybeLeaveData) => {
+  const params = typeof paramsOrUserId === 'object' && paramsOrUserId !== null && !paramsOrUserId._bsontype
+    ? paramsOrUserId
+    : { userId: paramsOrUserId, ...(maybeLeaveData || {}) };
+  const { userId, leaveTypeId, startDate, endDate, reason } = params;
+
   // Validate leave type exists
   const leaveType = await LeaveType.findById(leaveTypeId);
   if (!leaveType || !leaveType.isActive) {
@@ -22,7 +27,11 @@ const applyLeave = async ({ userId, leaveTypeId, startDate, endDate, reason }) =
 
   // Check leave balance
   const currentYear = getCurrentYear();
-  const balance = await LeaveBalance.findOne({ userId, leaveTypeId, year: currentYear });
+  let balance = await LeaveBalance.findOne({ userId, leaveTypeId, year: currentYear });
+  if (!balance) {
+    await initializeLeaveBalances(userId);
+    balance = await LeaveBalance.findOne({ userId, leaveTypeId, year: currentYear });
+  }
 
   if (!balance) {
     throw { statusCode: 400, message: 'Leave balance not found. Contact admin.' };
