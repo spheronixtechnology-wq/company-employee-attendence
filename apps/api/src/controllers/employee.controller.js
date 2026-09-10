@@ -8,6 +8,7 @@ const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const GeofenceSetting = require('../models/GeofenceSetting');
 const DeviceRequest = require('../models/DeviceRequest');
+const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
 const User = require('../models/User');
 const OfficeLocation = require('../models/OfficeLocation');
 
@@ -1092,6 +1093,108 @@ const getNetworkStatus = async (req, res) => {
   }
 };
 
+const requestManualAttendance = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { requestDate, reason } = req.body;
+
+    if (!requestDate) {
+      return badRequest(res, 'Request date is required');
+    }
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(requestDate)) {
+      return badRequest(res, 'Invalid date format. Expected YYYY-MM-DD');
+    }
+
+    if (!reason || !reason.trim() || reason.trim().length < 3) {
+      return badRequest(res, 'Reason is required and must be at least 3 characters');
+    }
+
+    const existingPending = await ManualAttendanceRequest.findOne({
+      userId,
+      requestDate,
+      status: 'pending',
+    });
+    if (existingPending) {
+      return badRequest(res, 'You already have a pending manual attendance request for this date.');
+    }
+
+    const existingAttendance = await Attendance.findOne({ userId, date: requestDate });
+    if (existingAttendance && existingAttendance.status === 'present') {
+      return badRequest(res, 'Attendance is already recorded as present for this date.');
+    }
+
+    const user = await User.findById(userId).populate('teamId');
+    const teamId = user?.teamId?._id || user?.teamId || null;
+
+    const request = await ManualAttendanceRequest.create({
+      userId,
+      teamId,
+      requestDate,
+      reason: reason.trim(),
+      status: 'pending',
+    });
+
+    await Attendance.findOneAndUpdate(
+      { userId, date: requestDate },
+      {
+        $setOnInsert: { userId, date: requestDate },
+        $set: { status: 'manual_pending', checkInMethod: 'manual' },
+      },
+      { upsert: true, new: true }
+    );
+
+    if (teamId) {
+      const managers = await User.find({ teamId, role: 'manager', isActive: true });
+      for (const m of managers) {
+        await createNotification({
+          userId: m._id,
+          type: 'manual_attendance_submitted',
+          title: 'Manual Attendance Request',
+          message: `${user.name} submitted a manual attendance request for ${requestDate}.`,
+        });
+      }
+      emitToTeam(teamId, 'attendance:manual_request_created', {
+        requestId: request._id,
+        userId,
+        userName: user.name,
+        requestDate,
+        reason: reason.trim(),
+      });
+    }
+
+    const admins = await User.find({ role: 'admin', isActive: true });
+    for (const a of admins) {
+      await createNotification({
+        userId: a._id,
+        type: 'manual_attendance_submitted',
+        title: 'Manual Attendance Request',
+        message: `${user.name} submitted a manual attendance request for ${requestDate}.`,
+      });
+    }
+
+    return success(res, 'Manual attendance request submitted successfully', { request });
+  } catch (error) {
+    console.error('requestManualAttendance error:', error);
+    return badRequest(res, error.message || 'Failed to submit manual attendance request');
+  }
+};
+
+const getMyManualAttendanceRequests = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const requests = await ManualAttendanceRequest.find({ userId })
+      .populate('decidedBy', 'name')
+      .sort({ createdAt: -1 });
+
+    return success(res, 'Manual attendance requests fetched', { requests });
+  } catch (error) {
+    console.error('getMyManualAttendanceRequests error:', error);
+    return badRequest(res, 'Failed to fetch manual attendance requests');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -1114,4 +1217,6 @@ module.exports = {
   getMyAttendanceHistory,
   updateProfile,
   getNetworkStatus,
+  requestManualAttendance,
+  getMyManualAttendanceRequests,
 };

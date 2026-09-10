@@ -17,6 +17,7 @@ const notificationSchema = new mongoose.Schema(
         'leave_overridden',
         'attendance_override',
         'daily_log_reminder',
+        'manual_attendance_submitted',
         'manual_attendance_approved',
         'manual_attendance_rejected',
         'device_approved',

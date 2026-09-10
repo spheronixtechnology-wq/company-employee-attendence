@@ -40,6 +40,10 @@ router.post('/leave/apply', isEmployee, employeeController.applyForLeave);
 // QR Code
 router.get('/qr/current', isEmployee, employeeController.getCurrentQrCode);
 
+// Manual Attendance
+router.post('/manual-attendance/request', isEmployee, employeeController.requestManualAttendance);
+router.get('/manual-attendance/requests', isEmployee, employeeController.getMyManualAttendanceRequests);
+
 // Device
 router.post('/device/request', isEmployee, employeeController.requestDeviceApproval);  // legacy alias
 router.get('/device-status', isEmployee, employeeController.getDeviceStatus);
