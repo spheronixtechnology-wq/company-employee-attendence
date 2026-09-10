@@ -9,7 +9,14 @@ const deleteImage = async (fileUrl) => {
   return true;
 };
 
+const getFileUrl = (filename, subfolder = 'daily-logs') => {
+  if (!filename) return null;
+  // Express serves /uploads statically from path.join(__dirname, '..', uploadDir)
+  return `/uploads/${subfolder}/${filename}`;
+};
+
 module.exports = {
   uploadImage,
-  deleteImage
+  deleteImage,
+  getFileUrl,
 };

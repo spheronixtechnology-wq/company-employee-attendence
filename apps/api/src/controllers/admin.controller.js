@@ -12,9 +12,13 @@ const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest } = requir
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
 const ManagerPermission = require('../models/ManagerPermission');
+const Attendance = require('../models/Attendance');
+const LeaveRequest = require('../models/LeaveRequest');
+const LocationRequest = require('../models/LocationRequest');
 const { writeAuditLog } = require('../services/audit.service');
 const { getClientIp, getActiveLocalInterfaces } = require('../utils/ipUtils');
 const { formatDeviceLabel } = require('../utils/deviceUtils');
+const { getTodayDateString } = require('../utils/dateUtils');
 const ipaddr = require('ipaddr.js');
 
 const getStatus = (req, res) => {
@@ -23,19 +27,39 @@ const getStatus = (req, res) => {
 
 const getDashboard = async (req, res) => {
   try {
-    const totalEmployees = await User.countDocuments({ role: 'employee' });
-    
-    // Mocking the rest for now since many models might still be missing
+    const validUserIds = await User.distinct('_id');
+    const totalEmployees = await User.countDocuments({ role: 'employee', isActive: true });
+    const todayStr = getTodayDateString();
+
+    const [
+      activeMethodDoc,
+      pendingDeviceApprovals,
+      pendingLeaveRequests,
+      pendingLocationRequests,
+      checkedInToday,
+      onLeaveToday
+    ] = await Promise.all([
+      AttendanceMethodSetting.findOne({ isActive: true }).lean(),
+      DeviceRequest.countDocuments({ userId: { $in: validUserIds }, status: 'pending' }),
+      LeaveRequest.countDocuments({ status: 'pending' }),
+      LocationRequest.countDocuments({ status: 'pending' }),
+      Attendance.countDocuments({ date: todayStr, status: { $in: ['present', 'half_day'] } }),
+      Attendance.countDocuments({ date: todayStr, status: 'on_leave' }),
+    ]);
+
+    const absentToday = Math.max(0, totalEmployees - checkedInToday - onLeaveToday);
+
     return success(res, 'Dashboard data retrieved', {
-      activeAttendanceMethod: 'qr_code',
+      activeAttendanceMethod: activeMethodDoc?.method || 'qr_code',
       totalEmployees,
-      checkedInToday: 12,
-      absentToday: 2,
-      onLeaveToday: 1,
-      pendingLeaveRequests: 3,
+      checkedInToday,
+      absentToday,
+      onLeaveToday,
+      pendingLeaveRequests,
+      pendingLocationRequests,
       pendingManualAttendanceRequests: 0,
-      pendingDeviceApprovals: 5,
-      missingDailyLogs: 4
+      pendingDeviceApprovals,
+      missingDailyLogs: 0
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Dashboard fetch failed', error: err.message });
@@ -72,8 +96,22 @@ const getEmployees = async (req, res) => {
 
 const getTeams = async (req, res) => {
   try {
-    const teams = await Team.find().populate('leadUserId', 'name email');
-    return success(res, 'Teams fetched successfully', { teams });
+    const teams = await Team.find().populate('leadUserId', 'name email role').lean();
+    const teamIds = teams.map(t => t._id);
+    const members = await User.find({ teamId: { $in: teamIds }, isActive: true })
+      .select('name email role designation teamId')
+      .lean();
+
+    const enriched = teams.map(t => {
+      const teamMembers = members.filter(m => m.teamId?.toString() === t._id.toString());
+      return {
+        ...t,
+        membersCount: teamMembers.length,
+        members: teamMembers,
+      };
+    });
+
+    return success(res, 'Teams fetched successfully', { teams: enriched });
   } catch (error) {
     console.error('Error fetching teams:', error);
     return badRequest(res, 'Failed to fetch teams');
@@ -372,22 +410,53 @@ const deleteOfficeLocation = async (req, res) => {
 
 /**
  * GET /api/admin/device-requests
- * Returns all company device requests, filtered by status.
+ * Returns all company device requests, filtered by status, formatted with labels and counts.
  */
 const getDeviceRequests = async (req, res) => {
   try {
-    const status = req.query.status || 'pending';
-    const query = {};
+    const validUserIds = await User.distinct('_id');
+    const status = req.query.status || 'all';
+
+    const baseQuery = { userId: { $in: validUserIds } };
+    const query = { ...baseQuery };
     if (status !== 'all') {
       query.status = status;
     }
 
-    const requests = await DeviceRequest.find(query)
-      .populate('userId', 'name email role designation teamId avatarUrl')
-      .sort({ createdAt: -1 })
-      .lean();
+    const [rawRequests, counts] = await Promise.all([
+      DeviceRequest.find(query)
+        .populate({
+          path: 'userId',
+          select: 'name email role designation teamId avatarUrl',
+          populate: { path: 'teamId', select: 'name' },
+        })
+        .sort({ createdAt: -1 })
+        .lean(),
+      (async () => {
+        const [all, pending, approved, rejected] = await Promise.all([
+          DeviceRequest.countDocuments(baseQuery),
+          DeviceRequest.countDocuments({ ...baseQuery, status: 'pending' }),
+          DeviceRequest.countDocuments({ ...baseQuery, status: 'approved' }),
+          DeviceRequest.countDocuments({ ...baseQuery, status: 'rejected' }),
+        ]);
+        return { all, pending, approved, rejected };
+      })(),
+    ]);
 
-    return success(res, 'Fetched device requests', { requests });
+    const requests = rawRequests.map((r) => ({
+      ...r,
+      requestedDeviceLabel: formatDeviceLabel(r.requestedDeviceLabel),
+    }));
+
+    // Mark notifications for device requests as read for this admin
+    if (req.user?._id) {
+      await Notification.updateMany(
+        { userId: req.user._id, isRead: false, type: { $in: ['device_request', 'new_device_request', 'device_request_submitted'] } },
+        { $set: { isRead: true } }
+      );
+    }
+
+    return success(res, 'Fetched device requests', { requests, counts });
   } catch (error) {
     console.error('getDeviceRequests error:', error);
     return badRequest(res, 'Failed to fetch device requests');

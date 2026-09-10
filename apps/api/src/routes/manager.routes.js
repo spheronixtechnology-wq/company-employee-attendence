@@ -24,6 +24,9 @@ router.patch('/device-requests/:id/decision', isManager, managerController.handl
 router.get('/location-requests', isManager, managerController.getLocationRequests);
 router.patch('/location-requests/:id/decision', isManager, managerController.handleLocationRequestDecision);
 
+// Manual Attendance Decisions
+router.post('/team/manual-attendance/:id/decision', isManager, managerController.handleManualAttendanceDecision);
+
 // System Settings & Configuration (Attendance Method, WiFi/IP, Office Locations)
 router.get('/attendance-method/active', isManager, adminController.getActiveAttendanceMethod);
 router.patch('/attendance-method/switch', isManager, adminController.switchAttendanceMethod);

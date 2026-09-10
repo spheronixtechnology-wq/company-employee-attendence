@@ -6,12 +6,13 @@ import { ManagerDeviceRequestsPage, ManagerLocationRequestsPage } from './pages/
 import AttendanceMethodPage from './pages/AttendanceMethodPage';
 import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
-import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight } from 'lucide-react';
+import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import api from './lib/api';
+import DocumentPreviewModal from './components/DocumentPreviewModal';
 
 // ── Login Page (shared design) ──────────────────────────────────────────────
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { EyeOff, LogIn } from 'lucide-react';
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -241,6 +242,7 @@ const TeamAttendancePage = () => {
   const [records, setRecords] = useState([]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
   const { socket } = useSocket();
 
   const fetchAttendance = useCallback(() => {
@@ -271,6 +273,28 @@ const TeamAttendancePage = () => {
     };
   }, [socket, date]);
 
+  const handleManualDecision = async (requestId, action) => {
+    let note = '';
+    if (action === 'reject') {
+      const input = prompt('Reason for rejection (optional):');
+      if (input === null) return; // User clicked Cancel
+      note = input;
+    }
+
+    setProcessingId(requestId + action);
+    try {
+      await api.post(`/manager/team/manual-attendance/${requestId}/decision`, {
+        action,
+        decisionNote: note || undefined,
+      });
+      fetchAttendance();
+    } catch (err) {
+      alert(err.response?.data?.message || `Failed to ${action} manual attendance request.`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   return (
     <div className="p-6 space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -279,27 +303,101 @@ const TeamAttendancePage = () => {
       </div>
       {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-400" size={28} /></div> : (
         <div className="space-y-3">
-          {records.map(rec => (
-            <div key={rec._id} className="card flex items-center justify-between">
-              <div>
-                <p className="text-white font-semibold">{rec.userId?.name}</p>
-                <p className="text-slate-400 text-xs">
-                  {rec.checkInTime ? `In: ${new Date(rec.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : 'Not checked in'}
-                  {rec.checkOutTime ? ` · Out: ${new Date(rec.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
-                </p>
+          {records.map(rec => {
+            const isManualPending = rec.status === 'manual_pending' || (rec.manualRequest && rec.manualRequest.status === 'pending');
+            const hasManualReq = Boolean(rec.manualRequest && rec.manualRequest._id);
+
+            return (
+              <div
+                key={rec._id}
+                className={`card transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                  isManualPending
+                    ? 'border-amber-500/40 bg-gradient-to-r from-amber-950/20 via-slate-800/90 to-slate-800 shadow-md ring-1 ring-amber-500/20'
+                    : ''
+                }`}
+              >
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <p className="text-white font-semibold text-sm">{rec.userId?.name}</p>
+                    {isManualPending && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center gap-1">
+                        <Clock size={12} /> Pending Manual Review
+                      </span>
+                    )}
+                  </div>
+
+                  {/* If employee submitted a manual attendance request, display their submitted reason */}
+                  {rec.manualRequest?.reason && (
+                    <div className="bg-slate-900/80 border border-amber-500/25 rounded-xl px-3 py-2 text-xs text-amber-200/95 max-w-xl shadow-inner">
+                      <span className="font-semibold text-amber-400 block mb-0.5">Submitted Reason:</span>
+                      <p className="italic text-slate-200">"{rec.manualRequest.reason}"</p>
+                    </div>
+                  )}
+
+                  <p className="text-slate-400 text-xs">
+                    {rec.checkInTime ? `In: ${new Date(rec.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : 'Not checked in'}
+                    {rec.checkOutTime ? ` · Out: ${new Date(rec.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {/* Action buttons if pending manual review */}
+                  {isManualPending && hasManualReq ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        id={`approve-manual-${rec.manualRequest._id}`}
+                        onClick={() => handleManualDecision(rec.manualRequest._id, 'approve')}
+                        disabled={!!processingId}
+                        className="py-1.5 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {processingId === rec.manualRequest._id + 'approve' ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <CheckCircle2 size={13} />
+                        )}
+                        Approve
+                      </button>
+
+                      <button
+                        id={`reject-manual-${rec.manualRequest._id}`}
+                        onClick={() => handleManualDecision(rec.manualRequest._id, 'reject')}
+                        disabled={!!processingId}
+                        className="py-1.5 px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {processingId === rec.manualRequest._id + 'reject' ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <XCircle size={13} />
+                        )}
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-white">
+                        {rec.totalWorkMinutes ? `${Math.floor(rec.totalWorkMinutes / 60)}h ${rec.totalWorkMinutes % 60}m` : '—'}
+                      </p>
+                      <span
+                        className={
+                          rec.status === 'present'
+                            ? 'badge-success'
+                            : rec.status === 'half_day'
+                            ? 'badge-warning'
+                            : rec.status === 'absent'
+                            ? 'badge-danger'
+                            : rec.status === 'not_checked_in'
+                            ? 'badge-gray'
+                            : 'badge-gray'
+                        }
+                      >
+                        {rec.status === 'not_checked_in' ? 'Not Checked In' : rec.status || 'pending'}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-white">{rec.totalWorkMinutes ? `${Math.floor(rec.totalWorkMinutes/60)}h ${rec.totalWorkMinutes%60}m` : '—'}</p>
-                <span className={
-                  rec.status === 'present' ? 'badge-success' :
-                  rec.status === 'half_day' ? 'badge-warning' :
-                  rec.status === 'absent' ? 'badge-danger' :
-                  rec.status === 'not_checked_in' ? 'badge-gray' :
-                  'badge-gray'
-                }>{rec.status === 'not_checked_in' ? 'Not Checked In' : (rec.status || 'pending')}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {records.length === 0 && <p className="text-slate-500 text-center py-8">No attendance records for {date}.</p>}
         </div>
       )}
@@ -394,6 +492,7 @@ const formatTime = (dateInput) => {
 
 // ── Detailed Modal for Employee Daily Log & Shift Report ─────────────────────
 const EmployeeLogDetailModal = ({ log, onClose }) => {
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   if (!log) return null;
 
   const user = log.userId || {};
@@ -525,109 +624,100 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
               </span>
             </div>
 
-            {log.taskTitle && (
-              <div>
-                <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Task Title</p>
-                <p className="text-white font-medium bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">{log.taskTitle}</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {log.projectName && (
-                <div>
-                  <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Project</p>
-                  <p className="text-white bg-slate-900/60 p-2 rounded-lg border border-slate-800">{log.projectName}</p>
+            {/* Document Submission Card (New Standard) */}
+            {(log.documentUrl || log.attachmentUrl) ? (
+              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-3 shadow-inner">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                      {(log.doctype || log.documentName || '').match(/\.(xlsx|xls|csv)$|^(xlsx|xls|csv)$/i) ? (
+                        <FileSpreadsheet size={20} />
+                      ) : (
+                        <FileText size={20} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-xs font-bold text-white truncate max-w-[240px]" title={log.documentName || 'Daily Work Document'}>
+                          {log.documentName || log.taskTitle || 'Daily Work Document'}
+                        </p>
+                        {/* Doctype Badge */}
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                          (log.doctype || log.documentName || '').match(/xlsx|xls|csv/i)
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                            : (log.doctype || log.documentName || '').match(/docx|doc/i)
+                            ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                            : (log.doctype || log.documentName || '').match(/pdf/i)
+                            ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                            : 'bg-primary-500/15 border-primary-500/30 text-primary-400'
+                        }`}>
+                          {log.doctype || (log.documentName || '').split('.').pop() || 'DOC'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {log.documentSize ? `${(log.documentSize / (1024 * 1024)).toFixed(2)} MB • ` : ''}
+                        64-base encoded link • Ready for preview & download
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              )}
-              {log.ticketId && (
-                <div>
-                  <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Ticket ID</p>
-                  <p className="text-primary-400 font-mono bg-slate-900/60 p-2 rounded-lg border border-slate-800">{log.ticketId}</p>
-                </div>
-              )}
-            </div>
 
-            {log.description && (
-              <div>
-                <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Description</p>
-                <p className="text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 whitespace-pre-line leading-relaxed">{log.description}</p>
-              </div>
-            )}
+                {/* Two Action Buttons: Preview (View without download) and Download */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    id="preview-document-btn"
+                    onClick={() => setShowPreviewModal(true)}
+                    className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-1.5 font-semibold shadow-md shadow-primary-500/20"
+                  >
+                    <Eye size={14} /> Preview Document
+                  </button>
 
-            {log.githubLink && (
-              <div>
-                <p className="text-[11px] text-slate-400 font-semibold mb-0.5">GitHub Repository / PR</p>
-                <a
-                  href={log.githubLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-violet-400 hover:text-violet-300 font-mono flex items-center gap-1.5 underline bg-slate-900/60 p-2 rounded-lg border border-slate-800"
-                >
-                  <ExternalLink size={12} /> {log.githubLink}
-                </a>
-              </div>
-            )}
-
-            {Array.isArray(log.researchLinks) && log.researchLinks.length > 0 && (
-              <div>
-                <p className="text-[11px] text-slate-400 font-semibold mb-1">Research Links ({log.researchLinks.length})</p>
-                <div className="space-y-1">
-                  {log.researchLinks.map((rLink, rIdx) => (
-                    <a
-                      key={rIdx}
-                      href={rLink.startsWith('http') ? rLink : `https://${rLink}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1.5 underline truncate bg-slate-900/60 p-1.5 px-2.5 rounded-lg border border-slate-800"
-                    >
-                      <ExternalLink size={11} /> {rLink}
-                    </a>
-                  ))}
+                  <button
+                    type="button"
+                    id="download-document-direct-btn"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = log.documentUrl || log.attachmentUrl;
+                      link.download = log.documentName || `work-document.${log.doctype || 'dat'}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="btn-ghost text-xs py-2 px-3 flex items-center justify-center gap-1.5 border border-slate-700 hover:bg-slate-800 text-slate-200"
+                  >
+                    <Download size={14} /> Download
+                  </button>
                 </div>
               </div>
-            )}
-
-            {log.campaignName && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Campaign</p>
-                  <p className="text-white bg-slate-900/60 p-2 rounded-lg border border-slate-800">{log.campaignName}</p>
-                </div>
-                {log.platform && (
+            ) : (
+              /* Fallback / Legacy text log display if no document attached */
+              <div className="space-y-2">
+                {log.taskTitle && (
                   <div>
-                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Platform</p>
-                    <p className="text-white bg-slate-900/60 p-2 rounded-lg border border-slate-800">{log.platform}</p>
+                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Task Title</p>
+                    <p className="text-white font-medium bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">{log.taskTitle}</p>
                   </div>
                 )}
-              </div>
-            )}
-
-            {log.outputSummary && (
-              <div>
-                <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Deliverables / Output Summary</p>
-                <p className="text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 whitespace-pre-line">{log.outputSummary}</p>
-              </div>
-            )}
-
-            {log.blockers && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-                <p className="text-amber-400 font-bold flex items-center gap-1.5 mb-1">
-                  <AlertTriangle size={14} /> Blockers / Dependencies
-                </p>
-                <p className="text-amber-200 text-xs">{log.blockers}</p>
-              </div>
-            )}
-
-            {log.attachmentUrl && (
-              <div className="pt-1">
-                <a
-                  href={log.attachmentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-ghost text-xs py-1.5 px-3 border border-slate-700 flex items-center gap-1.5 text-primary-400 hover:text-primary-300 w-fit"
-                >
-                  <ExternalLink size={13} /> View Attached File
-                </a>
+                {log.description && (
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Description</p>
+                    <p className="text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 whitespace-pre-line">{log.description}</p>
+                  </div>
+                )}
+                {log.githubLink && (
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">GitHub Repository / PR</p>
+                    <a
+                      href={log.githubLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-violet-400 hover:text-violet-300 font-mono flex items-center gap-1.5 underline bg-slate-900/60 p-2 rounded-lg border border-slate-800"
+                    >
+                      <ExternalLink size={12} /> {log.githubLink}
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
@@ -645,6 +735,15 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
           </button>
         </div>
       </div>
+
+      {/* In-App Document Previewer Modal */}
+      <DocumentPreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        documentUrl={log.documentUrl || log.attachmentUrl}
+        documentName={log.documentName || log.taskTitle || 'Daily Work Document'}
+        documentSize={log.documentSize}
+      />
     </div>
   );
 };

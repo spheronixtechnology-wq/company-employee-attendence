@@ -44,6 +44,13 @@ const dailyLogSchema = new mongoose.Schema(
     platform: { type: String, trim: true, default: null },
     outputSummary: { type: String, trim: true, default: null },
 
+    // ── Document Upload Fields ───────────────────────
+    documentUrl: { type: String, default: null }, // Base64 data URL (data:mime;base64,...) or file path
+    documentName: { type: String, default: null },
+    documentSize: { type: Number, default: null }, // in bytes
+    documentMimeType: { type: String, default: null },
+    doctype: { type: String, default: null }, // e.g. xlsx, docx, pdf, txt, csv
+
     // ── Common ────────────────────────────────────────
     attachmentUrl: { type: String, default: null },
 

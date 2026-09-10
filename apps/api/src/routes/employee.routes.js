@@ -4,6 +4,8 @@ const employeeController = require('../controllers/employee.controller');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 
+const { uploadDailyLogDoc } = require('../middleware/upload.middleware');
+
 const isEmployee = [authenticate, authorize('employee')];
 
 router.get('/status', employeeController.getStatus);
@@ -29,7 +31,7 @@ router.post('/break/end', isEmployee, employeeController.endBreak);
 
 // Daily Logs
 router.get('/daily-log/me', isEmployee, employeeController.getDailyLog);
-router.post('/daily-log/me', isEmployee, employeeController.submitDailyLog);
+router.post('/daily-log/me', isEmployee, uploadDailyLogDoc, employeeController.submitDailyLog);
 
 // Leaves
 router.get('/leave/types', isEmployee, employeeController.getLeaveTypes);

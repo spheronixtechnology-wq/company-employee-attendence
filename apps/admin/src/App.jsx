@@ -1,13 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
 import AdminLayout from './components/AdminLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
+import TeamsPage from './pages/TeamsPage';
 import ManagerPermissionsPage from './pages/ManagerPermissionsPage';
 import { DeviceRequestsPage, OfficeLocationsPage, LocationRequestsPage } from './pages/AttendanceRequestsPages';
 import WifiSettingsPage from './pages/WifiSettingsPage';
-import { Loader2 } from 'lucide-react';
+import { Loader2, QrCode, Wifi, Smartphone, Fingerprint, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from './lib/api';
 
@@ -83,161 +85,171 @@ const LeaveRequestsPage = () => {
   );
 };
 
-// QR Code Admin Page
-const QrCodePage = () => {
-  const [qr, setQr] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/admin/qr/current').then(res => setQr(res.data.data.qr)).catch(() => setQr(null)).finally(() => setLoading(false));
-  }, []);
-
-  const regenerate = async () => {
-    const reason = prompt('Reason for regenerating QR code?');
-    if (!reason) return;
-    try {
-      const res = await api.post('/admin/qr/regenerate', { reason });
-      setQr(res.data.data.qr);
-    } catch (err) { alert(err.response?.data?.message || 'Failed'); }
-  };
-
-  return (
-    <div className="p-6 space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-bold text-white">QR Code Management</h1>
-      <div className="card text-center">
-        {loading ? <Loader2 className="animate-spin mx-auto" size={28} /> : qr ? (
-          <>
-            <p className="text-slate-400 text-sm mb-4">Today's QR Code Value</p>
-            <div className="font-mono text-lg text-primary-400 bg-slate-700 rounded-xl p-4 break-all mb-4">{qr.codeValue}</div>
-            <p className="text-xs text-slate-500">Valid: {qr.validDate} · Expires at midnight</p>
-            <button id="regenerate-qr-btn" onClick={regenerate} className="btn-primary mt-4">Regenerate QR Code</button>
-          </>
-        ) : (
-          <>
-            <p className="text-slate-500 mb-4">No QR code for today yet.</p>
-            <button id="generate-qr-btn" onClick={regenerate} className="btn-primary">Generate Today's QR Code</button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Geofence Admin Page
-const GeofencePage = () => {
-  const [geo, setGeo] = useState(null);
-  const [form, setForm] = useState({ officeName: '', latitude: '', longitude: '', radiusMeters: 200 });
-  const [saving, setSaving] = useState(false);
-  const [detecting, setDetecting] = useState(false);
-
-  useEffect(() => {
-    api.get('/admin/geofence').then(res => {
-      const g = res.data.data.geofence;
-      if (g) { setGeo(g); setForm({ officeName: g.officeName, latitude: g.latitude, longitude: g.longitude, radiusMeters: g.radiusMeters }); }
-    }).catch(console.error);
-  }, []);
-
-  const save = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const res = await api.patch('/admin/geofence', form);
-      setGeo(res.data.data.geofence);
-      alert('Geofence updated!');
-    } catch (err) { alert(err.response?.data?.message || 'Failed'); }
-    finally { setSaving(false); }
-  };
-
-  const autoDetect = () => {
-    if (!navigator.geolocation) return alert('Geolocation is not supported by your browser.');
-    setDetecting(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm(prev => ({ ...prev, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-        setDetecting(false);
-      },
-      (err) => {
-        alert('Failed to detect location. Please ensure location permissions are granted.');
-        setDetecting(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
-  };
-
-  return (
-    <div className="p-6 space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-bold text-white">Geofence Settings</h1>
-      <div className="card max-w-lg">
-        <form onSubmit={save} className="space-y-4">
-          <div><label className="label">Office Name</label><input className="input" value={form.officeName} onChange={e => setForm({...form, officeName: e.target.value})} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Latitude</label><input type="number" step="any" className="input" value={form.latitude} onChange={e => setForm({...form, latitude: e.target.value})} /></div>
-            <div><label className="label">Longitude</label><input type="number" step="any" className="input" value={form.longitude} onChange={e => setForm({...form, longitude: e.target.value})} /></div>
-          </div>
-          <div><label className="label">Radius (meters)</label><input type="number" className="input" value={form.radiusMeters} onChange={e => setForm({...form, radiusMeters: e.target.value})} /></div>
-          
-          <button type="button" onClick={autoDetect} disabled={detecting} className="btn-ghost w-full">
-            {detecting ? <Loader2 size={16} className="animate-spin inline mr-2" /> : null} {detecting ? 'Detecting Location...' : 'Auto Detect Location'}
-          </button>
-
-          <button type="submit" id="save-geofence-btn" disabled={saving} className="btn-primary w-full">
-            {saving ? <Loader2 size={16} className="animate-spin inline mr-2" /> : null} {saving ? 'Saving...' : 'Update Geofence'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
 // Attendance Method Admin Page
 const AttendanceMethodPage = () => {
   const [current, setCurrent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
+
+  const fetchActiveMethod = async () => {
+    try {
+      const res = await api.get('/admin/attendance-method/active');
+      setCurrent(res.data?.data?.activeMethod);
+    } catch (err) {
+      console.error('Failed to load active attendance method:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    api.get('/admin/attendance-method/active').then(res => setCurrent(res.data.data.activeMethod)).catch(console.error);
+    fetchActiveMethod();
   }, []);
 
-  const switchMethod = async (method) => {
-    const reason = prompt(`Reason for switching to ${method}?`);
-    if (!reason) return;
+  const handleSwitchMethod = async (methodKey) => {
+    const methodObj = methods.find(m => m.key === methodKey);
+    const reason = prompt(`Reason for switching attendance verification method to "${methodObj?.label || methodKey}"?`);
+    if (!reason || !reason.trim()) return;
+
+    setSwitching(true);
     try {
-      await api.patch('/admin/attendance-method/switch', { method, reason });
-      setCurrent(method);
-      alert('Attendance method switched!');
-    } catch (err) { alert(err.response?.data?.message || 'Failed'); }
+      await api.patch('/admin/attendance-method/switch', { method: methodKey, reason: reason.trim() });
+      setCurrent(methodKey);
+      alert(`Attendance method switched to ${methodObj?.label || methodKey} successfully!`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to switch attendance method');
+    } finally {
+      setSwitching(false);
+    }
   };
 
   const methods = [
-    { key: 'qr_code', label: 'QR Code', desc: 'Daily rotating QR code. Employees scan at check-in.' },
-    { key: 'wifi_ip', label: 'WiFi / IP', desc: 'Validates employee is on office network by IP address.' },
-    { key: 'device_fingerprint', label: 'Device Fingerprint', desc: 'Pre-registered and approved device required.' },
-    { key: 'biometric', label: 'Biometric Attendance', desc: 'Device-owner authentication using phone biometric sensor (fingerprint, Face ID, or PIN).' },
+    {
+      key: 'qr_code',
+      label: 'QR Code Attendance',
+      icon: QrCode,
+      desc: 'Daily dynamic rotating QR code. Employees scan the office QR display at check-in.',
+      badge: 'Popular',
+    },
+    {
+      key: 'wifi_ip',
+      label: 'WiFi / IP Network Gate',
+      icon: Wifi,
+      desc: 'Validates employee presence on approved office Wi-Fi networks by checking IP/subnet match.',
+      badge: 'Zero-touch',
+    },
+    // {
+    //   key: 'device_fingerprint',
+    //   label: 'Device Fingerprint Lock',
+    //   icon: Smartphone,
+    //   desc: 'Binds employee check-in exclusively to pre-registered and approved hardware devices.',
+    //   badge: 'Strict Trust',
+    // },
+    {
+      key: 'biometric',
+      label: 'Biometric (WebAuthn / FIDO2)',
+      icon: Fingerprint,
+      desc: 'Device-owner biometric verification using hardware sensors (Fingerprint, TouchID, FaceID, or PIN).',
+      badge: 'High Security',
+    },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="animate-spin text-primary-400" size={36} />
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-bold text-white">Attendance Method</h1>
-      <p className="text-slate-400 text-sm">Only one method can be active at a time. All methods require geofence validation.</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {methods.map(m => (
-          <div key={m.key} className={`card cursor-pointer transition-all ${current === m.key ? 'border-primary-500 bg-primary-500/10' : 'hover:border-slate-500'}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-white">{m.label}</h3>
-              {current === m.key && <span className="badge-success">Active</span>}
+    <div className="p-6 space-y-6 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-primary-500/20 text-primary-400">
+              <ShieldCheck size={24} />
+            </span>
+            Attendance Verification Method
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Configure the required verification mode for all employee check-ins across the organization.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs text-slate-400">Active Mode:</span>
+          <span className="text-xs font-bold text-primary-300 uppercase tracking-wider">
+            {current ? current.replace('_', ' ') : 'Loading...'}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {methods.map(m => {
+          const Icon = m.icon;
+          const isActive = current === m.key;
+
+          return (
+            <div
+              key={m.key}
+              className={`card relative transition-all duration-200 p-5 ${
+                isActive
+                  ? 'border-primary-500 bg-gradient-to-br from-primary-950/40 via-slate-800/80 to-slate-800 shadow-lg shadow-primary-900/20 ring-1 ring-primary-500/50'
+                  : 'hover:border-slate-600 bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`p-3 rounded-xl ${
+                      isActive ? 'bg-primary-600 text-white shadow-md shadow-primary-600/30' : 'bg-slate-700/60 text-slate-300'
+                    }`}
+                  >
+                    <Icon size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">{m.label}</h3>
+                    <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+                      {m.badge}
+                    </span>
+                  </div>
+                </div>
+
+                {isActive && (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+                    <CheckCircle2 size={13} /> Active
+                  </span>
+                )}
+              </div>
+
+              <p className="text-slate-300 text-sm mb-5 leading-relaxed">
+                {m.desc}
+              </p>
+
+              <div>
+                {isActive ? (
+                  <div className="text-center py-2 text-xs font-medium text-emerald-400/90 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
+                    Currently enforced at employee check-in
+                  </div>
+                ) : (
+                  <button
+                    id={`switch-to-${m.key}`}
+                    disabled={switching}
+                    onClick={() => handleSwitchMethod(m.key)}
+                    className="btn bg-slate-700 hover:bg-primary-600 hover:text-white text-slate-200 text-xs w-full py-2.5 transition-colors font-semibold"
+                  >
+                    {switching ? 'Updating...' : `Switch to ${m.label}`}
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="text-slate-400 text-xs mb-4">{m.desc}</p>
-            {current !== m.key && (
-              <button id={`switch-${m.key}`} onClick={() => switchMethod(m.key)} className="btn-ghost text-xs w-full">
-                Switch to {m.label}
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 };
-
 
 // Placeholder pages
 const PlaceholderPage = ({ title }) => (
@@ -272,14 +284,12 @@ function AppRoutes() {
             <Routes>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/employees" element={<EmployeesPage />} />
-              <Route path="/teams" element={<PlaceholderPage title="Team Management" />} />
+              <Route path="/teams" element={<TeamsPage />} />
               <Route path="/manager-permissions" element={<ManagerPermissionsPage />} />
               <Route path="/leave-requests" element={<LeaveRequestsPage />} />
               <Route path="/attendance" element={<PlaceholderPage title="Attendance Records" />} />
               <Route path="/attendance-method" element={<AttendanceMethodPage />} />
-              <Route path="/qr-code" element={<QrCodePage />} />
               <Route path="/wifi-settings" element={<WifiSettingsPage />} />
-              <Route path="/geofence" element={<GeofencePage />} />
 
               <Route path="/device-requests" element={<DeviceRequestsPage />} />
               <Route path="/office-locations" element={<OfficeLocationsPage />} />
@@ -298,7 +308,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <SocketProvider>
+          <AppRoutes />
+        </SocketProvider>
       </AuthProvider>
     </BrowserRouter>
   );

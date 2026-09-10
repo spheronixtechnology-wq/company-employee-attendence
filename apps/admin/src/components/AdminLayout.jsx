@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
+import api from '../lib/api';
 import {
   LayoutDashboard, Users, Calendar, ClipboardList, Shield,
   QrCode, Wifi, MapPin, Fingerprint, Settings, ScrollText,
@@ -36,19 +38,43 @@ const navSections = [
     label: 'System',
     items: [
       { path: '/attendance-method', label: 'Attendance Method', icon: Settings, id: 'nav-method' },
-      { path: '/qr-code', label: 'QR Code', icon: QrCode, id: 'nav-qr' },
       { path: '/wifi-settings', label: 'WiFi / IP Settings', icon: Wifi, id: 'nav-wifi' },
       { path: '/office-locations', label: 'Office Locations', icon: Building2, id: 'nav-locations' },
-      { path: '/geofence', label: 'Geofence (Legacy)', icon: MapPin, id: 'nav-geofence' },
     ],
   },
 ];
 
 export default function AdminLayout({ children }) {
   const { user, logout } = useAuth();
+  const { socket } = useSocket();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingDevicesCount, setPendingDevicesCount] = useState(0);
+
+  const fetchPendingCounts = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/device-requests?status=pending');
+      const count = res.data?.data?.counts?.pending ?? (res.data?.data?.requests?.length || 0);
+      setPendingDevicesCount(count);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchPendingCounts();
+  }, [fetchPendingCounts]);
+
+  // Real-time socket updates for badge
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => fetchPendingCounts();
+    socket.on('device:request_created', handleUpdate);
+    socket.on('device:request_resolved', handleUpdate);
+    return () => {
+      socket.off('device:request_created', handleUpdate);
+      socket.off('device:request_resolved', handleUpdate);
+    };
+  }, [socket, fetchPendingCounts]);
 
   const handleLogout = async () => {
     await logout();
@@ -97,10 +123,17 @@ export default function AdminLayout({ children }) {
                     to={item.path}
                     id={item.id}
                     onClick={() => setSidebarOpen(false)}
-                    className={active ? 'nav-item-active' : 'nav-item'}
+                    className={`${active ? 'nav-item-active' : 'nav-item'} flex items-center justify-between`}
                   >
-                    <item.icon size={16} />
-                    <span className="text-xs">{item.label}</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <item.icon size={16} />
+                      <span className="text-xs truncate">{item.label}</span>
+                    </div>
+                    {item.id === 'nav-device-requests' && pendingDevicesCount > 0 && (
+                      <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex-shrink-0">
+                        {pendingDevicesCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

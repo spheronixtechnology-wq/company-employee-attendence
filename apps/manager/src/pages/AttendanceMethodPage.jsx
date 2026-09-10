@@ -17,13 +17,13 @@ const methods = [
     desc: 'Validates employee presence on approved office Wi-Fi networks by checking IP/subnet match.',
     badge: 'Zero-touch',
   },
-  {
-    key: 'device_fingerprint',
-    label: 'Device Fingerprint Lock',
-    icon: Smartphone,
-    desc: 'Binds employee check-in exclusively to pre-registered and approved hardware devices.',
-    badge: 'Strict Trust',
-  },
+  // {
+  //   key: 'device_fingerprint',
+  //   label: 'Device Fingerprint Lock',
+  //   icon: Smartphone,
+  //   desc: 'Binds employee check-in exclusively to pre-registered and approved hardware devices.',
+  //   badge: 'Strict Trust',
+  // },
   {
     key: 'biometric',
     label: 'Biometric (WebAuthn / FIDO2)',
@@ -101,7 +101,7 @@ export default function AttendanceMethodPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {methods.map(m => {
           const Icon = m.icon;
           const isActive = current === m.key;

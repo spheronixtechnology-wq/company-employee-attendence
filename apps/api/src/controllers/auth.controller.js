@@ -118,8 +118,19 @@ const requestDeviceAccess = async (req, res, next) => {
           });
         }
       }
+      // Also notify admins
+      const admins = await User.find({ role: 'admin', isActive: true }, '_id');
+      for (const adm of admins) {
+        await createNotification({
+          userId: adm._id,
+          type: 'device_request',
+          title: 'New Device Replacement Request',
+          message: `${user.name} requested device replacement for ${requestedDeviceLabel || 'new device'}: "${reason}"`,
+          relatedId: newRequest._id,
+        });
+      }
     } catch (notifErr) {
-      console.warn('Failed to dispatch manager notification:', notifErr.message);
+      console.warn('Failed to dispatch manager/admin notification:', notifErr.message);
     }
 
     // Real-time socket emission to managers & admins

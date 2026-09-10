@@ -22,7 +22,7 @@ const { createNotification } = require('../services/notification.service');
 const { UAParser } = require('ua-parser-js');
 const { getClientIp, isIpInAllowedList, maskIp } = require('../utils/ipUtils');
 const { buildDeviceLabel, formatDeviceLabel } = require('../utils/deviceUtils');
-const { emitToTeam, emitToManagers, emitToUser } = require('../socket');
+const { emitToTeam, emitToManagers, emitToAdmins, emitToUser } = require('../socket');
 const crypto = require('crypto');
 const webauthnService = require('../services/webauthn.service');
 
@@ -43,12 +43,7 @@ const notifyRequestSubmitted = async ({ type, title, message, relatedId }) => {
       '_id role'
     ).lean();
 
-    let recipientIds = recipients.filter((r) => r.role === 'manager').map((r) => r._id);
-
-    // No active managers at all — fall back to admins
-    if (recipientIds.length === 0) {
-      recipientIds = recipients.filter((r) => r.role === 'admin').map((r) => r._id);
-    }
+    const recipientIds = recipients.map((r) => r._id);
 
     for (const recipientId of recipientIds) {
       await createNotification({ userId: recipientId, type, title, message, relatedId });
@@ -710,6 +705,11 @@ const requestDeviceApproval = async (req, res) => {
       });
     }
     emitToManagers('device:request_created', {
+      request: populatedRequest || newRequest,
+      userName: req.user.name,
+      teamId,
+    });
+    emitToAdmins('device:request_created', {
       request: populatedRequest || newRequest,
       userName: req.user.name,
       teamId,

@@ -11,6 +11,7 @@ const RegisteredDevice = require('../models/RegisteredDevice');
 const EmployeeLocation = require('../models/EmployeeLocation');
 const BiometricCredential = require('../models/BiometricCredential');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
+const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
 
 const leaveService = require('../services/leave.service');
 const { writeAuditLog } = require('../services/audit.service');
@@ -161,9 +162,17 @@ const getTeamAttendance = async (req, res) => {
       .sort({ name: 1 });
 
     const memberIds = members.map(m => m._id);
-    const attendanceRecords = await Attendance.find({ userId: { $in: memberIds }, date })
-      .populate('userId', 'name designation email avatarUrl phone')
-      .sort({ 'userId.name': 1 });
+    const [attendanceRecords, manualRequests] = await Promise.all([
+      Attendance.find({ userId: { $in: memberIds }, date })
+        .populate('userId', 'name designation email avatarUrl phone')
+        .sort({ 'userId.name': 1 }),
+      ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
+    ]);
+
+    const manualRequestMap = new Map();
+    for (const mr of manualRequests) {
+      manualRequestMap.set(mr.userId.toString(), mr);
+    }
 
     const attendanceMap = new Map();
     for (const record of attendanceRecords) {
@@ -175,7 +184,13 @@ const getTeamAttendance = async (req, res) => {
     // Merge team members so un-checked-in employees are still visible in roster
     const fullAttendance = members.map(member => {
       const existing = attendanceMap.get(member._id.toString());
-      if (existing) return existing;
+      const manualReq = manualRequestMap.get(member._id.toString()) || null;
+
+      if (existing) {
+        const obj = existing.toObject ? existing.toObject() : { ...existing };
+        obj.manualRequest = manualReq;
+        return obj;
+      }
       return {
         _id: `roster-${member._id}`,
         userId: member,
@@ -184,8 +199,9 @@ const getTeamAttendance = async (req, res) => {
         checkOutTime: null,
         totalWorkMinutes: 0,
         totalBreakMinutes: 0,
-        status: 'not_checked_in',
+        status: manualReq && manualReq.status === 'pending' ? 'manual_pending' : 'not_checked_in',
         breaks: [],
+        manualRequest: manualReq,
       };
     });
 
@@ -600,6 +616,135 @@ const getUnreadNotificationCount = async (req, res) => {
   }
 };
 
+/**
+ * POST /manager/team/manual-attendance/:id/decision
+ * Body: { action: 'approve' | 'reject', decisionNote?: string }
+ */
+const handleManualAttendanceDecision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, decisionNote } = req.body;
+
+    if (!['approve', 'reject'].includes(action)) {
+      return badRequest(res, 'Action must be "approve" or "reject"');
+    }
+
+    const request = await ManualAttendanceRequest.findById(id).populate('userId');
+    if (!request) {
+      return notFound(res, 'Manual attendance request not found');
+    }
+
+    if (request.status !== 'pending') {
+      return badRequest(res, `Request has already been ${request.status}`);
+    }
+
+    // Permission check: ensure manager manages this employee's team (unless admin)
+    if (req.user.role !== 'admin') {
+      const teams = await getManagedTeams(req.user);
+      const managedTeamIds = teams.map(t => t._id.toString());
+      const userTeamId = request.userId?.teamId?.toString() || request.teamId?.toString();
+      if (!userTeamId || !managedTeamIds.includes(userTeamId)) {
+        return forbidden(res, 'You do not have permission to manage this employee');
+      }
+    }
+
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    request.status = newStatus;
+    request.decidedBy = req.user._id;
+    request.decidedAt = new Date();
+    request.decisionNote = decisionNote || null;
+    await request.save();
+
+    // Now update or create the Attendance record for this user & requestDate
+    let attendance = await Attendance.findOne({ userId: request.userId._id, date: request.requestDate });
+
+    if (action === 'approve') {
+      const now = new Date();
+      const todayStr = getTodayDateString();
+      const isToday = request.requestDate === todayStr;
+
+      if (!attendance) {
+        attendance = new Attendance({
+          userId: request.userId._id,
+          date: request.requestDate,
+        });
+      }
+
+      attendance.status = 'present';
+      attendance.checkInMethod = 'manual';
+      // Set check-in time: if already set keep it; if today, now; if past, standard shift start 09:30
+      if (!attendance.checkInTime) {
+        attendance.checkInTime = isToday ? now : new Date(`${request.requestDate}T09:30:00.000Z`);
+      }
+      await attendance.save();
+
+      await writeAuditLog({
+        performedBy: req.user._id,
+        performedByRole: req.user.role,
+        action: 'ATTENDANCE_MANUAL_APPROVED',
+        targetCollection: 'ManualAttendanceRequest',
+        targetId: request._id,
+        targetUserId: request.userId._id,
+        teamId: request.teamId,
+        metadata: { requestDate: request.requestDate, decisionNote },
+      });
+
+      await createNotification({
+        userId: request.userId._id,
+        type: 'general',
+        title: 'Manual Attendance Approved ✅',
+        message: `Your manual attendance request for ${request.requestDate} has been approved.`,
+        relatedId: request._id,
+      });
+    } else {
+      // action === 'reject'
+      if (attendance && attendance.status === 'manual_pending') {
+        attendance.status = 'absent';
+        await attendance.save();
+      }
+
+      await writeAuditLog({
+        performedBy: req.user._id,
+        performedByRole: req.user.role,
+        action: 'ATTENDANCE_MANUAL_REJECTED',
+        targetCollection: 'ManualAttendanceRequest',
+        targetId: request._id,
+        targetUserId: request.userId._id,
+        teamId: request.teamId,
+        metadata: { requestDate: request.requestDate, decisionNote },
+      });
+
+      await createNotification({
+        userId: request.userId._id,
+        type: 'general',
+        title: 'Manual Attendance Rejected ❌',
+        message: `Your manual attendance request for ${request.requestDate} was rejected.` + (decisionNote ? ` Reason: ${decisionNote}` : ''),
+        relatedId: request._id,
+      });
+    }
+
+    // Real-time socket updates
+    if (request.teamId) {
+      emitToTeam(request.teamId, 'attendance:update', {
+        date: request.requestDate,
+        userId: request.userId._id,
+        status: action === 'approve' ? 'present' : 'absent',
+      });
+    }
+    emitToUser(request.userId._id, 'notification:new', {
+      title: `Manual Attendance ${action === 'approve' ? 'Approved ✅' : 'Rejected ❌'}`,
+    });
+
+    return success(res, `Manual attendance request ${action}d successfully`, {
+      request,
+      attendance,
+    });
+  } catch (error) {
+    console.error('handleManualAttendanceDecision error:', error);
+    return badRequest(res, 'Failed to process manual attendance decision');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -612,6 +757,7 @@ module.exports = {
   handleDeviceRequestDecision,
   getLocationRequests,
   handleLocationRequestDecision,
+  handleManualAttendanceDecision,
   getUnreadNotificationCount,
   getManagedTeams,
   getManagedTeam,

@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { FileText, Paperclip, CheckCircle, Loader2, Flame, ExternalLink, Link2 } from 'lucide-react';
-import DailyLogFields, { isValidGitHubUrl, isValidWebUrl } from '../components/DailyLogFields';
+import {
+  FileText,
+  CheckCircle,
+  Loader2,
+  Flame,
+  Download,
+  ExternalLink,
+  Sparkles,
+  FileCheck,
+} from 'lucide-react';
+import DailyLogDocUpload, { formatFileSize } from '../components/DailyLogDocUpload';
 
 export default function DailyLogPage() {
   const { user } = useAuth();
@@ -11,17 +20,8 @@ export default function DailyLogPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [todayLog, setTodayLog] = useState(null);
-
-  const [form, setForm] = useState({
-    hoursSpent: '',
-    taskTitle: '',
-    projectName: '',
-    description: '',
-    githubLink: '',
-    researchLinks: [''],
-  });
-  const [attachment, setAttachment] = useState(null);
-  const [fieldErrors, setFieldErrors] = useState({});
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
 
   const fetchLogs = async () => {
     try {
@@ -32,7 +32,7 @@ export default function DailyLogPage() {
       const todayEntry = res.data.data.logs?.find((l) => l.logDate === today);
       setTodayLog(todayEntry || null);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch daily logs:', err);
     }
   };
 
@@ -40,86 +40,32 @@ export default function DailyLogPage() {
     fetchLogs();
   }, []);
 
-  const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => ({ ...prev, [field]: null }));
-    }
-    if (message) setMessage(null);
-  };
-
   const onSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
-    setMessage(null);
-
-    const errors = {};
-    if (!form.taskTitle || !form.taskTitle.trim()) {
-      errors.taskTitle = 'Task Title is required';
-    }
-    if (!form.projectName || !form.projectName.trim()) {
-      errors.projectName = 'Project Name is required';
-    }
-    if (!form.description || !form.description.trim()) {
-      errors.description = 'Description is required';
-    }
-    if (form.githubLink && form.githubLink.trim() && !isValidGitHubUrl(form.githubLink.trim())) {
-      errors.githubLink = 'Invalid GitHub URL';
-    }
-    if (Array.isArray(form.researchLinks)) {
-      const invalidLink = form.researchLinks.find(
-        (l) => l.trim() && !isValidWebUrl(l.trim())
-      );
-      if (invalidLink) {
-        errors.researchLinks = 'One or more research links are invalid URLs';
-      }
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setMessage({ type: 'error', text: 'Please fill in all required fields and verify your links.' });
-      setSubmitting(false);
+    if (!selectedFile) {
+      setUploadError('Please choose or drop a work document (up to 2MB) before submitting.');
       return;
     }
 
+    setSubmitting(true);
+    setMessage(null);
+    setUploadError(null);
+
     try {
       const formData = new FormData();
-      formData.append('taskTitle', form.taskTitle.trim());
-      formData.append('projectName', form.projectName.trim());
-      formData.append('description', form.description.trim());
-      if (form.hoursSpent) {
-        formData.append('hoursSpent', form.hoursSpent);
-      }
-      if (form.githubLink && form.githubLink.trim()) {
-        formData.append('githubLink', form.githubLink.trim());
-      }
-      const validResearchLinks = (form.researchLinks || [])
-        .map((l) => l.trim())
-        .filter(Boolean);
-      if (validResearchLinks.length > 0) {
-        formData.append('researchLinks', JSON.stringify(validResearchLinks));
-      }
-      if (attachment) {
-        formData.append('attachment', attachment);
-      }
+      formData.append('document', selectedFile);
 
       await api.post('/employee/daily-log/me', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setMessage({ type: 'success', text: '✅ Daily log submitted successfully!' });
-      setForm({
-        hoursSpent: '',
-        taskTitle: '',
-        projectName: '',
-        description: '',
-        githubLink: '',
-        researchLinks: [''],
-      });
-      setAttachment(null);
+      setMessage({ type: 'success', text: '✅ Daily log document submitted successfully!' });
+      setSelectedFile(null);
       fetchLogs();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Submission failed.' });
+      const errMsg = err.response?.data?.message || err.message || 'Submission failed. Please try again.';
+      setMessage({ type: 'error', text: errMsg });
+      setUploadError(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -135,7 +81,7 @@ export default function DailyLogPage() {
               <FileText size={20} className="text-primary-400" />
               Daily Log
             </h1>
-            <p className="text-slate-400 text-sm">Submit your work summary for today</p>
+            <p className="text-slate-400 text-sm">Upload your work document summary for today (max 2MB)</p>
           </div>
           {/* Streak */}
           <div className="flex items-center gap-2 bg-warning-500/10 border border-warning-500/30 px-3 py-2 rounded-xl">
@@ -160,7 +106,7 @@ export default function DailyLogPage() {
 
         {/* Today's log already submitted */}
         {todayLog && (
-          <div className="card border-success-500/30 space-y-3">
+          <div className="card border-success-500/30 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <CheckCircle size={20} className="text-success-400" />
@@ -171,57 +117,33 @@ export default function DailyLogPage() {
               </span>
             </div>
 
-            <div className="space-y-2 text-sm">
-              {todayLog.taskTitle && (
-                <div>
-                  <p className="text-xs text-slate-400">Task Title</p>
-                  <p className="text-white font-medium">{todayLog.taskTitle}</p>
+            {/* Document Details Card */}
+            <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 flex-shrink-0">
+                  <FileCheck size={20} />
                 </div>
-              )}
-              {todayLog.projectName && (
-                <div>
-                  <p className="text-xs text-slate-400">Project Name</p>
-                  <p className="text-white">{todayLog.projectName}</p>
-                </div>
-              )}
-              {todayLog.description && (
-                <div>
-                  <p className="text-xs text-slate-400">Description</p>
-                  <p className="text-slate-200 whitespace-pre-line text-xs bg-slate-950/40 p-2.5 rounded-lg border border-slate-800">
-                    {todayLog.description}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {todayLog.documentName || todayLog.taskTitle || 'Daily Work Document'}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {todayLog.documentSize ? `${formatFileSize(todayLog.documentSize)} • ` : ''}
+                    Submitted {todayLog.submittedAt ? new Date(todayLog.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
                   </p>
                 </div>
-              )}
-              {todayLog.githubLink && (
-                <div>
-                  <p className="text-xs text-slate-400">GitHub Link</p>
-                  <a
-                    href={todayLog.githubLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-violet-400 hover:text-violet-300 text-xs flex items-center gap-1.5 underline"
-                  >
-                    <ExternalLink size={12} /> {todayLog.githubLink}
-                  </a>
-                </div>
-              )}
-              {Array.isArray(todayLog.researchLinks) && todayLog.researchLinks.length > 0 && (
-                <div>
-                  <p className="text-xs text-slate-400 mb-1">Research Links</p>
-                  <div className="space-y-1">
-                    {todayLog.researchLinks.map((rLink, rIdx) => (
-                      <a
-                        key={rIdx}
-                        href={rLink.startsWith('http') ? rLink : `https://${rLink}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary-400 hover:text-primary-300 text-xs flex items-center gap-1.5 underline truncate"
-                      >
-                        <Link2 size={12} /> {rLink}
-                      </a>
-                    ))}
-                  </div>
-                </div>
+              </div>
+
+              {(todayLog.documentUrl || todayLog.attachmentUrl) && (
+                <a
+                  href={todayLog.documentUrl || todayLog.attachmentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="btn-primary text-xs py-2 px-3.5 flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md shadow-primary-500/20 self-start sm:self-auto"
+                >
+                  <Download size={14} /> Download Document
+                </a>
               )}
             </div>
           </div>
@@ -229,47 +151,37 @@ export default function DailyLogPage() {
 
         {/* Submission Form */}
         {!todayLog && (
-          <div className="card">
-            <h2 className="font-semibold text-white mb-4">Submit Today's Log</h2>
+          <div className="card space-y-4">
+            <div>
+              <h2 className="font-semibold text-white">Upload Today's Work Document</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Attach your daily work report file (.doc, .docx, .pdf, .xlsx, or .txt) within 2MB size.
+              </p>
+            </div>
+
+            {/* Shift duration auto-calc banner */}
+            <div className="flex items-center gap-2.5 p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl text-xs text-violet-300">
+              <Sparkles size={15} className="text-violet-400 flex-shrink-0" />
+              <span>Work hours will be calculated automatically based on your active shift duration and breaks.</span>
+            </div>
+
             <form onSubmit={onSubmit} className="space-y-4">
-              <DailyLogFields form={form} onChange={handleChange} errors={fieldErrors} />
-
-              {/* Optional Hours Spent Override if submitting directly from this page */}
-              <div>
-                <label className="label text-xs">Hours Spent (optional)</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  max="24"
-                  className="input text-sm"
-                  placeholder="Leave empty to auto-calculate from active work hours"
-                  value={form.hoursSpent}
-                  onChange={(e) => handleChange('hoursSpent', e.target.value)}
-                />
-              </div>
-
-              {/* File Attachment */}
-              <div>
-                <label className="label text-xs flex items-center gap-2">
-                  <Paperclip size={14} /> Attachment (optional)
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp"
-                  className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary-600 file:text-white hover:file:bg-primary-500 cursor-pointer"
-                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                />
-              </div>
+              <DailyLogDocUpload
+                file={selectedFile}
+                onFileSelect={setSelectedFile}
+                error={uploadError}
+                setError={setUploadError}
+                disabled={submitting}
+              />
 
               <button
                 type="submit"
                 id="submit-daily-log-btn"
-                disabled={submitting}
-                className="btn-primary w-full mt-2"
+                disabled={submitting || !selectedFile}
+                className="btn-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                {submitting ? 'Submitting...' : 'Submit Daily Log'}
+                {submitting ? 'Uploading Document...' : 'Submit Daily Log'}
               </button>
             </form>
           </div>
@@ -285,23 +197,24 @@ export default function DailyLogPage() {
                   key={log._id}
                   className="flex items-center justify-between py-2.5 border-b border-slate-700/60 last:border-0"
                 >
-                  <div className="space-y-0.5">
+                  <div className="space-y-0.5 min-w-0 pr-3">
                     <p className="text-sm font-medium text-white">{log.logDate}</p>
-                    <p className="text-xs text-slate-400">
-                      {log.taskTitle || log.projectName || 'Log submitted'}
+                    <p className="text-xs text-slate-400 truncate">
+                      {log.documentName || log.taskTitle || log.projectName || 'Document submitted'}
                     </p>
-                    {log.githubLink && (
+                    {(log.documentUrl || log.attachmentUrl) && (
                       <a
-                        href={log.githubLink}
+                        href={log.documentUrl || log.attachmentUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 underline"
+                        download
+                        className="text-[11px] text-primary-400 hover:text-primary-300 flex items-center gap-1 underline pt-0.5"
                       >
-                        <ExternalLink size={10} /> GitHub
+                        <Download size={11} /> Download Document
                       </a>
                     )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold text-primary-400">{log.hoursSpent}h</p>
                     <span className="badge-success text-xs">✓ Submitted</span>
                   </div>

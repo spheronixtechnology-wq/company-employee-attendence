@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
+const managerController = require('../controllers/manager.controller');
 
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
@@ -28,6 +29,9 @@ router.get('/current-ip', isAdminOrManager, adminController.getCurrentIp);
 // Device Requests
 router.get('/device-requests', isAdmin, adminController.getDeviceRequests);
 router.patch('/device-requests/:id/decision', isAdmin, adminController.handleDeviceRequestDecision);
+
+// Manual Attendance Decision
+router.post('/manual-attendance/:id/decision', isAdmin, managerController.handleManualAttendanceDecision);
 
 // Attendance Method Settings
 router.get('/attendance-method/active', isAdminOrManager, adminController.getActiveAttendanceMethod);

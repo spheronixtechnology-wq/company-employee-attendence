@@ -1,75 +1,41 @@
 import { useState } from 'react';
-import { X, FileText, Send, Loader2, AlertCircle } from 'lucide-react';
-import DailyLogFields, { isValidGitHubUrl, isValidWebUrl } from '../DailyLogFields';
+import { X, FileText, Send, Loader2, AlertCircle, Sparkles } from 'lucide-react';
+import DailyLogDocUpload from '../DailyLogDocUpload';
 import api from '../../lib/api';
 
 export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
-  const [form, setForm] = useState({
-    taskTitle: '',
-    projectName: '',
-    description: '',
-    githubLink: '',
-    researchLinks: [''],
-  });
-  const [fieldErrors, setFieldErrors] = useState({});
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   if (!isOpen) return null;
 
-  const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => ({ ...prev, [field]: null }));
-    }
-    if (error) setError(null);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setUploadError(null);
 
-    // Validate required fields
-    const errors = {};
-    if (!form.taskTitle || !form.taskTitle.trim()) {
-      errors.taskTitle = 'Task Title is required';
-    }
-    if (!form.projectName || !form.projectName.trim()) {
-      errors.projectName = 'Project Name is required';
-    }
-    if (!form.description || !form.description.trim()) {
-      errors.description = 'Description is required';
-    }
-    if (form.githubLink && form.githubLink.trim() && !isValidGitHubUrl(form.githubLink.trim())) {
-      errors.githubLink = 'Invalid GitHub URL';
-    }
-
-    if (Array.isArray(form.researchLinks)) {
-      const invalidLink = form.researchLinks.find(
-        (l) => l.trim() && !isValidWebUrl(l.trim())
-      );
-      if (invalidLink) {
-        errors.researchLinks = 'One or more research links are invalid URLs';
-      }
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setError('Please fix the highlighted fields before submitting.');
+    if (!selectedFile) {
+      setError('Please choose or drop a work document (up to 2MB) before checking out.');
       return;
     }
 
     setSubmitting(true);
     try {
-      const payload = {
-        ...form,
-        researchLinks: (form.researchLinks || []).map((l) => l.trim()).filter(Boolean),
-      };
-      const res = await api.post('/employee/daily-log/me', payload);
-      const savedLog = res.data?.data?.log || payload;
+      const formData = new FormData();
+      formData.append('document', selectedFile);
+
+      const res = await api.post('/employee/daily-log/me', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const savedLog = res.data?.data?.log;
       if (onSuccess) onSuccess(savedLog);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to submit daily log.');
+      const errMsg = err.response?.data?.message || err.message || 'Failed to submit daily log.';
+      setError(errMsg);
+      setUploadError(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -85,8 +51,8 @@ export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
               <FileText size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Submit Daily Log</h2>
-              <p className="text-xs text-slate-400">Complete your daily summary to proceed to check-out</p>
+              <h2 className="text-base font-bold text-white">Upload Daily Work Document</h2>
+              <p className="text-xs text-slate-400">Upload your work document (within 2MB) to proceed to check-out</p>
             </div>
           </div>
           <button
@@ -106,17 +72,29 @@ export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
             </div>
           )}
 
-          <DailyLogFields form={form} onChange={handleChange} errors={fieldErrors} />
+          {/* Auto calculate hours banner */}
+          <div className="flex items-center gap-2 p-2.5 bg-violet-500/10 border border-violet-500/20 rounded-xl text-xs text-violet-300">
+            <Sparkles size={14} className="text-violet-400 flex-shrink-0" />
+            <span>Hours worked will be calculated automatically from your active shift duration.</span>
+          </div>
+
+          <DailyLogDocUpload
+            file={selectedFile}
+            onFileSelect={setSelectedFile}
+            error={uploadError}
+            setError={setUploadError}
+            disabled={submitting}
+          />
 
           <div className="pt-2">
             <button
               type="submit"
               id="submit-checkout-log-btn"
-              disabled={submitting}
-              className="btn-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20"
+              disabled={submitting || !selectedFile}
+              className="btn-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              {submitting ? 'Saving Log...' : 'Submit Log & Proceed to Check Out'}
+              {submitting ? 'Uploading & Unlocking...' : 'Submit Document & Proceed to Check Out'}
             </button>
           </div>
         </form>

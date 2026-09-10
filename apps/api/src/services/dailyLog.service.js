@@ -43,20 +43,47 @@ const normalizeUrl = (url) => {
 const submitDailyLog = async ({ user, logData, file }) => {
   const today = getTodayDateString();
 
-  // Validate required unified fields
-  const taskTitle = (logData.taskTitle || '').trim();
-  const projectName = (logData.projectName || '').trim();
-  const description = (logData.description || '').trim();
+  let documentUrl = null;
+  let documentName = null;
+  let documentSize = null;
+  let documentMimeType = null;
+  let doctype = null;
 
-  if (!taskTitle) {
-    throw { statusCode: 400, message: 'Task Title is required.' };
+  if (file) {
+    documentName = file.originalname;
+    documentSize = file.size;
+    documentMimeType = file.mimetype || 'application/octet-stream';
+    const extMatch = (file.originalname || '').split('.').pop();
+    doctype = extMatch ? extMatch.toLowerCase() : 'doc';
+
+    if (file.buffer) {
+      // 64-base convert the doc into data link
+      const base64Data = file.buffer.toString('base64');
+      documentUrl = `data:${documentMimeType};base64,${base64Data}`;
+    } else if (file.filename) {
+      documentUrl = getFileUrl(file.filename, 'daily-logs');
+    }
   }
-  if (!projectName) {
-    throw { statusCode: 400, message: 'Project Name is required.' };
+
+  // Check if an existing log for today already has a document
+  const existingTodayLog = await DailyLog.findOne({ userId: user._id, logDate: today });
+  if (!documentUrl && existingTodayLog?.documentUrl) {
+    documentUrl = existingTodayLog.documentUrl;
+    documentName = existingTodayLog.documentName;
+    documentSize = existingTodayLog.documentSize;
+    documentMimeType = existingTodayLog.documentMimeType;
+    doctype = existingTodayLog.doctype;
   }
-  if (!description) {
-    throw { statusCode: 400, message: 'Description is required.' };
+
+  // Validate that either a document was uploaded, or previously uploaded
+  if (!documentUrl && !file) {
+    throw { statusCode: 400, message: 'Please upload a daily work document (within 2MB).' };
   }
+
+  // Unified fields: provide friendly defaults if omitted
+  const taskTitle = (logData.taskTitle || documentName || 'Daily Work Document').trim();
+  const projectName = (logData.projectName || 'Daily Log').trim();
+  const description = (logData.description || 'Submitted via daily work document upload.').trim();
 
   // Validate GitHub link if provided
   let normalizedGithubLink = null;
@@ -71,7 +98,7 @@ const submitDailyLog = async ({ user, logData, file }) => {
     normalizedGithubLink = normalizeUrl(rawGh);
   }
 
-  // Process research links (array of strings)
+  // Process research links (array of strings) if provided
   let cleanedResearchLinks = [];
   if (Array.isArray(logData.researchLinks)) {
     cleanedResearchLinks = logData.researchLinks;
@@ -90,8 +117,6 @@ const submitDailyLog = async ({ user, logData, file }) => {
     .filter(Boolean)
     .map((link) => normalizeUrl(link));
 
-  const attachmentUrl = file ? getFileUrl(file.filename) : null;
-
   const log = await DailyLog.findOneAndUpdate(
     { userId: user._id, logDate: today },
     {
@@ -99,6 +124,14 @@ const submitDailyLog = async ({ user, logData, file }) => {
         teamId: user.teamId?._id || user.teamId,
         logDate: today,
         hoursSpent: logData.hoursSpent,
+        // Document upload fields (Base64 data link & metadata)
+        documentUrl: documentUrl || undefined,
+        documentName: documentName || undefined,
+        documentSize: documentSize || undefined,
+        documentMimeType: documentMimeType || undefined,
+        doctype: doctype || undefined,
+        // Common / backward compatibility
+        attachmentUrl: documentUrl || undefined,
         // Unified fields
         taskTitle,
         projectName,
@@ -111,8 +144,6 @@ const submitDailyLog = async ({ user, logData, file }) => {
         campaignName: logData.campaignName || null,
         platform: logData.platform || null,
         outputSummary: logData.outputSummary || null,
-        // Common
-        attachmentUrl: attachmentUrl || undefined,
         status: 'submitted',
         submittedAt: new Date(),
       },

@@ -1,38 +1,87 @@
-import { useState, useEffect } from 'react';
-import { Loader2, Smartphone, MapPin, CheckCircle, XCircle, Plus, Wifi, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Loader2, Smartphone, MapPin, CheckCircle, XCircle, Plus, Wifi, AlertCircle,
+  RefreshCw, Search, ChevronDown, ChevronUp, User, Globe, Shield, Clock, Calendar
+} from 'lucide-react';
 import api from '../lib/api';
+import { useSocket } from '../contexts/SocketContext';
 
 // --- 1. Device Requests Page ---
 export const DeviceRequestsPage = () => {
   const [requests, setRequests] = useState([]);
+  const [counts, setCounts] = useState({ all: 0, pending: 0, approved: 0, rejected: 0 });
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [processing, setProcessing] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [decisionNotes, setDecisionNotes] = useState({});
+  const [approvedUntils, setApprovedUntils] = useState({});
   const [message, setMessage] = useState(null);
+  const { socket } = useSocket();
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get(`/admin/device-requests?status=${statusFilter}`);
-      setRequests(res.data?.data?.requests || []);
+      const data = res.data?.data;
+      setRequests(data?.requests || []);
+      if (data?.counts) {
+        setCounts(data.counts);
+      }
     } catch (err) {
       console.error('Error loading device requests:', err);
       setMessage({ type: 'error', text: 'Failed to load device requests from server.' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchRequests();
-  }, [statusFilter]);
+  }, [fetchRequests]);
+
+  // Real-time WebSocket updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => fetchRequests();
+    socket.on('device:request_created', handleUpdate);
+    socket.on('device:request_resolved', handleUpdate);
+    return () => {
+      socket.off('device:request_created', handleUpdate);
+      socket.off('device:request_resolved', handleUpdate);
+    };
+  }, [socket, fetchRequests]);
+
+  // 30s polling + refetch on window visibility
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && !processing) fetchRequests();
+    }, 30000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible' && !processing) fetchRequests();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [fetchRequests, processing]);
 
   const handleDecision = async (id, action) => {
     setProcessing(id + action);
     try {
-      await api.patch(`/admin/device-requests/${id}/decision`, { action });
+      const payload = {
+        action,
+        decisionNote: decisionNotes[id] || null,
+      };
+      if (approvedUntils[id] && action === 'approve') {
+        payload.approvedUntil = new Date(approvedUntils[id]).toISOString();
+      }
+      await api.patch(`/admin/device-requests/${id}/decision`, payload);
       setMessage({ type: 'success', text: `Device request ${action}d successfully.` });
-      // Remove or refresh list
+      setDecisionNotes((prev) => ({ ...prev, [id]: '' }));
+      setApprovedUntils((prev) => ({ ...prev, [id]: '' }));
       fetchRequests();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || `Failed to ${action} request.` });
@@ -41,70 +90,314 @@ export const DeviceRequestsPage = () => {
     }
   };
 
+  const typeStyles = {
+    register: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    replacement: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+    temporary: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    lost: 'bg-red-500/10 text-red-400 border-red-500/30',
+  };
+
+  const statusStyles = {
+    pending: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    rejected: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+  };
+
+  // Search filter
+  const filteredRequests = requests.filter((req) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    const userName = req.userId?.name?.toLowerCase() || '';
+    const userEmail = req.userId?.email?.toLowerCase() || '';
+    const device = req.requestedDeviceLabel?.toLowerCase() || '';
+    const ip = req.ipAddress?.toLowerCase() || '';
+    const reason = req.reason?.toLowerCase() || '';
+    return userName.includes(term) || userEmail.includes(term) || device.includes(term) || ip.includes(term) || reason.includes(term);
+  });
+
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <Header
-          title="Device Requests"
-          desc="Review and approve employee mobile device registrations and replacement requests."
-        />
-        <div className="flex gap-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700/60">
-          {['pending', 'approved', 'rejected', 'all'].map((s) => (
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
+            <Smartphone className="text-primary-400" size={26} />
+            Device Requests
+          </h1>
+          <p className="text-slate-400 text-sm mt-0.5">
+            Review, verify, and approve employee mobile devices for company attendance access.
+          </p>
+        </div>
+        <button
+          onClick={fetchRequests}
+          disabled={loading}
+          className="btn-ghost flex items-center gap-2 self-start md:self-auto text-xs px-3.5 py-2 border border-slate-700 hover:border-slate-500 rounded-xl"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Status Filter Tabs */}
+        <div className="flex gap-1.5 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700/60 overflow-x-auto">
+          {[
+            { key: 'all', label: 'All', count: counts.all },
+            { key: 'pending', label: 'Pending', count: counts.pending, alert: counts.pending > 0 },
+            { key: 'approved', label: 'Approved', count: counts.approved },
+            { key: 'rejected', label: 'Rejected', count: counts.rejected },
+          ].map((tab) => (
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
-                statusFilter === s
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all whitespace-nowrap ${
+                statusFilter === tab.key
                   ? 'bg-primary-500 text-white shadow-md'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              {s}
+              <span>{tab.label}</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  statusFilter === tab.key
+                    ? 'bg-white/20 text-white'
+                    : tab.alert
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {tab.count ?? 0}
+              </span>
             </button>
           ))}
         </div>
+
+        {/* Search Box */}
+        <div className="relative min-w-[240px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search employee, device, IP..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input pl-9 pr-3 py-1.5 text-xs w-full bg-slate-900/80 border-slate-700/60 rounded-xl"
+          />
+        </div>
       </div>
 
+      {/* Feedback Message */}
       {message && (
         <div
-          className={`p-3.5 rounded-xl border text-sm font-medium ${
+          className={`p-3.5 rounded-xl border text-sm font-medium flex items-center justify-between ${
             message.type === 'success'
               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
               : 'bg-red-500/10 border-red-500/30 text-red-400'
           }`}
         >
-          {message.text}
+          <span>{message.text}</span>
+          <button onClick={() => setMessage(null)} className="text-xs opacity-70 hover:opacity-100">Dismiss</button>
         </div>
       )}
 
-      {loading ? (
+      {/* Main Content */}
+      {loading && requests.length === 0 ? (
         <LoadingScreen />
+      ) : filteredRequests.length === 0 ? (
+        <div className="card text-center py-16 border border-slate-700/50 bg-slate-800/30">
+          <Smartphone size={38} className="mx-auto mb-3 text-slate-600 opacity-60" />
+          <h3 className="text-white font-semibold text-base mb-1">No Device Requests Found</h3>
+          <p className="text-slate-400 text-xs max-w-md mx-auto">
+            {search.trim()
+              ? `No requests match "${search}". Try clearing your search.`
+              : `There are currently no ${statusFilter} device requests.`}
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {requests.length === 0 ? (
-            <EmptyState msg={`No ${statusFilter} device requests found.`} />
-          ) : (
-            requests.map((req) => (
-              <RequestCard
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredRequests.map((req) => {
+            const isExp = expanded === req._id;
+            const empName = req.userId?.name || 'Unknown Employee';
+            const empEmail = req.userId?.email || '—';
+            const teamName = req.userId?.teamId?.name || null;
+            const isPending = req.status === 'pending';
+
+            return (
+              <div
                 key={req._id}
-                icon={<Smartphone className="text-primary-400" size={24} />}
-                title={req.userId?.name || 'Unknown Employee'}
-                subtitle={req.userId?.email || '—'}
-                details={[
-                  { label: 'Device Model', value: req.requestedDeviceLabel || 'Unknown' },
-                  { label: 'Type', value: req.requestType || 'replacement' },
-                  { label: 'Reason', value: req.reason || '—' },
-                  { label: 'Status', value: req.status },
-                  {
-                    label: 'Requested',
-                    value: req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '—',
-                  },
-                ]}
-                onApprove={req.status === 'pending' ? () => handleDecision(req._id, 'approve') : null}
-                onReject={req.status === 'pending' ? () => handleDecision(req._id, 'reject') : null}
-              />
-            ))
-          )}
+                className="card border border-slate-700/60 bg-slate-800/80 hover:border-slate-600 transition-all flex flex-col justify-between"
+              >
+                {/* Card Top */}
+                <div className="space-y-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600/50 flex items-center justify-center text-white font-bold text-sm shadow-inner flex-shrink-0">
+                        {empName[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-white text-sm truncate">{empName}</h3>
+                          {teamName && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-700/60 text-slate-300 border border-slate-600/40">
+                              {teamName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 truncate">{empEmail}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${statusStyles[req.status] || statusStyles.pending}`}>
+                        {req.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Device Info */}
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 flex items-center gap-1.5">
+                        <Smartphone size={13} className="text-primary-400" /> Device Model
+                      </span>
+                      <span className="text-white font-medium truncate max-w-[180px]">
+                        {req.requestedDeviceLabel || 'Unknown Device'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Request Type</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium border capitalize ${typeStyles[req.requestType] || typeStyles.replacement}`}>
+                        {req.requestType}
+                      </span>
+                    </div>
+
+                    {req.reason && (
+                      <div className="text-xs pt-1 border-t border-slate-800/80">
+                        <span className="text-slate-400 block mb-0.5 text-[11px]">Reason:</span>
+                        <p className="text-slate-200 italic line-clamp-2">"{req.reason}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Expandable Technical Details */}
+                  {isExp && (
+                    <div className="pt-2 border-t border-slate-700/50 space-y-2 text-xs animate-in fade-in duration-150">
+                      {req.ipAddress && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Globe size={12} className="text-blue-400" /> Request IP
+                          </span>
+                          <span className="font-mono text-[11px] bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                            {req.ipAddress}
+                          </span>
+                        </div>
+                      )}
+
+                      {req.deviceFingerprint && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Shield size={12} className="text-emerald-400" /> Fingerprint
+                          </span>
+                          <span className="font-mono text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-emerald-300">
+                            {req.deviceFingerprint.slice(0, 14)}...
+                          </span>
+                        </div>
+                      )}
+
+                      {req.requestedUntil && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Clock size={12} className="text-amber-400" /> Access Until
+                          </span>
+                          <span className="text-slate-200">
+                            {new Date(req.requestedUntil).toLocaleDateString('en-IN')}
+                          </span>
+                        </div>
+                      )}
+
+                      {req.decisionNote && (
+                        <div className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-700/40">
+                          <span className="text-[11px] text-slate-400 block mb-0.5">Decision Note:</span>
+                          <p className="text-slate-300">{req.decisionNote}</p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                        <span>Submitted:</span>
+                        <span>{req.createdAt ? new Date(req.createdAt).toLocaleString('en-IN') : '—'}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Toggle Expand */}
+                  <button
+                    onClick={() => setExpanded(isExp ? null : req._id)}
+                    className="w-full flex items-center justify-center gap-1 text-[11px] text-slate-400 hover:text-white pt-1 transition-colors"
+                  >
+                    {isExp ? (
+                      <>Less Details <ChevronUp size={12} /></>
+                    ) : (
+                      <>More Details <ChevronDown size={12} /></>
+                    )}
+                  </button>
+                </div>
+
+                {/* Card Actions (for Pending Requests) */}
+                {isPending && (
+                  <div className="mt-4 pt-3.5 border-t border-slate-700/60 space-y-2.5">
+                    <input
+                      type="text"
+                      placeholder="Add note (optional)..."
+                      value={decisionNotes[req._id] || ''}
+                      onChange={(e) => setDecisionNotes((prev) => ({ ...prev, [req._id]: e.target.value }))}
+                      className="input w-full text-xs py-1.5 px-2.5 bg-slate-900/70 border-slate-700/60 rounded-lg"
+                    />
+
+                    {req.requestType === 'temporary' && (
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-0.5 block">Approve Access Until</label>
+                        <input
+                          type="date"
+                          value={approvedUntils[req._id] || ''}
+                          onChange={(e) => setApprovedUntils((prev) => ({ ...prev, [req._id]: e.target.value }))}
+                          className="input w-full text-xs py-1 px-2 bg-slate-900/70 border-slate-700/60 rounded-lg"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDecision(req._id, 'approve')}
+                        disabled={!!processing}
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        {processing === req._id + 'approve' ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <CheckCircle size={13} />
+                        )}
+                        Approve
+                      </button>
+
+                      <button
+                        onClick={() => handleDecision(req._id, 'reject')}
+                        disabled={!!processing}
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        {processing === req._id + 'reject' ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <XCircle size={13} />
+                        )}
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

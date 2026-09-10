@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import {
   Users, UserCheck, Calendar, ClipboardList, Settings,
@@ -22,6 +23,7 @@ const StatCard = ({ icon: Icon, label, value, color = 'primary', onClick }) => (
 );
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,16 +65,16 @@ export default function AdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Total Employees" value={data?.totalEmployees} color="primary" />
-        <StatCard icon={UserCheck} label="Checked In Today" value={data?.checkedInToday} color="success" />
+        <StatCard icon={Users} label="Total Employees" value={data?.totalEmployees} color="primary" onClick={() => navigate('/employees')} />
+        <StatCard icon={UserCheck} label="Checked In Today" value={data?.checkedInToday} color="success" onClick={() => navigate('/attendance')} />
         <StatCard icon={AlertCircle} label="Absent Today" value={data?.absentToday} color="danger" />
-        <StatCard icon={Calendar} label="On Leave Today" value={data?.onLeaveToday} color="warning" />
+        <StatCard icon={Calendar} label="On Leave Today" value={data?.onLeaveToday} color="warning" onClick={() => navigate('/leave-requests')} />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={ClipboardList} label="Pending Leaves" value={data?.pendingLeaveRequests} color="warning" />
-        <StatCard icon={MapPin} label="Location Requests" value={data?.pendingLocationRequests ?? 0} color="warning" />
-        <StatCard icon={Fingerprint} label="Pending Devices" value={data?.pendingDeviceApprovals} color="primary" />
+        <StatCard icon={ClipboardList} label="Pending Leaves" value={data?.pendingLeaveRequests} color="warning" onClick={() => navigate('/leave-requests')} />
+        <StatCard icon={MapPin} label="Location Requests" value={data?.pendingLocationRequests ?? 0} color="warning" onClick={() => navigate('/location-requests')} />
+        <StatCard icon={Fingerprint} label="Pending Devices" value={data?.pendingDeviceApprovals} color="primary" onClick={() => navigate('/device-requests')} />
         <StatCard icon={AlertCircle} label="Missing Daily Logs" value={data?.missingDailyLogs} color="danger" />
       </div>
 
