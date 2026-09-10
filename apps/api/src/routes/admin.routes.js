@@ -32,4 +32,8 @@ router.patch('/device-requests/:id/decision', isAdmin, adminController.handleDev
 router.get('/attendance-method/active', isAdmin, adminController.getActiveAttendanceMethod);
 router.patch('/attendance-method/switch', isAdmin, adminController.switchAttendanceMethod);
 
+// Manager Permissions
+router.get('/manager-permissions', isAdmin, adminController.getManagerPermissions);
+router.patch('/manager-permissions/:userId', isAdmin, adminController.updateManagerPermission);
+
 module.exports = router;

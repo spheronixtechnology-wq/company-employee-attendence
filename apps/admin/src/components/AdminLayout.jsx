@@ -13,8 +13,6 @@ const navSections = [
     label: 'Overview',
     items: [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, id: 'nav-dashboard' },
-      { path: '/audit-logs', label: 'Audit Logs', icon: ScrollText, id: 'nav-audit' },
-      { path: '/reports', label: 'Reports', icon: BarChart3, id: 'nav-reports' },
     ],
   },
   {
@@ -32,8 +30,6 @@ const navSections = [
       { path: '/device-requests', label: 'Device Requests', icon: Smartphone, id: 'nav-device-requests' },
       { path: '/location-requests', label: 'Location Requests', icon: MapPin, id: 'nav-location-requests' },
       { path: '/leave-requests', label: 'Leave Requests', icon: Calendar, id: 'nav-leaves' },
-      { path: '/manual-attendance', label: 'Manual Requests', icon: ClipboardList, id: 'nav-manual' },
-      { path: '/performance-notes', label: 'Performance Notes', icon: TrendingUp, id: 'nav-performance' },
     ],
   },
   {

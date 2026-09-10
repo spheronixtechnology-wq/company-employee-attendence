@@ -8,20 +8,10 @@ const ManagerPermissionsPage = () => {
 
   const fetchManagers = async () => {
     try {
-      const res = await api.get('/admin/users?role=manager');
-      // For demonstration, simulating permissions if not returned by API
-      const mgrs = res.data.data.users.map(m => ({
-        ...m,
-        permissions: m.permissions || {
-          canApproveLeaves: true,
-          canEditAttendance: false,
-          canAddPerformanceNotes: true,
-          canViewTeamReports: true,
-        }
-      }));
-      setManagers(mgrs);
+      const res = await api.get('/admin/manager-permissions');
+      setManagers(res.data?.data?.managers || []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch manager permissions:', err);
     } finally {
       setLoading(false);
     }
@@ -32,21 +22,28 @@ const ManagerPermissionsPage = () => {
   }, []);
 
   const togglePermission = async (managerId, permKey) => {
+    const target = managers.find(m => m._id === managerId);
+    if (!target) return;
+
+    const updatedPerms = {
+      ...target.permissions,
+      [permKey]: !target.permissions[permKey]
+    };
+
     // Optimistic update
     setManagers(prev => prev.map(m => {
       if (m._id === managerId) {
-        return { ...m, permissions: { ...m.permissions, [permKey]: !m.permissions[permKey] } };
+        return { ...m, permissions: updatedPerms };
       }
       return m;
     }));
     
-    // In a real app, you would make an API call here to save the permission
     try {
-      // await api.patch(`/admin/manager-permissions/${managerId}`, { [permKey]: newValue });
+      await api.patch(`/admin/manager-permissions/${managerId}`, { permissions: updatedPerms });
     } catch (err) {
       // Revert on failure
       fetchManagers();
-      alert('Failed to update permission');
+      alert(err.response?.data?.message || 'Failed to update permission');
     }
   };
 

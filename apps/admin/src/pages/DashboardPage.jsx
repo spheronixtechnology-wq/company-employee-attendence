@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import {
   Users, UserCheck, Calendar, ClipboardList, Settings,
-  TrendingUp, Shield, AlertCircle, Clock, Fingerprint,
+  TrendingUp, Shield, AlertCircle, MapPin, Fingerprint,
   RefreshCw, Loader2
 } from 'lucide-react';
 
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={ClipboardList} label="Pending Leaves" value={data?.pendingLeaveRequests} color="warning" />
-        <StatCard icon={Clock} label="Manual Requests" value={data?.pendingManualAttendanceRequests} color="warning" />
+        <StatCard icon={MapPin} label="Location Requests" value={data?.pendingLocationRequests ?? 0} color="warning" />
         <StatCard icon={Fingerprint} label="Pending Devices" value={data?.pendingDeviceApprovals} color="primary" />
         <StatCard icon={AlertCircle} label="Missing Daily Logs" value={data?.missingDailyLogs} color="danger" />
       </div>
@@ -83,7 +83,7 @@ export default function AdminDashboard() {
           {[
             { label: 'Manage Users', icon: Users, href: '/employees', id: 'qa-users' },
             { label: 'Leave Requests', icon: Calendar, href: '/leave-requests', id: 'qa-leaves' },
-            { label: 'Audit Logs', icon: Shield, href: '/audit-logs', id: 'qa-audit' },
+            { label: 'Manager Permissions', icon: Shield, href: '/manager-permissions', id: 'qa-permissions' },
             { label: 'System Settings', icon: Settings, href: '/attendance-method', id: 'qa-settings' },
           ].map((action) => (
             <a key={action.href} href={action.href} id={action.id} className="card flex flex-col items-center gap-3 py-4 hover:border-primary-500/50 transition-colors cursor-pointer text-center">

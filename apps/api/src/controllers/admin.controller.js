@@ -11,6 +11,7 @@ const { createNotification } = require('../services/notification.service');
 const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest } = require('../socket');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
+const ManagerPermission = require('../models/ManagerPermission');
 const { writeAuditLog } = require('../services/audit.service');
 const { getClientIp, getActiveLocalInterfaces } = require('../utils/ipUtils');
 const { formatDeviceLabel } = require('../utils/deviceUtils');
@@ -543,6 +544,80 @@ const switchAttendanceMethod = async (req, res) => {
   }
 };
 
+const getManagerPermissions = async (req, res) => {
+  try {
+    const managers = await User.find({ role: 'manager' }).select('name email role teamId').lean();
+    const permissions = await ManagerPermission.find({
+      userId: { $in: managers.map(m => m._id) },
+    }).lean();
+
+    const permMap = {};
+    permissions.forEach(p => {
+      permMap[p.userId.toString()] = p.permissions || {};
+    });
+
+    const defaultPerms = {
+      canApproveLeaves: true,
+      canEditAttendance: false,
+      canAddPerformanceNotes: true,
+      canViewTeamReports: true,
+    };
+
+    const result = managers.map(m => ({
+      _id: m._id,
+      name: m.name,
+      email: m.email,
+      role: m.role,
+      permissions: {
+        ...defaultPerms,
+        ...(permMap[m._id.toString()] || {}),
+      },
+    }));
+
+    return success(res, 'Manager permissions retrieved', { managers: result });
+  } catch (error) {
+    console.error('getManagerPermissions error:', error);
+    return badRequest(res, 'Failed to fetch manager permissions');
+  }
+};
+
+const updateManagerPermission = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { permissions } = req.body;
+
+    if (!permissions || typeof permissions !== 'object') {
+      return badRequest(res, 'Permissions object required');
+    }
+
+    const manager = await User.findById(userId);
+    if (!manager || manager.role !== 'manager') {
+      return badRequest(res, 'Manager not found');
+    }
+
+    const updated = await ManagerPermission.findOneAndUpdate(
+      { userId },
+      {
+        $set: {
+          'permissions.canApproveLeaves': !!permissions.canApproveLeaves,
+          'permissions.canEditAttendance': !!permissions.canEditAttendance,
+          'permissions.canAddPerformanceNotes': !!permissions.canAddPerformanceNotes,
+          'permissions.canViewTeamReports': !!permissions.canViewTeamReports,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return success(res, 'Manager permissions updated successfully', {
+      managerId: userId,
+      permissions: updated.permissions,
+    });
+  } catch (error) {
+    console.error('updateManagerPermission error:', error);
+    return badRequest(res, 'Failed to update manager permissions');
+  }
+};
+
 module.exports = { 
   getStatus, 
   getDashboard, 
@@ -561,4 +636,6 @@ module.exports = {
   getActiveAttendanceMethod,
   switchAttendanceMethod,
   getCurrentIp,
+  getManagerPermissions,
+  updateManagerPermission,
 };

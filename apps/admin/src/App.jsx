@@ -5,7 +5,6 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import ManagerPermissionsPage from './pages/ManagerPermissionsPage';
-import AuditLogsPage from './pages/AuditLogsPage';
 import { DeviceRequestsPage, OfficeLocationsPage, LocationRequestsPage } from './pages/AttendanceRequestsPages';
 import WifiSettingsPage from './pages/WifiSettingsPage';
 import { Loader2 } from 'lucide-react';
@@ -275,11 +274,8 @@ function AppRoutes() {
               <Route path="/employees" element={<EmployeesPage />} />
               <Route path="/teams" element={<PlaceholderPage title="Team Management" />} />
               <Route path="/manager-permissions" element={<ManagerPermissionsPage />} />
-              <Route path="/audit-logs" element={<AuditLogsPage />} />
               <Route path="/leave-requests" element={<LeaveRequestsPage />} />
               <Route path="/attendance" element={<PlaceholderPage title="Attendance Records" />} />
-              <Route path="/manual-attendance" element={<PlaceholderPage title="Manual Attendance Requests" />} />
-              <Route path="/performance-notes" element={<PlaceholderPage title="Performance Notes" />} />
               <Route path="/attendance-method" element={<AttendanceMethodPage />} />
               <Route path="/qr-code" element={<QrCodePage />} />
               <Route path="/wifi-settings" element={<WifiSettingsPage />} />
@@ -288,7 +284,6 @@ function AppRoutes() {
               <Route path="/device-requests" element={<DeviceRequestsPage />} />
               <Route path="/office-locations" element={<OfficeLocationsPage />} />
               <Route path="/location-requests" element={<LocationRequestsPage />} />
-              <Route path="/reports" element={<PlaceholderPage title="Reports & Analytics" />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
