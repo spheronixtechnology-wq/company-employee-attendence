@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const managerController = require('../controllers/manager.controller');
+const adminController = require('../controllers/admin.controller');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 
@@ -22,6 +23,16 @@ router.patch('/device-requests/:id/decision', isManager, managerController.handl
 
 router.get('/location-requests', isManager, managerController.getLocationRequests);
 router.patch('/location-requests/:id/decision', isManager, managerController.handleLocationRequestDecision);
+
+// System Settings & Configuration (Attendance Method, WiFi/IP, Office Locations)
+router.get('/attendance-method/active', isManager, adminController.getActiveAttendanceMethod);
+router.patch('/attendance-method/switch', isManager, adminController.switchAttendanceMethod);
+
+router.get('/office-locations', isManager, adminController.getOfficeLocations);
+router.post('/office-locations', isManager, adminController.createOfficeLocation);
+router.patch('/office-locations/:id', isManager, adminController.updateOfficeLocation);
+router.delete('/office-locations/:id', isManager, adminController.deleteOfficeLocation);
+router.get('/current-ip', isManager, adminController.getCurrentIp);
 
 // Notifications badge
 router.get('/notifications/unread-count', isManager, managerController.getUnreadNotificationCount);

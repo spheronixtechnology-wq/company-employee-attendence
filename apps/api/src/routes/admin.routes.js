@@ -6,6 +6,7 @@ const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 
 const isAdmin = [authenticate, authorize('admin')];
+const isAdminOrManager = [authenticate, authorize('admin', 'manager')];
 
 router.get('/status', adminController.getStatus);
 router.get('/dashboard', isAdmin, adminController.getDashboard);
@@ -18,19 +19,19 @@ router.post('/users', isAdmin, adminController.createUser);
 router.patch('/users/:id', isAdmin, adminController.updateUser);
 
 // Office Locations
-router.get('/office-locations', isAdmin, adminController.getOfficeLocations);
-router.post('/office-locations', isAdmin, adminController.createOfficeLocation);
-router.patch('/office-locations/:id', isAdmin, adminController.updateOfficeLocation);
-router.delete('/office-locations/:id', isAdmin, adminController.deleteOfficeLocation);
-router.get('/current-ip', isAdmin, adminController.getCurrentIp);
+router.get('/office-locations', isAdminOrManager, adminController.getOfficeLocations);
+router.post('/office-locations', isAdminOrManager, adminController.createOfficeLocation);
+router.patch('/office-locations/:id', isAdminOrManager, adminController.updateOfficeLocation);
+router.delete('/office-locations/:id', isAdminOrManager, adminController.deleteOfficeLocation);
+router.get('/current-ip', isAdminOrManager, adminController.getCurrentIp);
 
 // Device Requests
 router.get('/device-requests', isAdmin, adminController.getDeviceRequests);
 router.patch('/device-requests/:id/decision', isAdmin, adminController.handleDeviceRequestDecision);
 
 // Attendance Method Settings
-router.get('/attendance-method/active', isAdmin, adminController.getActiveAttendanceMethod);
-router.patch('/attendance-method/switch', isAdmin, adminController.switchAttendanceMethod);
+router.get('/attendance-method/active', isAdminOrManager, adminController.getActiveAttendanceMethod);
+router.patch('/attendance-method/switch', isAdminOrManager, adminController.switchAttendanceMethod);
 
 // Manager Permissions
 router.get('/manager-permissions', isAdmin, adminController.getManagerPermissions);

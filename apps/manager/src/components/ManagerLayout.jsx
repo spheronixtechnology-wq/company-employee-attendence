@@ -5,7 +5,8 @@ import { useSocket } from '../contexts/SocketContext';
 import api from '../lib/api';
 import {
   LayoutDashboard, ClipboardList, Calendar, FileText,
-  TrendingUp, LogOut, Menu, X, Smartphone, MapPin, Users
+  TrendingUp, LogOut, Menu, X, Smartphone, MapPin, Users,
+  Settings, Wifi, Building2
 } from 'lucide-react';
 
 const navItems = [
@@ -18,6 +19,9 @@ const navItems = [
   { path: '/team/performance', label: 'Performance', icon: TrendingUp, id: 'nav-performance' },
   { path: '/device-requests', label: 'Device Requests', icon: Smartphone, id: 'nav-device-requests' },
   { path: '/location-requests', label: 'Location Requests', icon: MapPin, id: 'nav-location-requests' },
+  { path: '/attendance-method', label: 'Attendance Method', icon: Settings, id: 'nav-method' },
+  { path: '/wifi-settings', label: 'WiFi / IP Settings', icon: Wifi, id: 'nav-wifi' },
+  { path: '/office-locations', label: 'Office Locations', icon: Building2, id: 'nav-locations' },
 ];
 
 export default function ManagerLayout({ children }) {

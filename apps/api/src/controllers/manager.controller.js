@@ -10,6 +10,7 @@ const Notification = require('../models/Notification');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const EmployeeLocation = require('../models/EmployeeLocation');
 const BiometricCredential = require('../models/BiometricCredential');
+const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 
 const leaveService = require('../services/leave.service');
 const { writeAuditLog } = require('../services/audit.service');
@@ -128,7 +129,11 @@ const getDashboard = async (req, res) => {
     const pendingDeviceRequests = await DeviceRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
     const pendingLocationRequests = await LocationRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
 
+    const activeSetting = await AttendanceMethodSetting.findOne().sort({ createdAt: -1 });
+    const activeAttendanceMethod = activeSetting?.method || 'qr_code';
+
     return success(res, 'Dashboard fetched', {
+      activeAttendanceMethod,
       teamTotal: totalMembers,
       checkedIn: checkedInToday,
       onLeave: onLeaveToday,

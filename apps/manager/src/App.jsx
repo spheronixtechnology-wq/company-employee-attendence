@@ -3,6 +3,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider, useSocket } from './contexts/SocketContext';
 import ManagerLayout from './components/ManagerLayout';
 import { ManagerDeviceRequestsPage, ManagerLocationRequestsPage } from './pages/ManagerRequestsPages';
+import AttendanceMethodPage from './pages/AttendanceMethodPage';
+import OfficeLocationsPage from './pages/OfficeLocationsPage';
+import WifiSettingsPage from './pages/WifiSettingsPage';
 import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import api from './lib/api';
@@ -111,7 +114,21 @@ const DashboardPage = () => {
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-bold text-white">Team Dashboard</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Team Dashboard</h1>
+          <p className="text-slate-400 text-sm mt-0.5">
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 w-fit">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs text-slate-400">Mode:</span>
+          <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">
+            {data?.activeAttendanceMethod?.replace('_', ' ') || 'QR CODE'}
+          </span>
+        </div>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {[
           { label: 'Team Total', value: data?.teamTotal, color: 'text-violet-400' },
@@ -765,6 +782,9 @@ function AppRoutes() {
               <Route path="/team/performance" element={<PlaceholderPage title="Performance Notes" />} />
               <Route path="/device-requests" element={<ManagerDeviceRequestsPage />} />
               <Route path="/location-requests" element={<ManagerLocationRequestsPage />} />
+              <Route path="/attendance-method" element={<AttendanceMethodPage />} />
+              <Route path="/wifi-settings" element={<WifiSettingsPage />} />
+              <Route path="/office-locations" element={<OfficeLocationsPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
