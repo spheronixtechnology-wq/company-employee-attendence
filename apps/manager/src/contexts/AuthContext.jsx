@@ -23,8 +23,26 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
-    setUser(res.data.data.user);
-    return res.data.data.user;
+    if (res.data?.data?.user) {
+      setUser(res.data.data.user);
+    }
+    return res.data?.data;
+  };
+
+  const verifyMfaSetup = async (tempToken, otp) => {
+    const res = await api.post('/auth/mfa/setup-verify', { tempToken, otp });
+    if (res.data?.data?.user) {
+      setUser(res.data.data.user);
+    }
+    return res.data?.data?.user;
+  };
+
+  const verifyMfa = async (tempToken, otp) => {
+    const res = await api.post('/auth/mfa/verify', { tempToken, otp });
+    if (res.data?.data?.user) {
+      setUser(res.data.data.user);
+    }
+    return res.data?.data?.user;
   };
 
   const logout = async () => {
@@ -33,7 +51,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, setUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        verifyMfaSetup,
+        verifyMfa,
+        logout,
+        setUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

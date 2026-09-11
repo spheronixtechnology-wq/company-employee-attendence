@@ -469,57 +469,55 @@ export default function WifiSettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="page-container space-y-6 animate-fade-in">
       {/* ── Notification Banner ── */}
       {message && (
         <div
-          className={`p-4 rounded-2xl flex items-center justify-between text-sm shadow-lg animate-in fade-in ${
+          className={`p-4 rounded-2xl flex items-center justify-between text-sm shadow-sm animate-in fade-in ${
             message.type === 'success'
-              ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-300'
-              : message.type === 'error'
-              ? 'bg-red-500/15 border border-red-500/40 text-red-300'
-              : 'bg-primary-500/15 border border-primary-500/40 text-primary-300'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
           }`}
         >
           <div className="flex items-center gap-3">
             {message.type === 'success' ? (
-              <CheckCircle size={18} className="text-emerald-400 flex-shrink-0" />
+              <CheckCircle size={18} className="text-emerald-600 flex-shrink-0" />
             ) : (
-              <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+              <AlertCircle size={18} className="text-rose-600 flex-shrink-0" />
             )}
             <span>{message.text}</span>
           </div>
-          <button onClick={() => setMessage(null)} className="text-xs opacity-70 hover:opacity-100">
+          <button onClick={() => setMessage(null)} className="text-xs text-slate-500 hover:text-slate-800">
             Dismiss
           </button>
         </div>
       )}
 
       {/* ── Page Header & Method Status ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/60 p-6 rounded-3xl border border-slate-800 backdrop-blur-md shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 card p-6 border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500/20 to-blue-600/20 border border-primary-500/30 flex items-center justify-center text-primary-400 shadow-inner">
+          <div className="w-12 h-12 rounded-2xl bg-primary-50 border border-primary-200 flex items-center justify-center text-primary-600 shadow-sm">
             <Wifi size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">WiFi / IP Settings</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WiFi / IP Settings</h1>
+            <p className="text-xs text-slate-600 mt-0.5">
               Configure authorized office internet gateways, display SSIDs, and live geofence perimeters.
             </p>
           </div>
         </div>
 
         {/* Method Status Toggle */}
-        <div className="flex items-center gap-3 bg-slate-800/80 p-2 rounded-2xl border border-slate-700/60">
+        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
           <div className="px-3 py-1.5">
-            <span className="text-[11px] text-slate-400 block">Attendance Method</span>
+            <span className="text-[11px] text-slate-500 block">Attendance Method</span>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span
                 className={`w-2 h-2 rounded-full ${
-                  activeMethod === 'wifi_ip' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+                  activeMethod === 'wifi_ip' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
                 }`}
               />
-              <span className="text-xs font-semibold text-white">
+              <span className="text-xs font-semibold text-slate-900">
                 {activeMethod === 'wifi_ip' ? 'WiFi / IP (Active)' : `Active: ${activeMethod || 'Other'}`}
               </span>
             </div>
@@ -529,7 +527,7 @@ export default function WifiSettingsPage() {
             <button
               onClick={handleSwitchToWifi}
               disabled={switchingMethod}
-              className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-md shadow-primary-500/20 whitespace-nowrap"
+              className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-sm whitespace-nowrap"
             >
               {switchingMethod ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
               Switch to WiFi / IP
@@ -539,14 +537,14 @@ export default function WifiSettingsPage() {
       </div>
 
       {/* ── Section 1: Live Network Inspector (Dual LAN & WAN Detection) ── */}
-      <div className="card p-6 bg-gradient-to-r from-slate-900/95 via-slate-850 to-slate-900/95 border border-slate-700/70 rounded-3xl shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="card p-6 border-slate-200 rounded-3xl shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
           <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Network size={16} className="text-primary-400" />
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Network size={16} className="text-primary-600" />
               Live Network Inspector (Office Wi-Fi & Internet Gateway)
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               Exact network addresses detected from your computer and office internet router.
             </p>
           </div>
@@ -554,7 +552,7 @@ export default function WifiSettingsPage() {
             <button
               type="button"
               onClick={handleAutoConfigureAll}
-              className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-md shadow-primary-500/20 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-500 hover:to-indigo-500"
+              className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-sm"
               title="Auto-Detect & Whitelist All Required Office IPs"
             >
               <Zap size={13} />
@@ -564,10 +562,10 @@ export default function WifiSettingsPage() {
               type="button"
               onClick={fetchCurrentIp}
               disabled={detectingIp}
-              className="btn-ghost text-xs py-2 px-3 flex items-center gap-1.5 self-start sm:self-auto hover:bg-slate-800"
+              className="btn bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs py-2 px-3 flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
               title="Scan Network Now"
             >
-              <RefreshCw size={13} className={detectingIp ? 'animate-spin text-primary-400' : ''} />
+              <RefreshCw size={13} className={detectingIp ? 'animate-spin text-primary-600' : ''} />
               {detectingIp ? 'Scanning...' : 'Refresh IP'}
             </button>
           </div>
@@ -575,19 +573,19 @@ export default function WifiSettingsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Card A: Office Wi-Fi Network (LAN) */}
-          <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 flex flex-col justify-between space-y-3">
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Wifi size={14} className="text-emerald-400" />
+                <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                  <Wifi size={14} className="text-emerald-600" />
                   Office Wi-Fi Network (LAN)
                 </span>
                 {isLocalSubnetInAllowedList || isLocalIpInAllowedList ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
                     <CheckCircle size={11} /> Whitelisted
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
                     <AlertCircle size={11} /> Not in Whitelist
                   </span>
                 )}
@@ -595,29 +593,29 @@ export default function WifiSettingsPage() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-400">Device IP (ipconfig):</span>
-                  <span className="font-mono text-xs font-bold text-white bg-slate-900 px-2 py-0.5 rounded border border-slate-700/60">
+                  <span className="text-[11px] text-slate-600">Device IP (ipconfig):</span>
+                  <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm">
                     {localWifi?.ip || 'Detecting...'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-400">Wi-Fi Subnet:</span>
-                  <span className="font-mono text-xs font-bold text-emerald-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-700/60">
+                  <span className="text-[11px] text-slate-600">Wi-Fi Subnet:</span>
+                  <span className="font-mono text-xs font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm">
                     {localWifi?.subnet || 'Detecting...'}
                   </span>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+              <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
                 Allows any employee connected to your office Wi-Fi router to check in when using a local office server.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/60">
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
               {localWifi?.subnet && !isLocalSubnetInAllowedList && (
                 <button
                   type="button"
                   onClick={handleAddLocalSubnetToWhitelist}
-                  className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border-emerald-500/30"
+                  className="btn text-xs py-1.5 px-2.5 flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 font-semibold"
                 >
                   <Plus size={13} /> Add Wi-Fi Subnet ({localWifi.subnet})
                 </button>
@@ -626,7 +624,7 @@ export default function WifiSettingsPage() {
                 <button
                   type="button"
                   onClick={handleAddLocalIpToWhitelist}
-                  className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1 border border-slate-700 hover:border-slate-600"
+                  className="btn bg-white text-xs py-1.5 px-2.5 flex items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
                 >
                   <Plus size={13} /> Add Exact IP ({localWifi.ip})
                 </button>
@@ -635,23 +633,23 @@ export default function WifiSettingsPage() {
           </div>
 
           {/* Card B: Office Internet Gateway (Public WAN Dual-Stack) */}
-          <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 flex flex-col justify-between space-y-3">
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-3">
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Globe size={14} className="text-sky-400" />
+                <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                  <Globe size={14} className="text-sky-600" />
                   Office Internet Gateway (Public WAN Dual-Stack)
                 </span>
                 {isPublicIpv4InAllowedList && isIpv6SubnetInAllowedList ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
                     <CheckCircle size={11} /> IPv4 & IPv6 Whitelisted
                   </span>
                 ) : isPublicIpv4InAllowedList || isIpv6SubnetInAllowedList ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-400 bg-sky-500/15 px-2 py-0.5 rounded-full border border-sky-500/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-200">
                     <CheckCircle size={11} /> Partially Whitelisted
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
                     <AlertCircle size={11} /> Not in Whitelist
                   </span>
                 )}
@@ -659,39 +657,39 @@ export default function WifiSettingsPage() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-400">Public IPv4:</span>
-                  <span className="font-mono text-xs font-bold text-white bg-slate-900 px-2 py-0.5 rounded border border-slate-700/60">
+                  <span className="text-[11px] text-slate-600">Public IPv4:</span>
+                  <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm">
                     {publicIpv4 || 'Detecting...'}
                   </span>
                   {isPublicIpv4InAllowedList && (
-                    <span className="text-[10px] text-emerald-400 font-semibold">✓</span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">✓</span>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-400">Office IPv6 Subnet:</span>
-                  <span className="font-mono text-xs font-bold text-sky-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-700/60">
+                  <span className="text-[11px] text-slate-600">Office IPv6 Subnet:</span>
+                  <span className="font-mono text-xs font-bold text-sky-700 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm">
                     {ipv6Subnet || (publicIpv6 ? `${publicIpv6.slice(0, 19)}...` : 'No IPv6 Route')}
                   </span>
                   {isIpv6SubnetInAllowedList && (
-                    <span className="text-[10px] text-emerald-400 font-semibold">✓</span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">✓</span>
                   )}
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+              <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
                 {ipv6Subnet
-                  ? <>Your network supports IPv6. Whitelisting the <strong className="text-slate-300">/64 subnet</strong> matches all office devices even when mobile OS privacy addresses rotate.</>
-                  : <>Your office network uses IPv4 (<span className="text-amber-400 font-medium">No IPv6 Route</span>). Simply whitelist the <strong className="text-slate-300">Public IPv4</strong> address below to allow all employees on this Wi-Fi to check in.</>}
+                  ? <>Your network supports IPv6. Whitelisting the <strong className="text-slate-800">/64 subnet</strong> matches all office devices even when mobile OS privacy addresses rotate.</>
+                  : <>Your office network uses IPv4 (<span className="text-amber-700 font-medium">No IPv6 Route</span>). Simply whitelist the <strong className="text-slate-800">Public IPv4</strong> address below to allow all employees on this Wi-Fi to check in.</>}
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/60">
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
               {(!isPublicIpv4InAllowedList || !isIpv6SubnetInAllowedList) && (publicIpv4 || ipv6Subnet) && (
                 <button
                   type="button"
                   onClick={handleAddBothInternetIpsToWhitelist}
-                  className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-md shadow-primary-500/20"
+                  className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-sm"
                 >
                   <Plus size={13} /> Whitelist Complete Office Internet (IPv4 & IPv6)
                 </button>
@@ -700,7 +698,7 @@ export default function WifiSettingsPage() {
                 <button
                   type="button"
                   onClick={handleAddPublicIpv4ToWhitelist}
-                  className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1 border border-slate-700 hover:border-slate-600"
+                  className="btn bg-white text-xs py-1.5 px-2.5 flex items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
                 >
                   <Plus size={13} /> Add IPv4 ({publicIpv4})
                 </button>
@@ -709,7 +707,7 @@ export default function WifiSettingsPage() {
                 <button
                   type="button"
                   onClick={handleAddIpv6SubnetToWhitelist}
-                  className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1 border border-slate-700 hover:border-slate-600"
+                  className="btn bg-white text-xs py-1.5 px-2.5 flex items-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
                 >
                   <Plus size={13} /> Add IPv6 ({ipv6Subnet})
                 </button>
@@ -724,9 +722,9 @@ export default function WifiSettingsPage() {
         {/* Left Column: Office Selector & Network Settings (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           {/* Office Selection */}
-          <div className="card p-5 border border-slate-700/60 rounded-3xl bg-slate-900/60">
+          <div className="card p-5 border-slate-200 rounded-3xl shadow-sm">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                 Select Office Location to Configure
               </label>
               <span className="text-[11px] text-slate-500">{locations.length} configured location(s)</span>
@@ -734,7 +732,7 @@ export default function WifiSettingsPage() {
 
             <div className="flex gap-3">
               <select
-                className="select flex-1 font-medium text-sm"
+                className="select flex-1 font-medium text-sm border-slate-200 bg-white text-slate-800 shadow-sm"
                 value={selectedOfficeId}
                 onChange={handleOfficeSelect}
               >
@@ -749,43 +747,43 @@ export default function WifiSettingsPage() {
           </div>
 
           {/* Network Configuration Card */}
-          <div className="card p-6 border border-slate-700/60 rounded-3xl bg-slate-900/60 space-y-5">
-            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-800">
-              <Wifi size={18} className="text-primary-400" />
-              <h2 className="text-base font-bold text-white">1. Authorized Office Network (IP Whitelist)</h2>
+          <div className="card p-6 border-slate-200 rounded-3xl shadow-sm space-y-5">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-200">
+              <Wifi size={18} className="text-primary-600" />
+              <h2 className="text-base font-bold text-slate-900">1. Authorized Office Network (IP Whitelist)</h2>
             </div>
 
             {/* Office Name & SSID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label">Office Name</label>
+                <label className="label text-slate-700 font-semibold">Office Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Main Headquarters"
-                  className="input text-sm"
+                  className="input text-sm border-slate-200 bg-white text-slate-900"
                   value={form.officeName}
                   onChange={(e) => setForm({ ...form, officeName: e.target.value })}
                 />
               </div>
 
               <div>
-                <label className="label">Office WiFi Name (SSID)</label>
+                <label className="label text-slate-700 font-semibold">Office WiFi Name (SSID)</label>
                 <input
                   type="text"
                   placeholder="e.g. Spheronix-Office-5G"
-                  className="input text-sm"
+                  className="input text-sm border-slate-200 bg-white text-slate-900"
                   value={form.wifiSsid}
                   onChange={(e) => setForm({ ...form, wifiSsid: e.target.value })}
                 />
-                <p className="text-[11px] text-slate-400 mt-1">Display label telling employees which network to join.</p>
+                <p className="text-[11px] text-slate-600 mt-1">Display label telling employees which network to join.</p>
               </div>
             </div>
 
             {/* Allowed Public IPs */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="label">Allowed Public IP(s) & CIDR Subnets</label>
-                <span className="text-[11px] text-slate-400">{form.allowedIps.length} IP(s) whitelisted</span>
+                <label className="label text-slate-700 font-semibold">Allowed Public IP(s) & CIDR Subnets</label>
+                <span className="text-[11px] text-slate-600">{form.allowedIps.length} IP(s) whitelisted</span>
               </div>
 
               {/* IP Input & Add Button */}
@@ -793,7 +791,7 @@ export default function WifiSettingsPage() {
                 <input
                   type="text"
                   placeholder="Enter Public IP or CIDR (e.g. 103.5.135.77 or 2401:4900:9002:3383::/64)"
-                  className="input flex-1 font-mono text-xs"
+                  className="input flex-1 font-mono text-xs border-slate-200 bg-white text-slate-900"
                   value={newIpInput}
                   onChange={(e) => setNewIpInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIp())}
@@ -801,14 +799,14 @@ export default function WifiSettingsPage() {
                 <button
                   type="button"
                   onClick={handleAddIp}
-                  className="btn-secondary text-xs px-4 flex items-center gap-1"
+                  className="btn bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs px-4 flex items-center gap-1 font-semibold border border-slate-200"
                 >
                   <Plus size={14} /> Add
                 </button>
               </div>
 
               {/* IP Chips List */}
-              <div className="p-3 bg-slate-950/70 rounded-2xl border border-slate-800 min-h-[85px] flex flex-wrap gap-2 items-start">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 min-h-[85px] flex flex-wrap gap-2 items-start">
                 {form.allowedIps.length === 0 ? (
                   <span className="text-xs text-slate-500 italic p-1">
                     No IPs configured. Attendance will be blocked until at least one public IP is added.
@@ -824,22 +822,22 @@ export default function WifiSettingsPage() {
                     return (
                       <span
                         key={ip}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs border ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs border shadow-sm ${
                           isMyIp
-                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                            : 'bg-slate-800/80 border-slate-700 text-slate-200'
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                            : 'bg-white border-slate-200 text-slate-800'
                         }`}
                       >
                         <span>{ip}</span>
                         {isMyIp && (
-                          <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-500/20 px-1 rounded">
+                          <span className="text-[9px] uppercase font-bold text-emerald-800 bg-emerald-100 px-1 rounded">
                             You
                           </span>
                         )}
                         <button
                           type="button"
                           onClick={() => handleRemoveIp(ip)}
-                          className="text-slate-400 hover:text-red-400 ml-1 transition-colors"
+                          className="text-slate-400 hover:text-rose-600 ml-1 transition-colors"
                           title="Remove IP"
                         >
                           <Trash2 size={12} />
@@ -850,8 +848,8 @@ export default function WifiSettingsPage() {
                 )}
               </div>
 
-              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-[11px] text-amber-300 flex items-start gap-2">
-                <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-amber-400" />
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 flex items-start gap-2">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-amber-600" />
                 <span>
                   <strong>Important:</strong> Enter the public static IP of your office internet router. If configuring while connected to the office WiFi, click <strong>"Add My IP to Whitelist"</strong> above.
                 </span>
@@ -863,18 +861,18 @@ export default function WifiSettingsPage() {
         {/* Right Column: Live Location (GPS Geofence) & Simulator (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
           {/* Live Geofence Configuration Card */}
-          <div className="card p-6 border border-slate-700/60 rounded-3xl bg-slate-900/60 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="card p-6 border-slate-200 rounded-3xl shadow-sm space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <MapPin size={18} className="text-primary-400" />
-                <h2 className="text-base font-bold text-white">2. Live Location Access (Geofence)</h2>
+                <MapPin size={18} className="text-primary-600" />
+                <h2 className="text-base font-bold text-slate-900">2. Live Location Access (Geofence)</h2>
               </div>
               {form.latitude && form.longitude && (
                 <a
                   href={`https://www.openstreetmap.org/?mlat=${form.latitude}&mlon=${form.longitude}#map=18/${form.latitude}/${form.longitude}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1"
+                  className="text-xs text-primary-600 hover:text-primary-700 font-semibold flex items-center gap-1"
                 >
                   Map <ExternalLink size={12} />
                 </a>
@@ -882,15 +880,15 @@ export default function WifiSettingsPage() {
             </div>
 
             {/* GPS Detection Action Card */}
-            <div className="p-4 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-white">Device GPS Capture</span>
+                <span className="text-xs font-semibold text-slate-900">Device GPS Capture</span>
                 {gpsAccuracy !== null && (
                   <span
                     className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
                       gpsAccuracy <= 25
-                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border border-amber-200'
                     }`}
                   >
                     ±{Math.round(gpsAccuracy)}m accuracy
@@ -898,7 +896,7 @@ export default function WifiSettingsPage() {
                 )}
               </div>
 
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-600">
                 Stand at the office and click below to auto-capture high-accuracy GPS coordinates.
               </p>
 
@@ -906,7 +904,7 @@ export default function WifiSettingsPage() {
                 type="button"
                 onClick={handleDetectGps}
                 disabled={detectingGps}
-                className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-md shadow-primary-500/20"
+                className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
               >
                 {detectingGps ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
                 {detectingGps ? 'Querying Satellite GPS…' : '📍 Capture Current GPS Location'}
@@ -916,24 +914,24 @@ export default function WifiSettingsPage() {
             {/* Lat / Lng Inputs */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Latitude</label>
+                <label className="label text-slate-700 font-semibold">Latitude</label>
                 <input
                   type="number"
                   step="any"
                   placeholder="e.g. 17.4325"
-                  className="input text-xs font-mono"
+                  className="input text-xs font-mono border-slate-200 bg-white text-slate-900"
                   value={form.latitude}
                   onChange={(e) => setForm({ ...form, latitude: e.target.value })}
                 />
               </div>
 
               <div>
-                <label className="label">Longitude</label>
+                <label className="label text-slate-700 font-semibold">Longitude</label>
                 <input
                   type="number"
                   step="any"
                   placeholder="e.g. 78.3872"
-                  className="input text-xs font-mono"
+                  className="input text-xs font-mono border-slate-200 bg-white text-slate-900"
                   value={form.longitude}
                   onChange={(e) => setForm({ ...form, longitude: e.target.value })}
                 />
@@ -943,8 +941,8 @@ export default function WifiSettingsPage() {
             {/* Radius Input & Slider */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="label mb-0">Allowed Geofence Radius</label>
-                <span className="text-xs font-bold text-primary-300">{form.radiusMeters} meters</span>
+                <label className="label mb-0 text-slate-700 font-semibold">Allowed Geofence Radius</label>
+                <span className="text-xs font-bold text-primary-700">{form.radiusMeters} meters</span>
               </div>
 
               <input
@@ -954,7 +952,7 @@ export default function WifiSettingsPage() {
                 step="10"
                 value={form.radiusMeters}
                 onChange={(e) => setForm({ ...form, radiusMeters: Number(e.target.value) })}
-                className="w-full accent-primary-500 cursor-pointer mb-2"
+                className="w-full accent-primary-600 cursor-pointer mb-2"
               />
 
               <div className="flex justify-between text-[10px] text-slate-500">
@@ -966,24 +964,24 @@ export default function WifiSettingsPage() {
           </div>
 
           {/* Live Check-In Simulator */}
-          <div className="card p-5 border border-slate-700/60 rounded-3xl bg-slate-900/60 space-y-4">
+          <div className="card p-5 border-slate-200 rounded-3xl shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sliders size={16} className="text-primary-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Attendance Rule Simulator</h3>
+                <Sliders size={16} className="text-primary-600" />
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Attendance Rule Simulator</h3>
               </div>
               <button
                 type="button"
                 onClick={handleRunSimulation}
                 disabled={simulating || !form.latitude || !form.longitude}
-                className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1 text-primary-400 hover:text-primary-300"
+                className="btn bg-white border border-slate-200 text-xs py-1.5 px-2.5 flex items-center gap-1 text-primary-700 hover:bg-slate-50 shadow-sm"
               >
                 {simulating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 Test My Status
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-600">
               Tests whether your current network IP and physical GPS coordinates pass the rules configured above.
             </p>
 
@@ -991,27 +989,27 @@ export default function WifiSettingsPage() {
               <div
                 className={`p-3.5 rounded-2xl border space-y-2 text-xs animate-in fade-in ${
                   simResult.passedAll
-                    ? 'bg-emerald-500/10 border-emerald-500/30'
-                    : 'bg-red-500/10 border-red-500/30'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
                 }`}
               >
                 <div className="flex items-center justify-between font-semibold">
-                  <span className="text-slate-300">Simulation Verdict:</span>
-                  <span className={simResult.passedAll ? 'text-emerald-400' : 'text-red-400'}>
+                  <span className="text-slate-700">Simulation Verdict:</span>
+                  <span className={simResult.passedAll ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'}>
                     {simResult.passedAll ? '✅ Attendance Accepted' : '❌ Attendance Rejected'}
                   </span>
                 </div>
 
-                <div className="space-y-1 text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                <div className="space-y-1 text-[11px] text-slate-600 pt-1 border-t border-slate-200">
                   <div className="flex justify-between">
                     <span>1. Office Network IP:</span>
-                    <span className={simResult.isIpAuthorized ? 'text-emerald-400 font-medium' : 'text-red-400'}>
+                    <span className={simResult.isIpAuthorized ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
                       {simResult.isIpAuthorized ? 'PASS' : 'FAIL (Unauthorized IP)'}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>2. Geofence Distance:</span>
-                    <span className={simResult.isGpsInside ? 'text-emerald-400 font-medium' : 'text-red-400'}>
+                    <span className={simResult.isGpsInside ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
                       {simResult.distanceMeters}m from office ({simResult.isGpsInside ? 'PASS' : `FAIL > ${simResult.allowedRadius}m`})
                     </span>
                   </div>
@@ -1023,10 +1021,10 @@ export default function WifiSettingsPage() {
       </div>
 
       {/* ── Save Settings Bar ── */}
-      <div className="sticky bottom-6 z-20 bg-slate-900/90 backdrop-blur-md p-4 rounded-3xl border border-slate-700/80 shadow-2xl flex items-center justify-between">
+      <div className="sticky bottom-6 z-20 bg-white/95 backdrop-blur-md p-4 rounded-3xl border border-slate-200 shadow-xl flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold text-white">Save Location & Network Configuration</p>
-          <p className="text-[11px] text-slate-400">Updates will apply immediately to employee check-in validation.</p>
+          <p className="text-xs font-semibold text-slate-900">Save Location & Network Configuration</p>
+          <p className="text-[11px] text-slate-600">Updates will apply immediately to employee check-in validation.</p>
         </div>
 
         <button

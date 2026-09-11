@@ -19,12 +19,14 @@ const dailyLogService = require('../services/dailyLog.service');
 const leaveService = require('../services/leave.service');
 const authService = require('../services/auth.service');
 const { createNotification } = require('../services/notification.service');
+const { enrichAttendanceRecord } = require('../services/employeeProfile.service');
 const { UAParser } = require('ua-parser-js');
 const { getClientIp, isIpInAllowedList, maskIp } = require('../utils/ipUtils');
 const { buildDeviceLabel, formatDeviceLabel } = require('../utils/deviceUtils');
 const { emitToTeam, emitToManagers, emitToAdmins, emitToUser } = require('../socket');
 const crypto = require('crypto');
 const webauthnService = require('../services/webauthn.service');
+const { getActiveOfficeQr, verifyOfficeQrPayload } = require('../utils/qrUtils');
 
 // In-memory active checkout sessions: Map<userIdStr, { token: string, expiresAt: number }>
 const activeCheckoutSessions = new Map();
@@ -256,9 +258,28 @@ const checkIn = async (req, res) => {
     }
 
     // Strict Device Verification
-    const registeredDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
+    let registeredDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
     if (!registeredDevice) {
-      return badRequest(res, 'Use Your Registered Mobile — this device is not authorized for attendance.');
+      if (req.user.role === 'manager') {
+        const clientIp = getClientIp(req);
+        const rawUA = req.headers['user-agent'] || '';
+        const currentDeviceLabel = buildDeviceLabel(rawUA);
+        const currentFingerprint = req.body.deviceFingerprint || req.headers['x-device-fingerprint'] || crypto.randomBytes(16).toString('hex');
+        registeredDevice = await RegisteredDevice.create({
+          userId,
+          deviceFingerprint: currentFingerprint,
+          deviceLabel: currentDeviceLabel,
+          status: 'ACTIVE',
+          isActive: true,
+          ipAddress: clientIp,
+          lastSeenIp: clientIp,
+          userAgent: rawUA,
+          lastSeenAt: new Date(),
+        });
+        console.log(`[Device Enrollment] Auto-registered active device for manager ${req.user.name} (${currentDeviceLabel})`);
+      } else {
+        return badRequest(res, 'Use Your Registered Mobile — this device is not authorized for attendance.');
+      }
     }
     if (registeredDevice.temporaryUntil && new Date() > new Date(registeredDevice.temporaryUntil)) {
       return badRequest(res, 'Use Your Registered Mobile — temporary access has expired.');
@@ -281,19 +302,29 @@ const checkIn = async (req, res) => {
         console.log(`[Device Enrollment] Silently enrolled device for ${req.user.name} (${currentDeviceLabel})`);
       }
     } else {
-      // Device has an enrolled fingerprint — enforce hard lock
+      // Device has an enrolled fingerprint — enforce hard lock for employees
       if (!currentFingerprint || currentFingerprint !== registeredDevice.deviceFingerprint) {
-        // Trigger throttled manager alert (at most 1 per 60 mins)
-        await throttleUnregisteredDeviceAlert({
-          employee: req.user,
-          deviceLabel: currentDeviceLabel,
-          ipAddress: clientIp,
-        });
+        if (req.user.role === 'manager') {
+          // Managers punch from desktop/browser portal — sync device info
+          if (currentFingerprint) {
+            registeredDevice.deviceFingerprint = currentFingerprint;
+          }
+          registeredDevice.lastSeenIp = clientIp;
+          registeredDevice.lastSeenAt = new Date();
+          await registeredDevice.save();
+        } else {
+          // Trigger throttled manager alert (at most 1 per 60 mins)
+          await throttleUnregisteredDeviceAlert({
+            employee: req.user,
+            deviceLabel: currentDeviceLabel,
+            ipAddress: clientIp,
+          });
 
-        return badRequest(
-          res,
-          'Use Your Registered Mobile — this device is not authorized for attendance. If you cleared your browser data or switched devices, please request a device replacement from the Device Status page.'
-        );
+          return badRequest(
+            res,
+            'Use Your Registered Mobile — this device is not authorized for attendance. If you cleared your browser data or switched devices, please request a device replacement from the Device Status page.'
+          );
+        }
       }
 
       // Fingerprint matches! Silently update IP and last seen timestamp
@@ -363,9 +394,13 @@ const checkIn = async (req, res) => {
       }
 
       case 'qr_code': {
-        // STRICT ISOLATION: Zero IP check. Only validates daily HMAC QR code.
+        // STRICT ISOLATION: Zero IP check. Authoritatively validates HMAC-signed office QR code.
         if (!qrCodeValue) {
           return badRequest(res, 'Invalid QR Code — please scan today\'s office QR code.');
+        }
+        const verification = verifyOfficeQrPayload(qrCodeValue);
+        if (!verification.valid) {
+          return badRequest(res, verification.reason || 'Invalid or expired Office QR code. Please scan the current code on the office screen.');
         }
         break;
       }
@@ -445,10 +480,12 @@ const initiateCheckout = async (req, res) => {
       return badRequest(res, 'Already checked out today.');
     }
 
-    // Daily log check (mandatory before check-out)
-    const dailyLog = await DailyLog.findOne({ userId, logDate: today });
-    if (!dailyLog) {
-      return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
+    // Daily log check (mandatory before check-out for employees)
+    if (req.user.role === 'employee') {
+      const dailyLog = await DailyLog.findOne({ userId, logDate: today });
+      if (!dailyLog) {
+        return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
+      }
     }
 
     // Generate short-lived token (90 seconds)
@@ -487,10 +524,15 @@ const checkOut = async (req, res) => {
       return badRequest(res, 'Already checked out today.');
     }
 
-    // Daily Log Verification (mandatory before check-out)
-    const dailyLog = await DailyLog.findOne({ userId, logDate: today });
-    if (!dailyLog) {
-      return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
+    // Daily Log Verification (mandatory before check-out for employees)
+    let dailyLog = null;
+    if (req.user.role === 'employee') {
+      dailyLog = await DailyLog.findOne({ userId, logDate: today });
+      if (!dailyLog) {
+        return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
+      }
+    } else {
+      dailyLog = await DailyLog.findOne({ userId, logDate: today });
     }
 
     const clientIp = getClientIp(req);
@@ -571,7 +613,7 @@ const checkOut = async (req, res) => {
     const currentFingerprint = deviceFingerprint || req.headers['x-device-fingerprint'] || null;
     const registeredDevice = await RegisteredDevice.findOne({ userId, isActive: true, status: 'ACTIVE' });
     if (registeredDevice && registeredDevice.deviceFingerprint && currentFingerprint) {
-      if (registeredDevice.deviceFingerprint !== currentFingerprint) {
+      if (registeredDevice.deviceFingerprint !== currentFingerprint && req.user.role !== 'manager') {
         return badRequest(res, 'Use Your Registered Mobile — this device is not authorized for attendance.');
       }
     }
@@ -581,6 +623,12 @@ const checkOut = async (req, res) => {
     attendance.status = calcAttendanceStatus(metrics.actualWorkMinutes);
     attendance.checkOutTime = checkOutTime;
     await attendance.save();
+
+    // Synchronize daily log hours with finalized actual work duration
+    if (dailyLog && metrics.actualWorkMinutes > 0) {
+      dailyLog.hoursSpent = Math.round((metrics.actualWorkMinutes / 60) * 10) / 10;
+      await dailyLog.save();
+    }
 
     const populatedAttendance = await Attendance.findById(attendance._id)
       .populate('userId', 'name designation email');
@@ -639,14 +687,19 @@ const checkOut = async (req, res) => {
 
 const getCurrentQrCode = async (req, res) => {
   try {
-    // In a full implementation, this might fetch from a central rotating Redis key 
-    // or database value generated by an admin device. For now, return a static/mock value.
-    const qrData = {
-      codeValue: 'OFFICE_QR_DEFAULT',
-      expiresAt: new Date(Date.now() + 60000).toISOString() // Valid for 1 min
-    };
+    let office = await OfficeLocation.findOne({ status: 'active' }).lean();
+    if (!office) {
+      office = await OfficeLocation.findOne({}).lean();
+    }
+    const officeId = office?._id ? office._id.toString() : 'default_office';
+    const activeQr = getActiveOfficeQr(officeId, 5); // 5-minute rotating window
     
-    return success(res, 'QR code fetched successfully', { qr: qrData });
+    return success(res, 'QR code fetched successfully', {
+      qr: {
+        codeValue: activeQr.qrString,
+        expiresAt: activeQr.expiresAt,
+      },
+    });
   } catch (error) {
     console.error('Error fetching QR code:', error);
     return badRequest(res, 'Failed to fetch QR code');
@@ -1004,14 +1057,7 @@ const getMyAttendanceHistory = async (req, res) => {
     const userId = req.user._id;
     const records = await Attendance.find({ userId }).sort({ date: -1 }).lean();
 
-    const normalized = records.map(rec => {
-      const actualWork = rec.actualWorkMinutes ?? rec.totalWorkMinutes ?? 0;
-      return {
-        ...rec,
-        totalWorkMinutes: actualWork,
-        actualWorkMinutes: actualWork,
-      };
-    });
+    const normalized = records.map(rec => enrichAttendanceRecord(rec));
 
     const totalDays = normalized.length;
     const presentCount = normalized.filter(r => r.status === 'present').length;
@@ -1036,7 +1082,7 @@ const getMyAttendanceHistory = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { name, phone, designation } = req.body;
+    const { name, phone, designation, avatarUrl } = req.body;
 
     const updates = {};
     if (name !== undefined) {
@@ -1050,6 +1096,16 @@ const updateProfile = async (req, res) => {
     }
     if (designation !== undefined) {
       updates.designation = designation ? designation.trim() : null;
+    }
+    if (avatarUrl !== undefined) {
+      if (avatarUrl && typeof avatarUrl === 'string') {
+        if (avatarUrl.length > 7 * 1024 * 1024) {
+          return badRequest(res, 'Avatar image is too large.');
+        }
+        updates.avatarUrl = avatarUrl.trim();
+      } else {
+        updates.avatarUrl = null;
+      }
     }
 
     const updatedUser = await User.findByIdAndUpdate(

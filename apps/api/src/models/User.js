@@ -63,6 +63,26 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Multi-Factor Authentication (MFA) fields
+    mfaEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    mfaSecret: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    mfaPendingSecret: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    mfaPendingCreatedAt: {
+      type: Date,
+      select: false,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -86,6 +106,8 @@ userSchema.methods.comparePassword = async function (plainPassword) {
 userSchema.methods.toSafeObject = function () {
   const obj = this.toObject();
   delete obj.passwordHash;
+  delete obj.mfaSecret;
+  delete obj.mfaPendingSecret;
   return obj;
 };
 

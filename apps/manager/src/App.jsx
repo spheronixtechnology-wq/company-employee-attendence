@@ -2,148 +2,344 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider, useSocket } from './contexts/SocketContext';
 import ManagerLayout from './components/ManagerLayout';
-import { ManagerDeviceRequestsPage, ManagerLocationRequestsPage } from './pages/ManagerRequestsPages';
+import { ManagerDeviceRequestsPage } from './pages/ManagerRequestsPages';
+import DashboardPage from './pages/DashboardPage';
 import AttendanceMethodPage from './pages/AttendanceMethodPage';
 import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
+import TeamOvertimePage from './pages/TeamOvertimePage';
 import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import api from './lib/api';
 import DocumentPreviewModal from './components/DocumentPreviewModal';
+import EmployeeProfileModal from './components/EmployeeProfileModal';
 
 // ── Login Page (shared design) ──────────────────────────────────────────────
-import { EyeOff, LogIn } from 'lucide-react';
+import { EyeOff, LogIn, ShieldCheck, Shield, Copy, Check, ArrowLeft, KeyRound, QrCode } from 'lucide-react';
+
 const LoginPage = () => {
-  const { login } = useAuth();
+  const { login, verifyMfaSetup, verifyMfa } = useAuth();
   const navigate = useNavigate();
+
+  // Navigation steps: 'credentials' | 'mfa_setup' | 'mfa_verify'
+  const [step, setStep] = useState('credentials');
   const [form, setForm] = useState({ email: '', password: '' });
+  const [mfaData, setMfaData] = useState({ tempToken: '', qrCode: '', secret: '' });
+  const [otp, setOtp] = useState('');
+  const [copied, setCopied] = useState(false);
+
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
+  // Step 1: Submit Credentials
+  const handleCredentialsSubmit = async (e) => {
     e.preventDefault();
-    setError(''); setLoading(true);
+    setError('');
+    setLoading(true);
     try {
-      const user = await login(form.email, form.password);
+      const data = await login(form.email, form.password);
+      if (data?.mfaRequired) {
+        if (!data.mfaEnrolled) {
+          // First-time enrollment or after Admin reset: show QR code
+          setMfaData({
+            tempToken: data.tempToken,
+            qrCode: data.qrCode,
+            secret: data.secret,
+          });
+          setOtp('');
+          setStep('mfa_setup');
+        } else {
+          // Normal subsequent login: strictly prompt for OTP (NO QR code)
+          setMfaData({
+            tempToken: data.tempToken,
+            qrCode: '',
+            secret: '',
+          });
+          setOtp('');
+          setStep('mfa_verify');
+        }
+      } else {
+        // Direct session without MFA (non-manager or MFA disabled)
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invalid email or password.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Verify Initial MFA Setup
+  const handleMfaSetupSubmit = async (e) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      setError('Please enter the full 6-digit code from your authenticator app.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await verifyMfaSetup(mfaData.tempToken, otp);
       navigate('/dashboard');
-    } catch (err) { setError(err.response?.data?.message || 'Login failed.'); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invalid 6-digit code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 3: Verify Subsequent MFA Login
+  const handleMfaVerifySubmit = async (e) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      setError('Please enter the full 6-digit code from your authenticator app.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await verifyMfa(mfaData.tempToken, otp);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invalid 6-digit code. Please check your authenticator app.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copySecret = () => {
+    if (!mfaData.secret) return;
+    navigator.clipboard.writeText(mfaData.secret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleBackToCredentials = () => {
+    setStep('credentials');
+    setOtp('');
+    setMfaData({ tempToken: '', qrCode: '', secret: '' });
+    setError('');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-violet-900/20 to-slate-900 p-4">
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md animate-slide-up">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl mb-4 shadow-lg shadow-violet-500/30">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+        {/* Logo / Header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl mb-4 shadow-md shadow-violet-500/20">
+            {step === 'credentials' && (
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            )}
+            {step === 'mfa_setup' && <QrCode className="w-8 h-8 text-white" />}
+            {step === 'mfa_verify' && <ShieldCheck className="w-8 h-8 text-white" />}
           </div>
-          <h1 className="text-2xl font-bold text-white">Manager Portal</h1>
-          <p className="text-slate-400 mt-1 text-sm">Spheronix Technology</p>
+          <h1 className="text-2xl font-bold text-slate-900">Manager Portal</h1>
+          <p className="text-slate-600 mt-1 text-xs">Spheronix Technology</p>
         </div>
-        <div className="card-glass border border-slate-600/50 shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && <div className="bg-danger-500/10 border border-danger-500/30 rounded-xl px-4 py-3 text-danger-400 text-sm">{error}</div>}
-            <div>
-              <label className="label">Email</label>
-              <input id="email" type="email" required className="input" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+
+        <div className="card bg-white border border-slate-200 shadow-xl p-6">
+          {error && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-rose-700 text-xs mb-5 font-medium flex items-center gap-2">
+              <AlertTriangle size={15} className="flex-shrink-0" />
+              <span>{error}</span>
             </div>
-            <div>
-              <label className="label">Password</label>
-              <div className="relative">
-                <input id="password" type={showPw ? 'text' : 'password'} required className="input pr-12" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 p-1">
-                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+          )}
+
+          {/* ── STEP 1: EMAIL & PASSWORD ── */}
+          {step === 'credentials' && (
+            <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+              <div>
+                <label className="label text-xs font-semibold text-slate-700">Work Email</label>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  placeholder="manager@spheronixtechnology.in"
+                  className="input text-xs border-slate-200 bg-white text-slate-900"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="label text-xs font-semibold text-slate-700">Password</label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPw ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••••••"
+                    className="input pr-12 text-xs border-slate-200 bg-white text-slate-900"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 transition-colors"
+                  >
+                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                id="login-submit-btn"
+                disabled={loading}
+                className="btn bg-violet-600 hover:bg-violet-500 text-white btn-lg w-full text-xs font-bold mt-2 shadow-md shadow-violet-600/20"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
+                {loading ? 'Verifying Credentials...' : 'Sign In'}
+              </button>
+            </form>
+          )}
+
+          {/* ── STEP 2: MFA SETUP & ENROLLMENT (QR CODE SHOWN) ── */}
+          {step === 'mfa_setup' && (
+            <form onSubmit={handleMfaSetupSubmit} className="space-y-4 animate-fade-in">
+              <div className="text-center pb-1">
+                <span className="px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold uppercase tracking-wider">
+                  Step 2: Authenticator Setup
+                </span>
+                <h2 className="text-base font-bold text-slate-900 mt-2">Scan QR with Authenticator</h2>
+                <p className="text-slate-600 text-xs mt-1">
+                  Use Google Authenticator, Microsoft Authenticator, or Authy on your mobile device.
+                </p>
+              </div>
+
+              {/* QR Code Card */}
+              {mfaData.qrCode && (
+                <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50 rounded-2xl border border-slate-200 shadow-inner">
+                  <div className="p-2.5 bg-white rounded-xl shadow-md">
+                    <img
+                      src={mfaData.qrCode}
+                      alt="Authenticator QR Code"
+                      className="w-44 h-44 object-contain"
+                    />
+                  </div>
+                  <span className="text-[11px] text-slate-600 mt-2 font-medium">
+                    Point your camera at this code in your Authenticator app
+                  </span>
+                </div>
+              )}
+
+              {/* Manual Secret Key (if cannot scan) */}
+              {mfaData.secret && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1">
+                    <span className="flex items-center gap-1 font-medium">
+                      <KeyRound size={12} /> Can't scan? Enter key manually:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={copySecret}
+                      className="text-violet-600 hover:text-violet-700 font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      <span>{copied ? 'Copied!' : 'Copy'}</span>
+                    </button>
+                  </div>
+                  <p className="font-mono text-[11px] text-slate-800 tracking-wider break-all select-all bg-white px-2 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                    {mfaData.secret.match(/.{1,4}/g)?.join(' ') || mfaData.secret}
+                  </p>
+                </div>
+              )}
+
+              {/* OTP Entry */}
+              <div>
+                <label className="label text-xs font-semibold text-slate-700 text-center block">
+                  Enter 6-Digit Code from App
+                </label>
+                <input
+                  id="mfa-setup-otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="input text-center text-2xl font-mono tracking-widest font-black py-2.5 border-violet-300 focus:border-violet-500 bg-white text-slate-900"
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                id="mfa-setup-submit-btn"
+                disabled={loading || otp.length !== 6}
+                className="btn bg-violet-600 hover:bg-violet-500 text-white btn-lg w-full text-xs font-bold shadow-md shadow-violet-600/20 disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {loading ? 'Activating MFA...' : 'Verify & Complete Setup'}
+              </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={handleBackToCredentials}
+                  className="text-slate-600 hover:text-slate-900 text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                >
+                  <ArrowLeft size={13} /> Back to Sign In
                 </button>
               </div>
-            </div>
-            <button type="submit" id="login-submit-btn" disabled={loading} className="btn bg-violet-600 hover:bg-violet-500 text-white btn-lg w-full">
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <LogIn size={18} />}
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
+            </form>
+          )}
+
+          {/* ── STEP 3: MFA VERIFICATION (SUBSEQUENT LOGINS — NO QR SHOWN) ── */}
+          {step === 'mfa_verify' && (
+            <form onSubmit={handleMfaVerifySubmit} className="space-y-4 animate-fade-in">
+              <div className="text-center pb-2">
+                <div className="w-12 h-12 rounded-2xl bg-violet-50 border border-violet-200 text-violet-600 flex items-center justify-center mx-auto mb-3 shadow-sm">
+                  <ShieldCheck size={26} />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">Two-Factor Authentication</h2>
+                <p className="text-slate-600 text-xs mt-1">
+                  Open your Authenticator app and enter the 6-digit code for <strong>Spheronix</strong>.
+                </p>
+              </div>
+
+              <div>
+                <input
+                  id="mfa-verify-otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="input text-center text-2xl font-mono tracking-widest font-black py-3 border-violet-300 focus:border-violet-500 bg-white text-slate-900"
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                id="mfa-verify-submit-btn"
+                disabled={loading || otp.length !== 6}
+                className="btn bg-violet-600 hover:bg-violet-500 text-white btn-lg w-full text-xs font-bold shadow-md shadow-violet-600/20 disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                {loading ? 'Verifying Code...' : 'Verify & Continue'}
+              </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={handleBackToCredentials}
+                  className="text-slate-600 hover:text-slate-900 text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                >
+                  <ArrowLeft size={13} /> Back to Sign In
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Manager Dashboard ────────────────────────────────────────────────────────
-const DashboardPage = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const { socket } = useSocket();
-
-  const fetchDashboard = useCallback(() => {
-    api.get('/manager/dashboard').then(res => setData(res.data.data)).catch(console.error).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchDashboard();
-    // Poll every 30s + refetch when the tab becomes visible
-    const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchDashboard();
-    }, 30000);
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchDashboard();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [fetchDashboard]);
-
-  // Real-time socket updates for team dashboard
-  useEffect(() => {
-    if (!socket) return;
-    const onUpdate = () => fetchDashboard();
-    socket.on('attendance:update', onUpdate);
-    socket.on('break:update', onUpdate);
-    socket.on('device:request_created', onUpdate);
-    socket.on('leave:request_created', onUpdate);
-    return () => {
-      socket.off('attendance:update', onUpdate);
-      socket.off('break:update', onUpdate);
-      socket.off('device:request_created', onUpdate);
-      socket.off('leave:request_created', onUpdate);
-    };
-  }, [socket, fetchDashboard]);
-
-  if (loading) return <div className="flex justify-center items-center min-h-screen"><Loader2 className="animate-spin text-violet-400" size={40} /></div>;
-
-  return (
-    <div className="p-6 space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Team Dashboard</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 w-fit">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs text-slate-400">Mode:</span>
-          <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">
-            {data?.activeAttendanceMethod?.replace('_', ' ') || 'QR CODE'}
-          </span>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Team Total', value: data?.teamTotal, color: 'text-violet-400' },
-          { label: 'Checked In', value: data?.checkedIn, color: 'text-success-400' },
-          { label: 'Not Checked In', value: data?.notCheckedIn, color: 'text-danger-400' },
-          { label: 'On Leave', value: data?.onLeave, color: 'text-warning-400' },
-          { label: 'Missing Daily Logs', value: data?.missingDailyLogs, color: 'text-warning-400' },
-          { label: 'Pending Leaves', value: data?.pendingLeaveRequests, color: 'text-primary-400' },
-        ].map(item => (
-          <div key={item.label} className="card text-center">
-            <p className={`text-3xl font-bold ${item.color}`}>{item.value ?? '—'}</p>
-            <p className="text-slate-400 text-xs mt-1">{item.label}</p>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -153,6 +349,7 @@ const DashboardPage = () => {
 const TeamMembersPage = () => {
   const [data, setData] = useState({ teams: [], members: [] });
   const [loading, setLoading] = useState(true);
+  const [selectedMemberId, setSelectedMemberId] = useState(null);
   const { socket } = useSocket();
 
   const fetchMembers = useCallback(() => {
@@ -186,11 +383,11 @@ const TeamMembersPage = () => {
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-violet-400" size={32} /></div>;
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
+    <div className="page-container space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Team Members</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-slate-900">Team Members</h1>
+          <p className="text-slate-600 text-sm mt-0.5">
             {data.teams.map(t => t.name).join(', ') || 'Managed Teams'} · {data.members.length} member{data.members.length === 1 ? '' : 's'}
           </p>
         </div>
@@ -198,41 +395,62 @@ const TeamMembersPage = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {data.members.map(member => (
-          <div key={member._id} className="card relative overflow-hidden flex flex-col justify-between">
+          <div
+            key={member._id}
+            onClick={() => setSelectedMemberId(member._id)}
+            className="card relative overflow-hidden flex flex-col justify-between border-slate-200 hover:border-violet-300 hover:shadow-lg transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+          >
             <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                {member.name?.[0]?.toUpperCase()}
-              </div>
+              {member.avatarUrl ? (
+                <img
+                  src={member.avatarUrl}
+                  alt={member.name}
+                  className="w-11 h-11 rounded-xl object-cover flex-shrink-0 shadow-sm ring-1 ring-violet-200 group-hover:scale-105 transition-transform"
+                />
+              ) : (
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                  {member.name?.[0]?.toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-white font-semibold truncate">{member.name}</p>
+                  <p className="text-slate-900 font-bold truncate group-hover:text-violet-600 transition-colors">{member.name}</p>
                   <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                    member.currentStatus === 'checked_in' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                    member.currentStatus === 'on_break' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                    member.currentStatus === 'checked_out' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                    'bg-slate-700/50 text-slate-400 border border-slate-600/30'
+                    member.currentStatus === 'checked_in' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                    member.currentStatus === 'on_break' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                    member.currentStatus === 'checked_out' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                    'bg-slate-100 text-slate-600 border border-slate-200'
                   }`}>
                     {member.currentStatus === 'checked_in' ? '● Working' :
                      member.currentStatus === 'on_break' ? '☕ On Break' :
                      member.currentStatus === 'checked_out' ? '✓ Checked Out' : 'Offline'}
                   </span>
                 </div>
-                <p className="text-slate-400 text-xs mt-0.5 truncate">{member.designation || 'Employee'}</p>
+                <p className="text-slate-600 text-xs mt-0.5 truncate">{member.designation || 'Employee'}</p>
                 <p className="text-slate-500 text-xs truncate">{member.email}</p>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
+            <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
               <span>Team: {member.teamId?.name || 'Unassigned'}</span>
-              {member.phone && <span>{member.phone}</span>}
+              <span className="text-violet-600 font-medium group-hover:underline flex items-center gap-1">
+                View Profile & Records &rarr;
+              </span>
             </div>
           </div>
         ))}
       </div>
       {data.members.length === 0 && (
-        <div className="card text-center py-12 text-slate-400">
+        <div className="card text-center py-12 text-slate-500">
           No team members found in your assigned team(s).
         </div>
       )}
+
+      {/* 360 Degree Performance & Profile Modal */}
+      <EmployeeProfileModal
+        isOpen={!!selectedMemberId}
+        memberId={selectedMemberId}
+        onClose={() => setSelectedMemberId(null)}
+      />
     </div>
   );
 };
@@ -296,12 +514,12 @@ const TeamAttendancePage = () => {
   };
 
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
+    <div className="page-container space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Team Attendance</h1>
-        <input type="date" className="input w-auto" value={date} onChange={e => setDate(e.target.value)} />
+        <h1 className="text-2xl font-bold text-slate-900">Team Attendance</h1>
+        <input type="date" className="input w-auto border-slate-200 bg-white text-slate-900 shadow-sm" value={date} onChange={e => setDate(e.target.value)} />
       </div>
-      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-400" size={28} /></div> : (
+      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-600" size={28} /></div> : (
         <div className="space-y-3">
           {records.map(rec => {
             const isManualPending = rec.status === 'manual_pending' || (rec.manualRequest && rec.manualRequest.status === 'pending');
@@ -310,17 +528,17 @@ const TeamAttendancePage = () => {
             return (
               <div
                 key={rec._id}
-                className={`card transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                className={`card transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 border-slate-200 shadow-sm ${
                   isManualPending
-                    ? 'border-amber-500/40 bg-gradient-to-r from-amber-950/20 via-slate-800/90 to-slate-800 shadow-md ring-1 ring-amber-500/20'
+                    ? 'border-amber-400 bg-amber-50/40 shadow-sm ring-1 ring-amber-300'
                     : ''
                 }`}
               >
                 <div className="space-y-1.5 flex-1 min-w-0">
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <p className="text-white font-semibold text-sm">{rec.userId?.name}</p>
+                    <p className="text-slate-900 font-bold text-sm">{rec.userId?.name}</p>
                     {isManualPending && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center gap-1">
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-semibold flex items-center gap-1">
                         <Clock size={12} /> Pending Manual Review
                       </span>
                     )}
@@ -328,13 +546,13 @@ const TeamAttendancePage = () => {
 
                   {/* If employee submitted a manual attendance request, display their submitted reason */}
                   {rec.manualRequest?.reason && (
-                    <div className="bg-slate-900/80 border border-amber-500/25 rounded-xl px-3 py-2 text-xs text-amber-200/95 max-w-xl shadow-inner">
-                      <span className="font-semibold text-amber-400 block mb-0.5">Submitted Reason:</span>
-                      <p className="italic text-slate-200">"{rec.manualRequest.reason}"</p>
+                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-900 max-w-xl">
+                      <span className="font-semibold text-amber-800 block mb-0.5">Submitted Reason:</span>
+                      <p className="italic text-slate-700">"{rec.manualRequest.reason}"</p>
                     </div>
                   )}
 
-                  <p className="text-slate-400 text-xs">
+                  <p className="text-slate-600 text-xs">
                     {rec.checkInTime ? `In: ${new Date(rec.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : 'Not checked in'}
                     {rec.checkOutTime ? ` · Out: ${new Date(rec.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
                   </p>
@@ -348,7 +566,7 @@ const TeamAttendancePage = () => {
                         id={`approve-manual-${rec.manualRequest._id}`}
                         onClick={() => handleManualDecision(rec.manualRequest._id, 'approve')}
                         disabled={!!processingId}
-                        className="py-1.5 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                        className="py-1.5 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
                       >
                         {processingId === rec.manualRequest._id + 'approve' ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -362,7 +580,7 @@ const TeamAttendancePage = () => {
                         id={`reject-manual-${rec.manualRequest._id}`}
                         onClick={() => handleManualDecision(rec.manualRequest._id, 'reject')}
                         disabled={!!processingId}
-                        className="py-1.5 px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                        className="py-1.5 px-3 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50"
                       >
                         {processingId === rec.manualRequest._id + 'reject' ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -374,7 +592,7 @@ const TeamAttendancePage = () => {
                     </div>
                   ) : (
                     <div className="text-right">
-                      <p className="text-sm font-bold text-white">
+                      <p className="text-sm font-bold text-slate-900">
                         {rec.totalWorkMinutes ? `${Math.floor(rec.totalWorkMinutes / 60)}h ${rec.totalWorkMinutes % 60}m` : '—'}
                       </p>
                       <span
@@ -443,20 +661,20 @@ const TeamLeaveRequestsPage = () => {
   };
 
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-bold text-white">Team Leave Requests</h1>
+    <div className="page-container space-y-5 animate-fade-in">
+      <h1 className="text-2xl font-bold text-slate-900">Team Leave Requests</h1>
       <div className="flex gap-2">
         {['pending', 'approved', 'rejected'].map(s => (
-          <button key={s} onClick={() => setFilter(s)} className={`btn ${filter === s ? 'btn-primary' : 'btn-ghost'} text-xs capitalize`}>{s}</button>
+          <button key={s} onClick={() => setFilter(s)} className={`btn ${filter === s ? 'btn-primary' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'} text-xs capitalize shadow-sm`}>{s}</button>
         ))}
       </div>
-      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-400" size={28} /></div> : (
+      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-600" size={28} /></div> : (
         <div className="space-y-3">
           {requests.map(req => (
-            <div key={req._id} className="card flex items-center justify-between gap-4">
+            <div key={req._id} className="card flex items-center justify-between gap-4 border-slate-200 shadow-sm">
               <div>
-                <p className="text-white font-semibold">{req.userId?.name}</p>
-                <p className="text-slate-400 text-xs">{req.leaveTypeId?.name} · {req.startDate} → {req.endDate} ({req.totalDays}d)</p>
+                <p className="text-slate-900 font-bold">{req.userId?.name}</p>
+                <p className="text-slate-600 text-xs">{req.leaveTypeId?.name} · {req.startDate} → {req.endDate} ({req.totalDays}d)</p>
                 <p className="text-slate-500 text-xs">{req.reason}</p>
               </div>
               {req.status === 'pending' && (
@@ -505,17 +723,25 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
   const actualWork = att?.actualWorkMinutes ?? Math.max(0, totalDuration - totalBreaks);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-5 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between sticky top-0 z-10">
+        <div className="p-5 border-b border-slate-200 bg-white flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
-              {user.name?.[0]?.toUpperCase() || 'E'}
-            </div>
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.name || 'Employee'}
+                className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-violet-500/20 ring-2 ring-violet-200"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white font-bold text-lg flex items-center justify-center shadow-md shadow-violet-500/20">
+                {user.name?.[0]?.toUpperCase() || 'E'}
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white">{user.name || 'Employee'}</h2>
+                <h2 className="text-base font-bold text-slate-900">{user.name || 'Employee'}</h2>
                 {att?.status && (
                   <span className={
                     att.status === 'present' ? 'badge-success' :
@@ -524,14 +750,14 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                   }>{att.status}</span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-600">
                 {user.designation || 'Team Member'} {user.email ? `· ${user.email}` : ''}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X size={18} />
           </button>
@@ -541,56 +767,56 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {/* Shift Metrics Cards */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-center">
-              <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center mx-auto mb-1">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center mx-auto mb-1">
                 <Clock size={15} />
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Gross Shift</p>
-              <p className="text-sm font-bold text-white mt-0.5">{totalDuration ? formatDuration(totalDuration) : `${log.hoursSpent}h`}</p>
+              <p className="text-[11px] text-slate-600 font-medium">Gross Shift</p>
+              <p className="text-sm font-bold text-slate-900 mt-0.5">{totalDuration ? formatDuration(totalDuration) : `${log.hoursSpent}h`}</p>
               <p className="text-[10px] text-slate-500">Duration</p>
             </div>
 
-            <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-center">
-              <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-1">
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-center">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 border border-amber-300 flex items-center justify-center mx-auto mb-1">
                 <Coffee size={15} />
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Total Breaks</p>
-              <p className="text-sm font-bold text-amber-400 mt-0.5">{formatDuration(totalBreaks)}</p>
-              <p className="text-[10px] text-slate-500">{breaks.length} break{breaks.length === 1 ? '' : 's'}</p>
+              <p className="text-[11px] text-amber-800 font-medium">Total Breaks</p>
+              <p className="text-sm font-bold text-amber-700 mt-0.5">{formatDuration(totalBreaks)}</p>
+              <p className="text-[10px] text-amber-600">{breaks.length} break{breaks.length === 1 ? '' : 's'}</p>
             </div>
 
-            <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30 text-center">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-1">
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center mx-auto mb-1">
                 <Timer size={15} />
               </div>
-              <p className="text-[11px] text-emerald-400 font-medium">Actual Work</p>
-              <p className="text-sm font-extrabold text-emerald-300 mt-0.5">{actualWork ? formatDuration(actualWork) : `${log.hoursSpent}h`}</p>
-              <p className="text-[10px] text-emerald-400/70">Net Productive</p>
+              <p className="text-[11px] text-emerald-800 font-medium">Actual Work</p>
+              <p className="text-sm font-extrabold text-emerald-700 mt-0.5">{actualWork ? formatDuration(actualWork) : `${log.hoursSpent}h`}</p>
+              <p className="text-[10px] text-emerald-600">Net Productive</p>
             </div>
           </div>
 
           {/* Timestamps */}
           {att && (
-            <div className="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 text-xs space-y-1.5">
-              <div className="flex justify-between text-slate-400">
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+              <div className="flex justify-between text-slate-600">
                 <span>Check-In Time:</span>
-                <span className="font-semibold text-white">{formatTime(checkIn)}</span>
+                <span className="font-semibold text-slate-900">{formatTime(checkIn)}</span>
               </div>
-              <div className="flex justify-between text-slate-400 border-t border-slate-800/80 pt-1.5">
+              <div className="flex justify-between text-slate-600 border-t border-slate-200 pt-1.5">
                 <span>Check-Out Time:</span>
-                <span className="font-semibold text-white">{checkOut ? formatTime(checkOut) : 'Still Active'}</span>
+                <span className="font-semibold text-slate-900">{checkOut ? formatTime(checkOut) : 'Still Active'}</span>
               </div>
             </div>
           )}
 
           {/* Break Breakdown */}
           {breaks.length > 0 && (
-            <div className="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800">
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
-                  <Coffee size={13} className="text-amber-400" /> Break Breakdown
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <Coffee size={13} className="text-amber-600" /> Break Breakdown
                 </span>
-                <span className="text-xs font-mono text-slate-400">{formatDuration(totalBreaks)}</span>
+                <span className="text-xs font-mono text-slate-600">{formatDuration(totalBreaks)}</span>
               </div>
               <div className="space-y-1.5">
                 {breaks.map((b, idx) => {
@@ -599,11 +825,11 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                   const dur = (bStart && bEnd) ? Math.max(0, Math.floor((bEnd.getTime() - bStart.getTime()) / 60000)) : 0;
                   const typeLabel = b.type ? (b.type.charAt(0).toUpperCase() + b.type.slice(1)) : 'Personal';
                   return (
-                    <div key={b._id || idx} className="flex items-center justify-between p-2 bg-slate-800/60 rounded-lg text-xs">
-                      <span className="text-slate-300">
+                    <div key={b._id || idx} className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg text-xs">
+                      <span className="text-slate-800">
                         #{idx + 1} {typeLabel} Break ({formatTime(bStart)} – {formatTime(bEnd)})
                       </span>
-                      <span className="font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      <span className="font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                         {dur}m
                       </span>
                     </div>
@@ -614,22 +840,22 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
           )}
 
           {/* Daily Work Log Content */}
-          <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/60 space-y-3 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
-              <span className="font-bold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
-                <FileText size={14} className="text-violet-400" /> Daily Work Summary
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <span className="font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <FileText size={14} className="text-violet-600" /> Daily Work Summary
               </span>
-              <span className="px-2.5 py-0.5 bg-violet-500/10 border border-violet-500/30 text-violet-300 font-bold rounded-full">
-                Logged: {log.hoursSpent}h
+              <span className="px-2.5 py-0.5 bg-violet-50 border border-violet-200 text-violet-700 font-bold rounded-full">
+                Logged: {actualWork ? formatDuration(actualWork) : (log.hoursSpent ? `${log.hoursSpent}h` : '—')}
               </span>
             </div>
 
             {/* Document Submission Card (New Standard) */}
             {(log.documentUrl || log.attachmentUrl) ? (
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-3 shadow-inner">
+              <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center flex-shrink-0">
                       {(log.doctype || log.documentName || '').match(/\.(xlsx|xls|csv)$|^(xlsx|xls|csv)$/i) ? (
                         <FileSpreadsheet size={20} />
                       ) : (
@@ -638,23 +864,23 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-xs font-bold text-white truncate max-w-[240px]" title={log.documentName || 'Daily Work Document'}>
+                        <p className="text-xs font-bold text-slate-900 truncate max-w-[240px]" title={log.documentName || 'Daily Work Document'}>
                           {log.documentName || log.taskTitle || 'Daily Work Document'}
                         </p>
                         {/* Doctype Badge */}
                         <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
                           (log.doctype || log.documentName || '').match(/xlsx|xls|csv/i)
-                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                             : (log.doctype || log.documentName || '').match(/docx|doc/i)
-                            ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                            ? 'bg-blue-50 border-blue-200 text-blue-700'
                             : (log.doctype || log.documentName || '').match(/pdf/i)
-                            ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
-                            : 'bg-primary-500/15 border-primary-500/30 text-primary-400'
+                            ? 'bg-rose-50 border-rose-200 text-rose-700'
+                            : 'bg-primary-50 border-primary-200 text-primary-700'
                         }`}>
                           {log.doctype || (log.documentName || '').split('.').pop() || 'DOC'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-slate-600">
                         {log.documentSize ? `${(log.documentSize / (1024 * 1024)).toFixed(2)} MB • ` : ''}
                         64-base encoded link • Ready for preview & download
                       </p>
@@ -668,7 +894,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                     type="button"
                     id="preview-document-btn"
                     onClick={() => setShowPreviewModal(true)}
-                    className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-1.5 font-semibold shadow-md shadow-primary-500/20"
+                    className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-1.5 font-semibold shadow-sm"
                   >
                     <Eye size={14} /> Preview Document
                   </button>
@@ -684,7 +910,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                       link.click();
                       document.body.removeChild(link);
                     }}
-                    className="btn-ghost text-xs py-2 px-3 flex items-center justify-center gap-1.5 border border-slate-700 hover:bg-slate-800 text-slate-200"
+                    className="btn bg-white text-xs py-2 px-3 flex items-center justify-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
                   >
                     <Download size={14} /> Download
                   </button>
@@ -695,24 +921,24 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
               <div className="space-y-2">
                 {log.taskTitle && (
                   <div>
-                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Task Title</p>
-                    <p className="text-white font-medium bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">{log.taskTitle}</p>
+                    <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Task Title</p>
+                    <p className="text-slate-900 font-medium bg-white p-2.5 rounded-lg border border-slate-200">{log.taskTitle}</p>
                   </div>
                 )}
                 {log.description && (
                   <div>
-                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">Description</p>
-                    <p className="text-slate-200 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 whitespace-pre-line">{log.description}</p>
+                    <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Description</p>
+                    <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-slate-200 whitespace-pre-line">{log.description}</p>
                   </div>
                 )}
                 {log.githubLink && (
                   <div>
-                    <p className="text-[11px] text-slate-400 font-semibold mb-0.5">GitHub Repository / PR</p>
+                    <p className="text-[11px] text-slate-600 font-semibold mb-0.5">GitHub Repository / PR</p>
                     <a
                       href={log.githubLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs text-violet-400 hover:text-violet-300 font-mono flex items-center gap-1.5 underline bg-slate-900/60 p-2 rounded-lg border border-slate-800"
+                      className="text-xs text-violet-600 hover:text-violet-700 font-mono flex items-center gap-1.5 underline bg-white p-2 rounded-lg border border-slate-200"
                     >
                       <ExternalLink size={12} /> {log.githubLink}
                     </a>
@@ -721,7 +947,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
               </div>
             )}
 
-            <div className="pt-2 text-[11px] text-slate-500 flex justify-between border-t border-slate-800">
+            <div className="pt-2 text-[11px] text-slate-500 flex justify-between border-t border-slate-200">
               <span>Log Date: {log.logDate}</span>
               <span>Submitted: {log.submittedAt ? formatTime(log.submittedAt) : 'Today'}</span>
             </div>
@@ -729,8 +955,8 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex justify-end">
-          <button onClick={onClose} className="btn-ghost text-xs py-2 px-4 border border-slate-700 hover:bg-slate-800">
+        <div className="p-4 border-t border-slate-200 bg-white flex justify-end">
+          <button onClick={onClose} className="btn bg-white text-xs py-2 px-4 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm">
             Close
           </button>
         </div>
@@ -784,44 +1010,44 @@ const TeamDailyLogsPage = () => {
   }, [socket, fetchLogs]);
 
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
+    <div className="page-container space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Team Daily Logs</h1>
-          <p className="text-slate-400 text-xs mt-0.5">Click any employee card to view their complete daily report & shift details</p>
+          <h1 className="text-2xl font-bold text-slate-900">Team Daily Logs</h1>
+          <p className="text-slate-600 text-xs mt-0.5">Click any employee card to view their complete daily report & shift details</p>
         </div>
-        <input type="date" className="input w-auto" value={date} onChange={e => setDate(e.target.value)} />
+        <input type="date" className="input w-auto border-slate-200 bg-white text-slate-900 shadow-sm" value={date} onChange={e => setDate(e.target.value)} />
       </div>
-      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-400" size={28} /></div> : (
+      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-600" size={28} /></div> : (
         <div className="space-y-3">
           {logs.map(log => (
             <div
               key={log._id}
               onClick={() => setSelectedLog(log)}
-              className="card cursor-pointer hover:border-violet-500/60 hover:bg-slate-800/70 transition-all duration-200 group relative"
+              className="card cursor-pointer hover:border-violet-300 hover:bg-slate-50/80 transition-all duration-200 group relative border-slate-200 shadow-sm"
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <p className="text-white font-semibold group-hover:text-violet-300 transition-colors">{log.userId?.name}</p>
+                  <p className="text-slate-900 font-bold group-hover:text-violet-700 transition-colors">{log.userId?.name}</p>
                   {log.userId?.designation && (
                     <span className="text-[11px] text-slate-500">· {log.userId.designation}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20 text-xs font-bold font-mono">
-                    {log.hoursSpent}h
+                  <span className="px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-xs font-bold font-mono">
+                    {log.attendance?.actualWorkMinutes ? formatDuration(log.attendance.actualWorkMinutes) : (log.hoursSpent ? `${log.hoursSpent}h` : '—')}
                   </span>
-                  <ChevronRight size={16} className="text-slate-500 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all" />
+                  <ChevronRight size={16} className="text-slate-400 group-hover:text-violet-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </div>
-              {log.taskTitle && <p className="text-slate-300 text-xs font-medium">Task: {log.taskTitle}</p>}
-              {log.projectName && <p className="text-slate-400 text-xs mt-0.5">Project: {log.projectName}</p>}
-              {log.campaignName && <p className="text-slate-400 text-xs mt-0.5">Campaign: {log.campaignName}</p>}
-              {log.blockers && <p className="text-warning-400 text-xs mt-1">⚠ Blockers: {log.blockers}</p>}
+              {log.taskTitle && <p className="text-slate-800 text-xs font-medium">Task: {log.taskTitle}</p>}
+              {log.projectName && <p className="text-slate-600 text-xs mt-0.5">Project: {log.projectName}</p>}
+              {log.campaignName && <p className="text-slate-600 text-xs mt-0.5">Campaign: {log.campaignName}</p>}
+              {log.blockers && <p className="text-amber-700 text-xs mt-1">⚠ Blockers: {log.blockers}</p>}
 
-              <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+              <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
                 <span>{log.attendance?.checkInTime ? `Checked in: ${formatTime(log.attendance.checkInTime)}` : 'Logged today'}</span>
-                <span className="text-violet-400/80 group-hover:text-violet-300 font-medium flex items-center gap-1">
+                <span className="text-violet-600 group-hover:text-violet-700 font-medium flex items-center gap-1">
                   View Full Report & Breakdown →
                 </span>
               </div>
@@ -841,19 +1067,19 @@ const TeamDailyLogsPage = () => {
 };
 
 const PlaceholderPage = ({ title }) => (
-  <div className="p-6"><h1 className="text-2xl font-bold text-white">{title}</h1><p className="text-slate-400 mt-2">This section is available when the required manager permission is enabled by Admin.</p></div>
+  <div className="page-container"><h1 className="text-2xl font-bold text-slate-900">{title}</h1><p className="text-slate-600 mt-2">This section is available when the required manager permission is enabled by Admin.</p></div>
 );
 
 
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading, logout } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-900"><Loader2 className="animate-spin text-primary-400" size={40} /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><Loader2 className="animate-spin text-primary-600" size={40} /></div>;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'manager') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 space-y-4">
-        <p className="p-6 text-danger-400 text-lg">Access denied. Manager only.</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 space-y-4">
+        <p className="p-6 text-rose-600 text-lg font-semibold">Access denied. Manager only.</p>
         <button onClick={logout} className="btn-primary">Log Out / Switch Account</button>
       </div>
     );
@@ -863,7 +1089,7 @@ const ProtectedRoute = ({ children }) => {
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-900"><Loader2 className="animate-spin text-violet-400" size={40} /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><Loader2 className="animate-spin text-violet-600" size={40} /></div>;
 
   return (
     <Routes>
@@ -875,12 +1101,10 @@ function AppRoutes() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/team/members" element={<TeamMembersPage />} />
               <Route path="/team/attendance" element={<TeamAttendancePage />} />
+              <Route path="/team/overtime" element={<TeamOvertimePage />} />
               <Route path="/team/daily-logs" element={<TeamDailyLogsPage />} />
               <Route path="/team/leave-requests" element={<TeamLeaveRequestsPage />} />
-              <Route path="/team/task-history" element={<PlaceholderPage title="Team Task History" />} />
-              <Route path="/team/performance" element={<PlaceholderPage title="Performance Notes" />} />
               <Route path="/device-requests" element={<ManagerDeviceRequestsPage />} />
-              <Route path="/location-requests" element={<ManagerLocationRequestsPage />} />
               <Route path="/attendance-method" element={<AttendanceMethodPage />} />
               <Route path="/wifi-settings" element={<WifiSettingsPage />} />
               <Route path="/office-locations" element={<OfficeLocationsPage />} />

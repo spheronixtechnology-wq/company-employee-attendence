@@ -28,7 +28,7 @@ const login = async (req, res, next) => {
       /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
     );
 
-    const { token, user } = await authService.login({
+    const result = await authService.login({
       email,
       password,
       deviceFingerprint: deviceFingerprint || req.headers['x-device-fingerprint'] || null,
@@ -38,11 +38,20 @@ const login = async (req, res, next) => {
       userAgent,
     });
 
-    // Set JWT as httpOnly cookie with portal-specific name
-    const portalRole = req.headers['x-portal-role'] || 'employee';
-    res.cookie(`token_${portalRole}`, token, authService.getCookieOptions());
+    // If MFA is required for this role (e.g. manager), return the MFA challenge payload
+    if (result.mfaRequired) {
+      return success(
+        res,
+        result.mfaEnrolled ? 'MFA authentication code required' : 'MFA enrollment required',
+        result
+      );
+    }
 
-    return success(res, 'Login successful', { user });
+    // Set JWT as httpOnly cookie with portal-specific name
+    const portalRole = req.headers['x-portal-role'] || result.user?.role || 'employee';
+    res.cookie(`token_${portalRole}`, result.token, authService.getCookieOptions());
+
+    return success(res, 'Login successful', { user: result.user });
   } catch (err) {
     if (err.statusCode) {
       return res.status(err.statusCode).json({
@@ -196,4 +205,59 @@ const getMe = async (req, res, next) => {
   }
 };
 
-module.exports = { login, logout, getMe, requestDeviceAccess };
+/**
+ * POST /api/auth/mfa/setup-verify
+ * Manager verifies 6-digit OTP from Authenticator app to complete initial enrollment or re-enrollment.
+ */
+const mfaSetupVerify = async (req, res, next) => {
+  try {
+    const { tempToken, otp } = req.body;
+    const { token, user } = await authService.setupVerifyMfa({ tempToken, otp });
+
+    const portalRole = req.headers['x-portal-role'] || user.role || 'manager';
+    res.cookie(`token_${portalRole}`, token, authService.getCookieOptions());
+
+    return success(res, 'MFA setup verified and activated successfully', { user });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/auth/mfa/verify
+ * Manager verifies 6-digit OTP from Authenticator app on subsequent logins.
+ */
+const mfaVerify = async (req, res, next) => {
+  try {
+    const { tempToken, otp } = req.body;
+    const { token, user } = await authService.verifyMfa({ tempToken, otp });
+
+    const portalRole = req.headers['x-portal-role'] || user.role || 'manager';
+    res.cookie(`token_${portalRole}`, token, authService.getCookieOptions());
+
+    return success(res, 'MFA verified successfully', { user });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    next(err);
+  }
+};
+
+module.exports = {
+  login,
+  logout,
+  getMe,
+  requestDeviceAccess,
+  mfaSetupVerify,
+  mfaVerify,
+};

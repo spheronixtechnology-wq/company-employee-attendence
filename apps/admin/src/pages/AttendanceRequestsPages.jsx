@@ -91,16 +91,16 @@ export const DeviceRequestsPage = () => {
   };
 
   const typeStyles = {
-    register: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-    replacement: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-    temporary: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-    lost: 'bg-red-500/10 text-red-400 border-red-500/30',
+    register: 'bg-sky-50 text-sky-700 border-sky-200',
+    replacement: 'bg-purple-50 text-purple-700 border-purple-200',
+    temporary: 'bg-amber-50 text-amber-700 border-amber-200',
+    lost: 'bg-rose-50 text-rose-700 border-rose-200',
   };
 
   const statusStyles = {
-    pending: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-    approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-    rejected: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+    pending: 'bg-amber-50 text-amber-700 border-amber-200',
+    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    rejected: 'bg-rose-50 text-rose-700 border-rose-200',
   };
 
   // Search filter
@@ -120,18 +120,18 @@ export const DeviceRequestsPage = () => {
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <Smartphone className="text-primary-400" size={26} />
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+            <Smartphone className="text-primary-600" size={26} />
             Device Requests
           </h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+          <p className="text-slate-600 text-sm mt-0.5">
             Review, verify, and approve employee mobile devices for company attendance access.
           </p>
         </div>
         <button
           onClick={fetchRequests}
           disabled={loading}
-          className="btn-ghost flex items-center gap-2 self-start md:self-auto text-xs px-3.5 py-2 border border-slate-700 hover:border-slate-500 rounded-xl"
+          className="btn-ghost flex items-center gap-2 self-start md:self-auto text-xs px-3.5 py-2"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -141,7 +141,7 @@ export const DeviceRequestsPage = () => {
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Status Filter Tabs */}
-        <div className="flex gap-1.5 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700/60 overflow-x-auto">
+        <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 overflow-x-auto">
           {[
             { key: 'all', label: 'All', count: counts.all },
             { key: 'pending', label: 'Pending', count: counts.pending, alert: counts.pending > 0 },
@@ -153,8 +153,8 @@ export const DeviceRequestsPage = () => {
               onClick={() => setStatusFilter(tab.key)}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all whitespace-nowrap ${
                 statusFilter === tab.key
-                  ? 'bg-primary-500 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  ? 'bg-primary-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
               }`}
             >
               <span>{tab.label}</span>
@@ -163,8 +163,8 @@ export const DeviceRequestsPage = () => {
                   statusFilter === tab.key
                     ? 'bg-white/20 text-white'
                     : tab.alert
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : 'bg-slate-200 text-slate-700'
                 }`}
               >
                 {tab.count ?? 0}
@@ -181,7 +181,7 @@ export const DeviceRequestsPage = () => {
             placeholder="Search employee, device, IP..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input pl-9 pr-3 py-1.5 text-xs w-full bg-slate-900/80 border-slate-700/60 rounded-xl"
+            className="input pl-9 pr-3 py-1.5 text-xs w-full bg-white border-slate-200 rounded-xl text-slate-900"
           />
         </div>
       </div>
@@ -191,8 +191,8 @@ export const DeviceRequestsPage = () => {
         <div
           className={`p-3.5 rounded-xl border text-sm font-medium flex items-center justify-between ${
             message.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-red-500/10 border-red-500/30 text-red-400'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
           }`}
         >
           <span>{message.text}</span>
@@ -204,10 +204,10 @@ export const DeviceRequestsPage = () => {
       {loading && requests.length === 0 ? (
         <LoadingScreen />
       ) : filteredRequests.length === 0 ? (
-        <div className="card text-center py-16 border border-slate-700/50 bg-slate-800/30">
-          <Smartphone size={38} className="mx-auto mb-3 text-slate-600 opacity-60" />
-          <h3 className="text-white font-semibold text-base mb-1">No Device Requests Found</h3>
-          <p className="text-slate-400 text-xs max-w-md mx-auto">
+        <div className="card text-center py-16 border border-slate-200 bg-white">
+          <Smartphone size={38} className="mx-auto mb-3 text-slate-400" />
+          <h3 className="text-slate-900 font-semibold text-base mb-1">No Device Requests Found</h3>
+          <p className="text-slate-600 text-xs max-w-md mx-auto">
             {search.trim()
               ? `No requests match "${search}". Try clearing your search.`
               : `There are currently no ${statusFilter} device requests.`}
@@ -225,25 +225,25 @@ export const DeviceRequestsPage = () => {
             return (
               <div
                 key={req._id}
-                className="card border border-slate-700/60 bg-slate-800/80 hover:border-slate-600 transition-all flex flex-col justify-between"
+                className="card border border-slate-200 bg-white hover:border-slate-300 shadow-sm transition-all flex flex-col justify-between"
               >
                 {/* Card Top */}
                 <div className="space-y-3.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600/50 flex items-center justify-center text-white font-bold text-sm shadow-inner flex-shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-800 font-bold text-sm shadow-sm flex-shrink-0">
                         {empName[0]?.toUpperCase() || 'U'}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-white text-sm truncate">{empName}</h3>
+                          <h3 className="font-semibold text-slate-900 text-sm truncate">{empName}</h3>
                           {teamName && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-700/60 text-slate-300 border border-slate-600/40">
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
                               {teamName}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 truncate">{empEmail}</p>
+                        <p className="text-xs text-slate-500 truncate">{empEmail}</p>
                       </div>
                     </div>
 
@@ -255,40 +255,40 @@ export const DeviceRequestsPage = () => {
                   </div>
 
                   {/* Device Info */}
-                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/40 space-y-2">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400 flex items-center gap-1.5">
-                        <Smartphone size={13} className="text-primary-400" /> Device Model
+                      <span className="text-slate-600 flex items-center gap-1.5">
+                        <Smartphone size={13} className="text-primary-600" /> Device Model
                       </span>
-                      <span className="text-white font-medium truncate max-w-[180px]">
+                      <span className="text-slate-900 font-medium truncate max-w-[180px]">
                         {req.requestedDeviceLabel || 'Unknown Device'}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Request Type</span>
+                      <span className="text-slate-600">Request Type</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-medium border capitalize ${typeStyles[req.requestType] || typeStyles.replacement}`}>
                         {req.requestType}
                       </span>
                     </div>
 
                     {req.reason && (
-                      <div className="text-xs pt-1 border-t border-slate-800/80">
-                        <span className="text-slate-400 block mb-0.5 text-[11px]">Reason:</span>
-                        <p className="text-slate-200 italic line-clamp-2">"{req.reason}"</p>
+                      <div className="text-xs pt-1 border-t border-slate-200">
+                        <span className="text-slate-500 block mb-0.5 text-[11px]">Reason:</span>
+                        <p className="text-slate-700 italic line-clamp-2">"{req.reason}"</p>
                       </div>
                     )}
                   </div>
 
                   {/* Expandable Technical Details */}
                   {isExp && (
-                    <div className="pt-2 border-t border-slate-700/50 space-y-2 text-xs animate-in fade-in duration-150">
+                    <div className="pt-2 border-t border-slate-200 space-y-2 text-xs animate-in fade-in duration-150">
                       {req.ipAddress && (
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <Globe size={12} className="text-blue-400" /> Request IP
+                          <span className="text-slate-600 flex items-center gap-1">
+                            <Globe size={12} className="text-sky-600" /> Request IP
                           </span>
-                          <span className="font-mono text-[11px] bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                          <span className="font-mono text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-800">
                             {req.ipAddress}
                           </span>
                         </div>
@@ -296,10 +296,10 @@ export const DeviceRequestsPage = () => {
 
                       {req.deviceFingerprint && (
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <Shield size={12} className="text-emerald-400" /> Fingerprint
+                          <span className="text-slate-600 flex items-center gap-1">
+                            <Shield size={12} className="text-emerald-600" /> Fingerprint
                           </span>
-                          <span className="font-mono text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-emerald-300">
+                          <span className="font-mono text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-emerald-700">
                             {req.deviceFingerprint.slice(0, 14)}...
                           </span>
                         </div>
@@ -307,19 +307,19 @@ export const DeviceRequestsPage = () => {
 
                       {req.requestedUntil && (
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <Clock size={12} className="text-amber-400" /> Access Until
+                          <span className="text-slate-600 flex items-center gap-1">
+                            <Clock size={12} className="text-amber-600" /> Access Until
                           </span>
-                          <span className="text-slate-200">
+                          <span className="text-slate-800 font-medium">
                             {new Date(req.requestedUntil).toLocaleDateString('en-IN')}
                           </span>
                         </div>
                       )}
 
                       {req.decisionNote && (
-                        <div className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-700/40">
-                          <span className="text-[11px] text-slate-400 block mb-0.5">Decision Note:</span>
-                          <p className="text-slate-300">{req.decisionNote}</p>
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                          <span className="text-[11px] text-slate-500 block mb-0.5">Decision Note:</span>
+                          <p className="text-slate-700">{req.decisionNote}</p>
                         </div>
                       )}
 
@@ -333,7 +333,7 @@ export const DeviceRequestsPage = () => {
                   {/* Toggle Expand */}
                   <button
                     onClick={() => setExpanded(isExp ? null : req._id)}
-                    className="w-full flex items-center justify-center gap-1 text-[11px] text-slate-400 hover:text-white pt-1 transition-colors"
+                    className="w-full flex items-center justify-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 pt-1 transition-colors"
                   >
                     {isExp ? (
                       <>Less Details <ChevronUp size={12} /></>
@@ -345,23 +345,23 @@ export const DeviceRequestsPage = () => {
 
                 {/* Card Actions (for Pending Requests) */}
                 {isPending && (
-                  <div className="mt-4 pt-3.5 border-t border-slate-700/60 space-y-2.5">
+                  <div className="mt-4 pt-3.5 border-t border-slate-200 space-y-2.5">
                     <input
                       type="text"
                       placeholder="Add note (optional)..."
                       value={decisionNotes[req._id] || ''}
                       onChange={(e) => setDecisionNotes((prev) => ({ ...prev, [req._id]: e.target.value }))}
-                      className="input w-full text-xs py-1.5 px-2.5 bg-slate-900/70 border-slate-700/60 rounded-lg"
+                      className="input w-full text-xs py-1.5 px-2.5 bg-white border-slate-200 rounded-lg text-slate-900"
                     />
 
                     {req.requestType === 'temporary' && (
                       <div>
-                        <label className="text-[10px] text-slate-400 mb-0.5 block">Approve Access Until</label>
+                        <label className="text-[10px] text-slate-600 mb-0.5 block">Approve Access Until</label>
                         <input
                           type="date"
                           value={approvedUntils[req._id] || ''}
                           onChange={(e) => setApprovedUntils((prev) => ({ ...prev, [req._id]: e.target.value }))}
-                          className="input w-full text-xs py-1 px-2 bg-slate-900/70 border-slate-700/60 rounded-lg"
+                          className="input w-full text-xs py-1 px-2 bg-white border-slate-200 rounded-lg text-slate-900"
                         />
                       </div>
                     )}
@@ -370,7 +370,7 @@ export const DeviceRequestsPage = () => {
                       <button
                         onClick={() => handleDecision(req._id, 'approve')}
                         disabled={!!processing}
-                        className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
                       >
                         {processing === req._id + 'approve' ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -383,7 +383,7 @@ export const DeviceRequestsPage = () => {
                       <button
                         onClick={() => handleDecision(req._id, 'reject')}
                         disabled={!!processing}
-                        className="flex-1 py-1.5 px-3 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
                       >
                         {processing === req._id + 'reject' ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -528,22 +528,22 @@ export const OfficeLocationsPage = () => {
       </div>
 
       {showAdd && (
-        <div className="card p-6 bg-slate-800/80 border-primary-500/30 shadow-lg animate-fade-in mb-6">
-          <h3 className="text-lg font-bold text-white mb-4">Add New Office Location</h3>
+        <div className="card p-6 bg-white border border-slate-200 shadow-sm animate-fade-in mb-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-4">Add New Office Location</h3>
           
-          <div className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <p className="text-white font-medium">Capture Coordinates</p>
-              <p className="text-sm text-slate-400">Stand at the center of the office to auto-fill Lat/Lng.</p>
+              <p className="text-slate-900 font-medium">Capture Coordinates</p>
+              <p className="text-sm text-slate-600">Stand at the center of the office to auto-fill Lat/Lng.</p>
             </div>
-            <button onClick={autoDetect} disabled={detecting} className="btn-secondary flex items-center gap-2 whitespace-nowrap">
+            <button onClick={autoDetect} disabled={detecting} className="btn-ghost flex items-center gap-2 whitespace-nowrap">
               {detecting ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
               {detecting ? 'Detecting...' : '📍 Use Current Location'}
             </button>
           </div>
 
           {gpsAccuracy !== null && (
-            <div className={`mb-6 p-3 rounded-xl border flex items-start gap-3 text-sm ${gpsAccuracy > 50 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'}`}>
+            <div className={`mb-6 p-3 rounded-xl border flex items-start gap-3 text-sm ${gpsAccuracy > 50 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
               <CheckCircle size={18} className="mt-0.5 flex-shrink-0" />
               <div>
                 <strong>±{Math.round(gpsAccuracy)}m GPS Accuracy.</strong>
@@ -571,9 +571,9 @@ export const OfficeLocationsPage = () => {
             </div>
           </div>
 
-          <div className="border-t border-slate-700/60 pt-4 mb-4 space-y-4">
-            <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Wifi size={16} className="text-primary-400" /> Authorized Office Network Configuration
+          <div className="border-t border-slate-200 pt-4 mb-4 space-y-4">
+            <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <Wifi size={16} className="text-primary-600" /> Authorized Office Network Configuration
             </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -585,7 +585,7 @@ export const OfficeLocationsPage = () => {
                   value={form.wifiSsid}
                   onChange={e => setForm({...form, wifiSsid: e.target.value})}
                 />
-                <p className="text-[11px] text-slate-400 mt-1">Display guidance label telling employees which network to join.</p>
+                <p className="text-[11px] text-slate-500 mt-1">Display guidance label telling employees which network to join.</p>
               </div>
 
               <div>
@@ -596,22 +596,22 @@ export const OfficeLocationsPage = () => {
                   value={form.allowedIps}
                   onChange={e => setForm({...form, allowedIps: e.target.value})}
                 />
-                <p className="text-[11px] text-slate-400 mt-1">Authorized office router public egress IP(s) or CIDRs (comma-separated).</p>
+                <p className="text-[11px] text-slate-500 mt-1">Authorized office router public egress IP(s) or CIDRs (comma-separated).</p>
               </div>
             </div>
 
-            <div className="p-3.5 bg-slate-900/60 rounded-xl border border-slate-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Wifi size={16} className="text-primary-400" />
-                  <span className="text-sm font-semibold text-white">Auto-Detect Office Public IP</span>
+                  <Wifi size={16} className="text-primary-600" />
+                  <span className="text-sm font-semibold text-slate-900">Auto-Detect Office Public IP</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-600 mt-0.5">
                   Captures the public egress IP of your current internet connection and appends it to Allowed IPs.
                 </p>
                 {detectedIpInfo && (
-                  <p className="text-xs text-emerald-400 font-medium mt-1">
-                    ✅ Detected Public IP: <span className="font-mono text-white">{detectedIpInfo}</span>
+                  <p className="text-xs text-emerald-700 font-medium mt-1">
+                    ✅ Detected Public IP: <span className="font-mono text-slate-900">{detectedIpInfo}</span>
                   </p>
                 )}
               </div>
@@ -619,15 +619,15 @@ export const OfficeLocationsPage = () => {
                 type="button"
                 onClick={handleAutoDetectIp}
                 disabled={detectingIp}
-                className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap"
+                className="btn-ghost text-xs flex items-center gap-1.5 whitespace-nowrap"
               >
                 {detectingIp ? <Loader2 size={14} className="animate-spin" /> : <Wifi size={14} />}
                 {detectingIp ? 'Detecting...' : 'Detect Current IP'}
               </button>
             </div>
 
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
-              <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-amber-400" />
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
               <span>
                 <strong>Warning:</strong> Make sure you are connected to the official office network before using auto-detect. If configuring remotely from home, enter your office static public IP manually.
               </span>
@@ -647,32 +647,32 @@ export const OfficeLocationsPage = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {locations.length === 0 ? <EmptyState msg="No office locations configured." /> : 
           locations.map(loc => (
-            <div key={loc._id} className="card p-6 border border-slate-700/50 bg-gradient-to-br from-slate-800/80 to-slate-900/80 shadow-xl backdrop-blur-sm hover:border-primary-500/30 transition-colors flex flex-col justify-between">
+            <div key={loc._id} className="card p-6 border border-slate-200 bg-white shadow-sm hover:border-slate-300 transition-colors flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-primary-500/20 text-primary-400">
+                    <div className="p-3 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
                       <MapPin size={24} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-lg">{loc.officeName}</h3>
-                      <span className={`text-xs px-2 py-1 rounded-full ${loc.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                      <h3 className="font-bold text-slate-900 text-lg">{loc.officeName}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${loc.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
                         {loc.status.toUpperCase()}
                       </span>
                     </div>
                   </div>
-                  <button onClick={() => handleDelete(loc._id)} className="text-slate-500 hover:text-red-400 p-2 transition-colors" title="Delete Location">
+                  <button onClick={() => handleDelete(loc._id)} className="text-slate-400 hover:text-rose-600 p-2 transition-colors" title="Delete Location">
                     <XCircle size={20} />
                   </button>
                 </div>
-                <div className="space-y-2 text-sm text-slate-400 bg-slate-900/50 p-3 rounded-lg">
-                  <div className="flex justify-between"><span>Latitude:</span> <span className="text-white font-mono">{loc.latitude}</span></div>
-                  <div className="flex justify-between"><span>Longitude:</span> <span className="text-white font-mono">{loc.longitude}</span></div>
-                  <div className="flex justify-between"><span>Radius:</span> <span className="text-white">{loc.radiusMeters}m</span></div>
-                  <div className="flex justify-between border-t border-slate-800 pt-1.5"><span>WiFi SSID:</span> <span className="text-primary-300 font-medium">{loc.wifiSsid || 'Not set'}</span></div>
-                  <div className="flex flex-col border-t border-slate-800 pt-1.5">
+                <div className="space-y-2 text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <div className="flex justify-between"><span>Latitude:</span> <span className="text-slate-900 font-mono">{loc.latitude}</span></div>
+                  <div className="flex justify-between"><span>Longitude:</span> <span className="text-slate-900 font-mono">{loc.longitude}</span></div>
+                  <div className="flex justify-between"><span>Radius:</span> <span className="text-slate-900">{loc.radiusMeters}m</span></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1.5"><span>WiFi SSID:</span> <span className="text-sky-700 font-medium">{loc.wifiSsid || 'Not set'}</span></div>
+                  <div className="flex flex-col border-t border-slate-200 pt-1.5">
                     <span className="text-xs text-slate-500 mb-0.5">Allowed Public IPs:</span>
-                    <span className="text-xs font-mono text-emerald-400 break-all">
+                    <span className="text-xs font-mono text-emerald-700 break-all">
                       {loc.allowedIps && loc.allowedIps.length > 0 ? loc.allowedIps.join(', ') : 'None configured'}
                     </span>
                   </div>
@@ -723,7 +723,7 @@ export const LocationRequestsPage = () => {
           requests.map(req => (
             <RequestCard 
               key={req._id}
-              icon={<MapPin className="text-emerald-400" size={24} />}
+              icon={<MapPin className="text-emerald-600" size={24} />}
               title={req.userId?.name}
               subtitle={req.userId?.email}
               details={[
@@ -744,32 +744,32 @@ export const LocationRequestsPage = () => {
 
 const Header = ({ title, desc }) => (
   <div>
-    <h1 className="text-3xl font-extrabold text-white mb-2">{title}</h1>
-    <p className="text-slate-400">{desc}</p>
+    <h1 className="text-3xl font-extrabold text-slate-900 mb-2">{title}</h1>
+    <p className="text-slate-600 text-sm">{desc}</p>
   </div>
 );
 
 const LoadingScreen = () => (
   <div className="flex items-center justify-center min-h-[500px]">
-    <Loader2 className="animate-spin text-primary-400" size={40} />
+    <Loader2 className="animate-spin text-primary-600" size={40} />
   </div>
 );
 
 const EmptyState = ({ msg }) => (
-  <div className="col-span-full card text-center p-8 border border-slate-700/50 bg-slate-800/20 backdrop-blur-md">
+  <div className="col-span-full card text-center p-8 border border-slate-200 bg-white">
     <p className="text-slate-500">{msg}</p>
   </div>
 );
 
 const RequestCard = ({ icon, title, subtitle, details, onApprove, onReject }) => (
-  <div className="card p-5 border border-slate-700/50 bg-slate-800/80 shadow-lg hover:shadow-xl transition-all hover:border-slate-600">
+  <div className="card p-5 border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all hover:border-slate-300">
     <div className="flex items-center gap-4 mb-5">
-      <div className="p-3 bg-slate-900/80 rounded-xl shadow-inner border border-slate-700/50">
+      <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 text-slate-700">
         {icon}
       </div>
       <div>
-        <h3 className="font-bold text-white text-lg leading-tight">{title}</h3>
-        <p className="text-xs text-slate-400">{subtitle}</p>
+        <h3 className="font-bold text-slate-900 text-lg leading-tight">{title}</h3>
+        <p className="text-xs text-slate-500">{subtitle}</p>
       </div>
     </div>
     
@@ -777,16 +777,16 @@ const RequestCard = ({ icon, title, subtitle, details, onApprove, onReject }) =>
       {details.map((d, i) => (
         <div key={i} className="flex justify-between items-center text-sm">
           <span className="text-slate-500">{d.label}:</span>
-          <span className="text-slate-300 font-medium capitalize">{d.value}</span>
+          <span className="text-slate-800 font-medium capitalize">{d.value}</span>
         </div>
       ))}
     </div>
 
     <div className="flex gap-3">
-      <button onClick={onApprove} className="flex-1 py-2 px-4 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition-colors flex items-center justify-center gap-2 font-semibold text-sm border border-emerald-500/20">
+      <button onClick={onApprove} className="flex-1 py-2 px-4 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2 font-semibold text-sm border border-emerald-200">
         <CheckCircle size={16} /> Approve
       </button>
-      <button onClick={onReject} className="flex-1 py-2 px-4 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-colors flex items-center justify-center gap-2 font-semibold text-sm border border-rose-500/20">
+      <button onClick={onReject} className="flex-1 py-2 px-4 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors flex items-center justify-center gap-2 font-semibold text-sm border border-rose-200">
         <XCircle size={16} /> Reject
       </button>
     </div>

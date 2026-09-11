@@ -15,6 +15,9 @@ const ManagerPermission = require('../models/ManagerPermission');
 const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const LocationRequest = require('../models/LocationRequest');
+const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
+const leaveService = require('../services/leave.service');
+const employeeProfileService = require('../services/employeeProfile.service');
 const { writeAuditLog } = require('../services/audit.service');
 const { getClientIp, getActiveLocalInterfaces } = require('../utils/ipUtils');
 const { formatDeviceLabel } = require('../utils/deviceUtils');
@@ -28,7 +31,7 @@ const getStatus = (req, res) => {
 const getDashboard = async (req, res) => {
   try {
     const validUserIds = await User.distinct('_id');
-    const totalEmployees = await User.countDocuments({ role: 'employee', isActive: true });
+    const totalStaff = await User.countDocuments({ role: { $in: ['employee', 'manager'] }, isActive: true });
     const todayStr = getTodayDateString();
 
     const [
@@ -47,11 +50,12 @@ const getDashboard = async (req, res) => {
       Attendance.countDocuments({ date: todayStr, status: 'on_leave' }),
     ]);
 
-    const absentToday = Math.max(0, totalEmployees - checkedInToday - onLeaveToday);
+    const absentToday = Math.max(0, totalStaff - checkedInToday - onLeaveToday);
 
     return success(res, 'Dashboard data retrieved', {
       activeAttendanceMethod: activeMethodDoc?.method || 'qr_code',
-      totalEmployees,
+      totalStaff,
+      totalEmployees: totalStaff,
       checkedInToday,
       absentToday,
       onLeaveToday,
@@ -68,14 +72,18 @@ const getDashboard = async (req, res) => {
 
 const getEmployees = async (req, res) => {
   try {
-    const { search, role } = req.query;
+    const { search, role, teamId } = req.query;
     const query = {};
     
     // Filter by role if specified, otherwise return all employees and managers
-    if (role) {
+    if (role && role !== 'all') {
       query.role = role;
     } else {
       query.role = { $in: ['employee', 'manager'] };
+    }
+
+    if (teamId && teamId !== 'all') {
+      query.teamId = teamId;
     }
 
     if (search) {
@@ -85,9 +93,55 @@ const getEmployees = async (req, res) => {
       ];
     }
     
-    const employees = await User.find(query).populate('teamId', 'name');
+    const employees = await User.find(query).populate('teamId', 'name description').sort({ name: 1 });
+    const today = getTodayDateString();
+    const empIds = employees.map(e => e._id);
+
+    const [todayAttendances, todayLeaves] = await Promise.all([
+      Attendance.find({ userId: { $in: empIds }, date: today }).lean(),
+      LeaveRequest.find({
+        userId: { $in: empIds },
+        status: 'approved',
+        startDate: { $lte: today },
+        endDate: { $gte: today },
+      }).lean(),
+    ]);
+
+    const attMap = new Map(todayAttendances.map(a => [a.userId.toString(), a]));
+    const leaveSet = new Set(todayLeaves.map(l => l.userId.toString()));
+
+    const enrichedEmployees = employees.map(e => {
+      const safe = e.toSafeObject();
+      const att = attMap.get(e._id.toString());
+      const onLeave = leaveSet.has(e._id.toString());
+
+      let currentStatus = 'not_checked_in';
+      if (onLeave) {
+        currentStatus = 'on_leave';
+      } else if (att) {
+        if (att.checkOutTime) {
+          currentStatus = 'checked_out';
+        } else if (att.activeBreak?.startedAt) {
+          currentStatus = 'on_break';
+        } else if (att.checkInTime) {
+          currentStatus = 'working';
+        }
+      }
+
+      return {
+        ...safe,
+        currentStatus,
+        todayAttendance: att ? {
+          checkInTime: att.checkInTime,
+          checkOutTime: att.checkOutTime,
+          checkInMethod: att.checkInMethod || 'qr_code',
+          status: att.status,
+          totalBreakMinutes: att.completedBreakMinutes || att.totalBreakMinutes || 0,
+        } : null,
+      };
+    });
     
-    return success(res, 'Employees fetched successfully', { employees: employees.map(e => e.toSafeObject()) });
+    return success(res, 'Employees fetched successfully', { employees: enrichedEmployees });
   } catch (error) {
     console.error('Error fetching employees:', error);
     return badRequest(res, 'Failed to fetch employees');
@@ -615,7 +669,7 @@ const switchAttendanceMethod = async (req, res) => {
 
 const getManagerPermissions = async (req, res) => {
   try {
-    const managers = await User.find({ role: 'manager' }).select('name email role teamId').lean();
+    const managers = await User.find({ role: 'manager' }).select('name email role teamId mfaEnabled').lean();
     const permissions = await ManagerPermission.find({
       userId: { $in: managers.map(m => m._id) },
     }).lean();
@@ -637,6 +691,7 @@ const getManagerPermissions = async (req, res) => {
       name: m.name,
       email: m.email,
       role: m.role,
+      mfaEnabled: !!m.mfaEnabled,
       permissions: {
         ...defaultPerms,
         ...(permMap[m._id.toString()] || {}),
@@ -687,6 +742,267 @@ const updateManagerPermission = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/attendance
+ * Returns company-wide attendance records for a given date, with optional team filter.
+ */
+const getAttendance = async (req, res) => {
+  try {
+    const date = req.query.date || getTodayDateString();
+    const query = { role: { $in: ['employee', 'manager'] }, isActive: true };
+    if (req.query.role && req.query.role !== 'all') {
+      query.role = req.query.role;
+    }
+    if (req.query.teamId && req.query.teamId !== 'all') {
+      query.teamId = req.query.teamId;
+    }
+
+    const [members, teams] = await Promise.all([
+      User.find(query)
+        .select('name designation email avatarUrl phone teamId role')
+        .populate('teamId', 'name')
+        .sort({ name: 1 })
+        .lean(),
+      Team.find({ isActive: true }).select('name').sort({ name: 1 }).lean(),
+    ]);
+
+    const memberIds = members.map((m) => m._id);
+    const [attendanceRecords, manualRequests] = await Promise.all([
+      Attendance.find({ userId: { $in: memberIds }, date })
+        .populate('userId', 'name designation email avatarUrl phone teamId role')
+        .lean(),
+      ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
+    ]);
+
+    const manualRequestMap = new Map();
+    for (const mr of manualRequests) {
+      if (mr.userId) {
+        manualRequestMap.set(mr.userId.toString(), mr);
+      }
+    }
+
+    const attendanceMap = new Map();
+    for (const record of attendanceRecords) {
+      if (record.userId?._id) {
+        attendanceMap.set(record.userId._id.toString(), record);
+      }
+    }
+
+    const fullAttendance = members.map((member) => {
+      const existing = attendanceMap.get(member._id.toString());
+      const manualReq = manualRequestMap.get(member._id.toString()) || null;
+
+      if (existing) {
+        return {
+          ...existing,
+          manualRequest: manualReq,
+        };
+      }
+      return {
+        _id: `roster-${member._id}`,
+        userId: member,
+        date,
+        checkInTime: null,
+        checkOutTime: null,
+        totalWorkMinutes: 0,
+        totalBreakMinutes: 0,
+        status: manualReq && manualReq.status === 'pending' ? 'manual_pending' : 'not_checked_in',
+        breaks: [],
+        manualRequest: manualReq,
+      };
+    });
+
+    return success(res, 'Fetched attendance records', {
+      attendance: fullAttendance,
+      teams,
+    });
+  } catch (error) {
+    console.error('admin getAttendance error:', error);
+    return badRequest(res, 'Failed to fetch attendance records');
+  }
+};
+
+/**
+ * GET /api/admin/leave-requests
+ * Returns all company leave requests with optional status and team filters.
+ */
+const getLeaveRequests = async (req, res) => {
+  try {
+    const status = req.query.status || 'pending';
+    const baseQuery = {};
+
+    if (req.query.teamId && req.query.teamId !== 'all') {
+      const teamUsers = await User.find({ teamId: req.query.teamId }).select('_id');
+      baseQuery.userId = { $in: teamUsers.map((u) => u._id) };
+    }
+
+    const query = { ...baseQuery };
+    if (status !== 'all') {
+      query.status = status;
+    }
+
+    const [requests, teams, pendingCount, approvedCount, rejectedCount, totalCount] = await Promise.all([
+      LeaveRequest.find(query)
+        .populate({
+          path: 'userId',
+          select: 'name email designation avatarUrl teamId',
+          populate: { path: 'teamId', select: 'name' },
+        })
+        .populate('leaveTypeId', 'name code')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Team.find({ isActive: true }).select('name').sort({ name: 1 }).lean(),
+      LeaveRequest.countDocuments({ ...baseQuery, status: 'pending' }),
+      LeaveRequest.countDocuments({ ...baseQuery, status: 'approved' }),
+      LeaveRequest.countDocuments({ ...baseQuery, status: 'rejected' }),
+      LeaveRequest.countDocuments(baseQuery),
+    ]);
+
+    const counts = {
+      total: totalCount,
+      pending: pendingCount,
+      approved: approvedCount,
+      rejected: rejectedCount,
+    };
+
+    return success(res, 'Fetched leave requests', { requests, teams, counts });
+  } catch (error) {
+    console.error('admin getLeaveRequests error:', error);
+    return badRequest(res, 'Failed to fetch leave requests');
+  }
+};
+
+/**
+ * POST /api/admin/leave/:id/decision
+ * Admin approves or rejects a leave request.
+ */
+const handleLeaveDecision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, decisionNote } = req.body;
+
+    if (!['approved', 'rejected'].includes(decision)) {
+      return badRequest(res, 'Decision must be approved or rejected');
+    }
+
+    const leave = await LeaveRequest.findById(id);
+    if (!leave) return badRequest(res, 'Leave request not found');
+
+    const updatedLeave = await leaveService.makeLeaveDecision({
+      leaveId: id,
+      decidedBy: req.user,
+      decision,
+      decisionNote,
+    });
+
+    const socketPayload = {
+      leaveId: id,
+      decision,
+      decisionNote,
+      leave: updatedLeave,
+    };
+
+    emitToUser(leave.userId, 'leave:request_resolved', socketPayload);
+    emitToAdmins('leave:request_resolved', socketPayload);
+    emitToManagers('leave:request_resolved', socketPayload);
+
+    return success(res, `Leave request ${decision}`, { leave: updatedLeave });
+  } catch (error) {
+    console.error('admin handleLeaveDecision error:', error);
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      message: error.message || 'Failed to handle leave decision',
+    });
+  }
+};
+
+/**
+ * POST /api/admin/managers/:id/reset-mfa
+ * Admin resets a manager's MFA configuration.
+ * The old MFA secret is permanently invalidated and session tokens are revoked.
+ * On next login, the manager will receive a brand new secret and QR code.
+ */
+const resetManagerMfa = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const manager = await User.findById(id).select('+mfaSecret +mfaPendingSecret');
+    if (!manager || manager.role !== 'manager') {
+      return badRequest(res, 'Manager not found.');
+    }
+
+    // Invalidate existing MFA configuration & secrets completely
+    manager.mfaEnabled = false;
+    manager.mfaSecret = null;
+    manager.mfaPendingSecret = null;
+    manager.mfaPendingCreatedAt = null;
+    manager.tokenVersion = (manager.tokenVersion || 0) + 1; // Invalidate active session tokens
+    await manager.save();
+
+    console.log(`[MFA Reset] Admin ${req.user.name} (${req.user._id}) reset MFA for manager ${manager.name} (${manager._id})`);
+
+    return success(res, `MFA for ${manager.name} has been reset. The previous MFA secret is invalidated and they will be prompted to scan a fresh QR code upon next login.`);
+  } catch (error) {
+    console.error('resetManagerMfa error:', error);
+    return badRequest(res, error.message || 'Failed to reset manager MFA');
+  }
+};
+
+/**
+ * GET /api/admin/employees/:id/profile
+ * Admin 360° employee profile view.
+ */
+const getEmployeeProfile = async (req, res) => {
+  try {
+    const profile = await employeeProfileService.getEmployeeProfile(req.params.id, req.query);
+    if (!profile) {
+      return badRequest(res, 'Employee not found');
+    }
+    return success(res, 'Employee profile fetched successfully', profile);
+  } catch (err) {
+    console.error('admin getEmployeeProfile error:', err);
+    return badRequest(res, 'Failed to fetch employee profile');
+  }
+};
+
+/**
+ * GET /api/admin/employees/:id/attendance
+ */
+const getEmployeeAttendanceHistory = async (req, res) => {
+  try {
+    const result = await employeeProfileService.getPaginatedAttendance(req.params.id, req.query);
+    return success(res, 'Attendance history fetched successfully', result);
+  } catch (err) {
+    console.error('admin getEmployeeAttendanceHistory error:', err);
+    return badRequest(res, 'Failed to fetch attendance history');
+  }
+};
+
+/**
+ * GET /api/admin/employees/:id/daily-logs
+ */
+const getEmployeeDailyLogs = async (req, res) => {
+  try {
+    const result = await employeeProfileService.getPaginatedDailyLogs(req.params.id, req.query);
+    return success(res, 'Daily logs fetched successfully', result);
+  } catch (err) {
+    console.error('admin getEmployeeDailyLogs error:', err);
+    return badRequest(res, 'Failed to fetch daily logs');
+  }
+};
+
+/**
+ * GET /api/admin/employees/:id/overtime
+ */
+const getEmployeeOvertimeHistory = async (req, res) => {
+  try {
+    const result = await employeeProfileService.getPaginatedOvertime(req.params.id, req.query);
+    return success(res, 'Overtime history fetched successfully', result);
+  } catch (err) {
+    console.error('admin getEmployeeOvertimeHistory error:', err);
+    return badRequest(res, 'Failed to fetch overtime history');
+  }
+};
+
 module.exports = { 
   getStatus, 
   getDashboard, 
@@ -707,4 +1023,12 @@ module.exports = {
   getCurrentIp,
   getManagerPermissions,
   updateManagerPermission,
+  getAttendance,
+  getLeaveRequests,
+  handleLeaveDecision,
+  resetManagerMfa,
+  getEmployeeProfile,
+  getEmployeeAttendanceHistory,
+  getEmployeeDailyLogs,
+  getEmployeeOvertimeHistory,
 };

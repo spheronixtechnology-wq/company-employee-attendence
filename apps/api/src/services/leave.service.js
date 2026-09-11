@@ -6,7 +6,7 @@ const { writeAuditLog } = require('./audit.service');
 const { createNotification } = require('./notification.service');
 const { countDaysBetween, getCurrentYear } = require('../utils/dateUtils');
 const { AUDIT_ACTIONS } = require('../../../../packages/shared/auditActions');
-const { emitToTeam, emitToManagers } = require('../socket');
+const { emitToTeam, emitToManagers, emitToAdmins } = require('../socket');
 
 /**
  * Employee applies for leave.
@@ -89,6 +89,7 @@ const applyLeave = async (paramsOrUserId, maybeLeaveData) => {
     emitToTeam(user.teamId._id, 'leave:request_created', { request: populated || request });
   }
   emitToManagers('leave:request_created', { request: populated || request });
+  emitToAdmins('leave:request_created', { request: populated || request });
 
   return request;
 };

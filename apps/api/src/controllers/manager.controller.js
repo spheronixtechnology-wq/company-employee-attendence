@@ -14,6 +14,7 @@ const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
 
 const leaveService = require('../services/leave.service');
+const employeeProfileService = require('../services/employeeProfile.service');
 const { writeAuditLog } = require('../services/audit.service');
 const { createNotification } = require('../services/notification.service');
 const { AUDIT_ACTIONS } = require('../../../../packages/shared/auditActions');
@@ -350,10 +351,24 @@ const getTeamDailyLogs = async (req, res) => {
       if (a.userId) attMap.set(a.userId.toString(), a);
     }
 
-    const enrichedLogs = logs.map(log => ({
-      ...log,
-      attendance: log.userId?._id ? attMap.get(log.userId._id.toString()) || null : null,
-    }));
+    const enrichedLogs = logs.map(log => {
+      const rawAtt = log.userId?._id ? attMap.get(log.userId._id.toString()) || null : null;
+      const att = rawAtt ? employeeProfileService.enrichAttendanceRecord(rawAtt) : null;
+
+      let hoursSpent = log.hoursSpent;
+      if (att) {
+        const netMins = att.actualWorkMinutes ?? (att.totalDurationMinutes ? Math.max(0, att.totalDurationMinutes - (att.totalBreakMinutes || 0)) : null);
+        if (netMins !== null && netMins !== undefined && netMins > 0) {
+          hoursSpent = Math.round((netMins / 60) * 10) / 10;
+        }
+      }
+
+      return {
+        ...log,
+        hoursSpent,
+        attendance: att,
+      };
+    });
 
     return success(res, 'Fetched daily logs', { logs: enrichedLogs });
   } catch (error) {
@@ -745,6 +760,100 @@ const handleManualAttendanceDecision = async (req, res) => {
   }
 };
 
+/**
+ * Helper to verify that manager has authority over an employee.
+ */
+const verifyManagerMemberAuthority = async (managerUser, memberId) => {
+  const member = await User.findById(memberId).select('teamId role name').lean();
+  if (!member) {
+    return { authorized: false, status: 404, message: 'Employee not found.' };
+  }
+  if (managerUser.role === 'admin') {
+    return { authorized: true, member };
+  }
+  const teams = await getManagedTeams(managerUser);
+  const teamIds = teams.map((t) => t._id.toString());
+  if (!member.teamId || !teamIds.includes(member.teamId.toString())) {
+    return { authorized: false, status: 403, message: 'You do not have permission to view this employee profile.' };
+  }
+  return { authorized: true, member };
+};
+
+/**
+ * GET /manager/team/members/:id/profile
+ * Returns 360° employee performance profile scoped to selected period.
+ */
+const getMemberProfile = async (req, res) => {
+  try {
+    const authCheck = await verifyManagerMemberAuthority(req.user, req.params.id);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
+    }
+    const profile = await employeeProfileService.getEmployeeProfile(req.params.id, req.query);
+    if (!profile) {
+      return notFound(res, 'Employee profile could not be loaded.');
+    }
+    return success(res, 'Employee profile fetched successfully', profile);
+  } catch (err) {
+    console.error('getMemberProfile error:', err);
+    return badRequest(res, 'Failed to fetch employee profile');
+  }
+};
+
+/**
+ * GET /manager/team/members/:id/attendance
+ * Returns paginated attendance records for member with optional date range.
+ */
+const getMemberAttendanceHistory = async (req, res) => {
+  try {
+    const authCheck = await verifyManagerMemberAuthority(req.user, req.params.id);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
+    }
+    const result = await employeeProfileService.getPaginatedAttendance(req.params.id, req.query);
+    return success(res, 'Attendance history fetched successfully', result);
+  } catch (err) {
+    console.error('getMemberAttendanceHistory error:', err);
+    return badRequest(res, 'Failed to fetch attendance history');
+  }
+};
+
+/**
+ * GET /manager/team/members/:id/daily-logs
+ * Returns paginated daily work logs for member with optional date range.
+ */
+const getMemberDailyLogs = async (req, res) => {
+  try {
+    const authCheck = await verifyManagerMemberAuthority(req.user, req.params.id);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
+    }
+    const result = await employeeProfileService.getPaginatedDailyLogs(req.params.id, req.query);
+    return success(res, 'Daily logs fetched successfully', result);
+  } catch (err) {
+    console.error('getMemberDailyLogs error:', err);
+    return badRequest(res, 'Failed to fetch daily logs');
+  }
+};
+
+/**
+ * GET /manager/team/members/:id/overtime
+ * Returns paginated overtime records for member with optional date range.
+ */
+const getMemberOvertimeHistory = async (req, res) => {
+  try {
+    const authCheck = await verifyManagerMemberAuthority(req.user, req.params.id);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
+    }
+    const result = await employeeProfileService.getPaginatedOvertime(req.params.id, req.query);
+    return success(res, 'Overtime history fetched successfully', result);
+  } catch (err) {
+    console.error('getMemberOvertimeHistory error:', err);
+    return badRequest(res, 'Failed to fetch overtime history');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -762,4 +871,8 @@ module.exports = {
   getManagedTeams,
   getManagedTeam,
   getTeamMemberIds,
+  getMemberProfile,
+  getMemberAttendanceHistory,
+  getMemberDailyLogs,
+  getMemberOvertimeHistory,
 };

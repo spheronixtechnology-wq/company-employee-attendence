@@ -77,23 +77,23 @@ export default function TeamsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
+    <div className="page-container space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <span className="p-2 rounded-xl bg-primary-500/20 text-primary-400">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-primary-50 text-primary-600 border border-primary-200 shadow-sm">
               <GitBranch size={24} />
             </span>
             Team Management
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-600 text-sm mt-1">
             Active teams, departmental structures, and manager assignments at Spheronix.
           </p>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 shadow-sm"
         >
           <Plus size={18} /> Create New Team
         </button>
@@ -101,10 +101,10 @@ export default function TeamsPage() {
 
       {/* Teams Grid */}
       {teams.length === 0 ? (
-        <div className="card text-center py-12 space-y-3">
-          <GitBranch size={40} className="text-slate-500 mx-auto" />
-          <h3 className="text-white font-semibold">No Teams Found</h3>
-          <p className="text-slate-400 text-sm max-w-md mx-auto">
+        <div className="card text-center py-12 space-y-3 border-slate-200 shadow-sm">
+          <GitBranch size={40} className="text-slate-400 mx-auto" />
+          <h3 className="text-slate-900 font-bold">No Teams Found</h3>
+          <p className="text-slate-600 text-sm max-w-md mx-auto">
             Get started by creating your company's departments and assigning managers.
           </p>
           <button onClick={openCreateModal} className="btn-primary text-xs mt-2">
@@ -116,63 +116,63 @@ export default function TeamsPage() {
           {teams.map((team) => (
             <div
               key={team._id}
-              className="card bg-slate-800/80 border-slate-700 hover:border-primary-500/40 transition-all duration-200 p-5 flex flex-col justify-between"
+              className="card bg-white border-slate-200 hover:border-slate-300 transition-all duration-200 p-5 flex flex-col justify-between shadow-sm"
             >
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-bold text-base shadow-md shadow-primary-500/20">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center text-white font-bold text-base shadow-sm">
                       {team.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-white">{team.name}</h3>
-                      <span className="text-xs text-slate-400">
+                      <h3 className="text-lg font-bold text-slate-900">{team.name}</h3>
+                      <span className="text-xs text-slate-600">
                         {team.membersCount ?? (team.members?.length || 0)} Member{(team.membersCount === 1 || team.members?.length === 1) ? '' : 's'}
                       </span>
                     </div>
                   </div>
 
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     Active
                   </span>
                 </div>
 
                 {team.description && (
-                  <p className="text-xs text-slate-300 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800 line-clamp-2">
+                  <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 line-clamp-2">
                     {team.description}
                   </p>
                 )}
 
                 {/* Team Lead */}
-                <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50 space-y-1">
-                  <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Shield size={12} className="text-primary-400" /> Team Lead / Manager
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield size={12} className="text-primary-600" /> Team Lead / Manager
                   </span>
                   {team.leadUserId ? (
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-sm font-semibold text-white">{team.leadUserId.name}</span>
-                      <span className="text-xs text-slate-400">{team.leadUserId.email}</span>
+                      <span className="text-sm font-bold text-slate-900">{team.leadUserId.name}</span>
+                      <span className="text-xs text-slate-600">{team.leadUserId.email}</span>
                     </div>
                   ) : (
-                    <p className="text-xs text-amber-400 italic pt-1">No manager assigned</p>
+                    <p className="text-xs text-amber-700 font-medium italic pt-1">No manager assigned</p>
                   )}
                 </div>
 
                 {/* Team Members */}
                 <div className="space-y-2">
-                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Users size={14} className="text-slate-400" /> Assigned Members:
+                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Users size={14} className="text-slate-500" /> Assigned Members:
                   </span>
                   {team.members && team.members.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
                       {team.members.map((m) => (
                         <div
                           key={m._id}
-                          className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-700/50 border border-slate-600/40 text-xs text-slate-200"
+                          className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-800 shadow-sm"
                         >
-                          <span className={`w-2 h-2 rounded-full ${m.role === 'manager' ? 'bg-primary-400' : 'bg-emerald-400'}`} />
-                          <span className="font-medium">{m.name}</span>
-                          {m.designation && <span className="text-[10px] text-slate-400 font-normal">({m.designation})</span>}
+                          <span className={`w-2 h-2 rounded-full ${m.role === 'manager' ? 'bg-primary-500' : 'bg-emerald-500'}`} />
+                          <span className="font-semibold">{m.name}</span>
+                          {m.designation && <span className="text-[10px] text-slate-500 font-normal">({m.designation})</span>}
                         </div>
                       ))}
                     </div>
@@ -182,10 +182,10 @@ export default function TeamsPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-700/60 mt-4 flex justify-end">
+              <div className="pt-4 border-t border-slate-200 mt-4 flex justify-end">
                 <button
                   onClick={() => openEditModal(team)}
-                  className="btn bg-slate-700 hover:bg-primary-600 hover:text-white text-slate-200 text-xs flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors"
+                  className="btn bg-white hover:bg-slate-50 text-slate-700 text-xs flex items-center gap-1.5 px-3 py-1.5 font-semibold border border-slate-200 shadow-sm transition-colors"
                 >
                   <Edit2 size={13} /> Edit Team
                 </button>
@@ -197,48 +197,48 @@ export default function TeamsPage() {
 
       {/* Create / Edit Team Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="card w-full max-w-md p-6 bg-slate-800 border-slate-700 shadow-2xl relative space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="card w-full max-w-md p-6 bg-white border-slate-200 shadow-2xl relative space-y-5">
             <button
               onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1"
             >
               <X size={20} />
             </button>
 
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <GitBranch size={20} className="text-primary-400" />
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <GitBranch size={20} className="text-primary-600" />
               {editingTeam ? 'Edit Team' : 'Create New Team'}
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="label">Team / Department Name *</label>
+                <label className="label text-slate-700 font-semibold">Team / Department Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Engineering, Sales, Human Resources"
-                  className="input"
+                  className="input border-slate-200 bg-white text-slate-900"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
               </div>
 
               <div>
-                <label className="label">Description (Optional)</label>
+                <label className="label text-slate-700 font-semibold">Description (Optional)</label>
                 <textarea
                   rows={2}
                   placeholder="Brief description of the team's responsibilities"
-                  className="input resize-none"
+                  className="input resize-none border-slate-200 bg-white text-slate-900"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
               </div>
 
               <div>
-                <label className="label">Assign Team Lead / Manager</label>
+                <label className="label text-slate-700 font-semibold">Assign Team Lead / Manager</label>
                 <select
-                  className="input"
+                  className="input border-slate-200 bg-white text-slate-900"
                   value={form.leadUserId}
                   onChange={(e) => setForm({ ...form, leadUserId: e.target.value })}
                 >
@@ -249,23 +249,23 @@ export default function TeamsPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-600 mt-1">
                   The selected manager will have dashboard and approval permissions for this team.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-700">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="btn-ghost text-xs"
+                  className="btn bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs shadow-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="btn-primary text-xs px-5 py-2"
+                  className="btn-primary text-xs px-5 py-2 shadow-sm"
                 >
                   {submitting ? <Loader2 size={16} className="animate-spin inline mr-2" /> : null}
                   {editingTeam ? 'Update Team' : 'Create Team'}

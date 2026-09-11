@@ -28,31 +28,31 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4 md:p-6 animate-fade-in">
-      <div className="max-w-2xl mx-auto space-y-5">
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <Bell size={20} className="text-primary-400" /> Notifications
+    <div className="page-container animate-fade-in">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <Bell size={22} className="text-sky-600" /> Notifications
         </h1>
 
         {loading ? (
-          <div className="card text-center text-slate-500 py-8">Loading...</div>
+          <div className="card text-center text-slate-500 py-8 shadow-sm">Loading notifications...</div>
         ) : notifications.length === 0 ? (
-          <div className="card text-center py-12">
-            <Bell size={40} className="text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-500">No notifications yet.</p>
+          <div className="card text-center py-12 shadow-sm">
+            <Bell size={40} className="text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500 font-medium">No notifications yet.</p>
           </div>
         ) : (
           <div className="space-y-3">
             {notifications.map((n) => (
-              <div key={n._id} className="card flex items-start gap-3">
-                <div className="p-2 bg-slate-700 rounded-xl flex-shrink-0">
+              <div key={n._id} className="card shadow-sm flex items-start gap-3">
+                <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl flex-shrink-0">
                   {getIcon(n.type)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{n.title}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{n.message}</p>
-                  <p className="text-xs text-slate-600 mt-1 flex items-center gap-1">
-                    <Clock size={10} />
+                  <p className="text-sm font-bold text-slate-900">{n.title}</p>
+                  <p className="text-xs text-slate-600 mt-0.5 font-medium">{n.message}</p>
+                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                    <Clock size={11} />
                     {new Date(n.createdAt).toLocaleString('en-IN')}
                   </p>
                 </div>

@@ -1,12 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const employeeController = require('../controllers/employee.controller');
+const overtimeController = require('../controllers/overtime.controller');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 
 const { uploadDailyLogDoc } = require('../middleware/upload.middleware');
 
 const isEmployee = [authenticate, authorize('employee')];
+const isPunchUser = [authenticate, authorize('employee', 'manager')];
+const isAnyUser = [authenticate, authorize('employee', 'manager', 'admin')];
 
 router.get('/status', employeeController.getStatus);
 
@@ -14,20 +17,20 @@ router.get('/status', employeeController.getStatus);
 router.get('/dashboard', isEmployee, employeeController.getDashboard);
 
 // Attendance
-router.get('/attendance/me', isEmployee, employeeController.getMyAttendanceHistory);
-router.post('/attendance/check-in', isEmployee, employeeController.checkIn);
-router.post('/attendance/initiate-checkout', isEmployee, employeeController.initiateCheckout);
-router.post('/attendance/check-out', isEmployee, employeeController.checkOut);
+router.get('/attendance/me', isPunchUser, employeeController.getMyAttendanceHistory);
+router.post('/attendance/check-in', isPunchUser, employeeController.checkIn);
+router.post('/attendance/initiate-checkout', isPunchUser, employeeController.initiateCheckout);
+router.post('/attendance/check-out', isPunchUser, employeeController.checkOut);
 router.post('/attendance/send-report', isEmployee, employeeController.sendDailyReport);
 router.get('/network-status', isEmployee, employeeController.getNetworkStatus);
 
 // Profile
-router.put('/profile', isEmployee, employeeController.updateProfile);
-router.patch('/profile', isEmployee, employeeController.updateProfile);
+router.put('/profile', isAnyUser, employeeController.updateProfile);
+router.patch('/profile', isAnyUser, employeeController.updateProfile);
 
 // Breaks
-router.post('/break/start', isEmployee, employeeController.startBreak);
-router.post('/break/end', isEmployee, employeeController.endBreak);
+router.post('/break/start', isPunchUser, employeeController.startBreak);
+router.post('/break/end', isPunchUser, employeeController.endBreak);
 
 // Daily Logs
 router.get('/daily-log/me', isEmployee, employeeController.getDailyLog);
@@ -51,6 +54,13 @@ router.post('/device/request', isEmployee, employeeController.requestDeviceAppro
 router.get('/device-status', isEmployee, employeeController.getDeviceStatus);
 router.get('/device-requests', isEmployee, employeeController.getMyDeviceRequests);
 router.post('/device-requests', isEmployee, employeeController.requestDeviceApproval); // DeviceStatusPage uses this URL
+
+// Overtime (Two-Stage Approval Workflow)
+router.post('/overtime/request', isEmployee, overtimeController.requestOvertime);
+router.get('/overtime/me', isEmployee, overtimeController.getMyOvertime);
+router.post('/overtime/:id/start', isEmployee, overtimeController.startOvertimeSession);
+router.post('/overtime/:id/end', isEmployee, overtimeController.endOvertimeSession);
+router.post('/overtime/:id/cancel', isEmployee, overtimeController.cancelOvertimeRequest);
 
 // Biometric
 const biometricRoutes = require('./biometric.routes');

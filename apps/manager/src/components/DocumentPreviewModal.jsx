@@ -207,20 +207,20 @@ export default function DocumentPreviewModal({
   if (!isOpen || !documentUrl) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header Bar */}
-        <div className="p-4 px-5 border-b border-slate-800 bg-slate-900/95 flex items-center justify-between gap-3 sticky top-0 z-20">
+        <div className="p-4 px-5 border-b border-slate-200 bg-white flex items-center justify-between gap-3 sticky top-0 z-20">
           <div className="flex items-center gap-3 min-w-0">
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${
                 isExcel
-                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
                   : isPdf
-                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                  ? 'bg-rose-50 border-rose-200 text-rose-600'
                   : isWord
-                  ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
-                  : 'bg-violet-500/15 border-violet-500/30 text-violet-400'
+                  ? 'bg-blue-50 border-blue-200 text-blue-600'
+                  : 'bg-violet-50 border-violet-200 text-violet-600'
               }`}
             >
               {isExcel ? (
@@ -235,11 +235,11 @@ export default function DocumentPreviewModal({
             </div>
 
             <div className="min-w-0">
-              <h2 className="text-sm md:text-base font-bold text-white truncate" title={documentName}>
+              <h2 className="text-sm md:text-base font-bold text-slate-900 truncate" title={documentName}>
                 {documentName}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <span className="uppercase font-semibold text-primary-400">{ext} file</span>
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <span className="uppercase font-semibold text-primary-600">{ext} file</span>
                 {documentSize && <span>• {formatSize(documentSize)}</span>}
                 {isExcel && sheetNames.length > 0 && (
                   <span>• {sheetNames.length} sheet{sheetNames.length > 1 ? 's' : ''}</span>
@@ -253,7 +253,7 @@ export default function DocumentPreviewModal({
             <button
               id="preview-modal-download-btn"
               onClick={handleDownload}
-              className="btn-primary text-xs py-2 px-3.5 flex items-center gap-1.5 font-semibold shadow-md shadow-primary-500/20"
+              className="btn-primary text-xs py-2 px-3.5 flex items-center gap-1.5 font-semibold shadow-sm"
               title="Download original file"
             >
               <Download size={15} />
@@ -263,7 +263,7 @@ export default function DocumentPreviewModal({
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
               title="Close Preview"
             >
               <X size={18} />
@@ -273,8 +273,8 @@ export default function DocumentPreviewModal({
 
         {/* Sheet Tab Switcher for Excel */}
         {isExcel && sheetNames.length > 1 && (
-          <div className="flex items-center gap-1 px-5 py-2 bg-slate-950/60 border-b border-slate-800 overflow-x-auto text-xs">
-            <span className="text-[11px] text-slate-400 mr-2 flex items-center gap-1">
+          <div className="flex items-center gap-1 px-5 py-2 bg-slate-50 border-b border-slate-200 overflow-x-auto text-xs">
+            <span className="text-[11px] text-slate-600 mr-2 flex items-center gap-1">
               <Table size={12} /> Sheets:
             </span>
             {sheetNames.map((name) => (
@@ -283,8 +283,8 @@ export default function DocumentPreviewModal({
                 onClick={() => handleSheetChange(name)}
                 className={`px-3 py-1 rounded-lg font-medium transition-all ${
                   activeSheet === name
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 {name}
@@ -294,10 +294,10 @@ export default function DocumentPreviewModal({
         )}
 
         {/* Modal Body Preview Area */}
-        <div className="p-4 md:p-6 overflow-auto flex-1 bg-slate-950/40 min-h-[350px]">
+        <div className="p-4 md:p-6 overflow-auto flex-1 bg-slate-50 min-h-[350px]">
           {loading ? (
-            <div className="h-72 flex flex-col items-center justify-center space-y-3 text-slate-400">
-              <Loader2 size={32} className="animate-spin text-primary-400" />
+            <div className="h-72 flex flex-col items-center justify-center space-y-3 text-slate-600">
+              <Loader2 size={32} className="animate-spin text-primary-600" />
               <p className="text-sm">Loading document preview…</p>
             </div>
           ) : error ? (
@@ -306,8 +306,8 @@ export default function DocumentPreviewModal({
                 <AlertCircle size={24} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Preview Information</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-md">{error}</p>
+                <p className="text-sm font-semibold text-slate-900">Preview Information</p>
+                <p className="text-xs text-slate-600 mt-1 max-w-md">{error}</p>
               </div>
               <button onClick={handleDownload} className="btn-primary text-xs py-2 px-4 mt-2 flex items-center gap-2">
                 <Download size={14} /> Download Document
@@ -321,36 +321,36 @@ export default function DocumentPreviewModal({
                   This sheet is empty.
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-slate-700/80 shadow-inner bg-slate-900/90">
+                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
                   <table className="w-full text-left text-xs border-collapse font-mono">
                     <thead>
-                      <tr className="bg-slate-800/90 border-b border-slate-700 text-slate-300">
-                        <th className="p-2.5 px-3 w-12 text-center text-[10px] text-slate-500 border-r border-slate-700 select-none bg-slate-800">
+                      <tr className="bg-slate-100 border-b border-slate-200 text-slate-700">
+                        <th className="p-2.5 px-3 w-12 text-center text-[10px] text-slate-500 border-r border-slate-200 select-none bg-slate-100">
                           #
                         </th>
                         {sheetData[0]?.map((_, colIdx) => (
                           <th
                             key={colIdx}
-                            className="p-2.5 px-3.5 text-slate-300 font-semibold border-r border-slate-700/60 last:border-0 whitespace-nowrap"
+                            className="p-2.5 px-3.5 text-slate-700 font-semibold border-r border-slate-200 last:border-0 whitespace-nowrap"
                           >
                             {String.fromCharCode(65 + (colIdx % 26))}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800">
+                    <tbody className="divide-y divide-slate-200">
                       {sheetData.slice(0, 100).map((row, rowIdx) => (
                         <tr
                           key={rowIdx}
-                          className="hover:bg-slate-800/50 transition-colors odd:bg-slate-900/40"
+                          className="hover:bg-slate-50 transition-colors odd:bg-slate-50/50"
                         >
-                          <td className="p-2 px-3 text-center text-[10px] text-slate-500 border-r border-slate-700/80 bg-slate-800/40 select-none">
+                          <td className="p-2 px-3 text-center text-[10px] text-slate-500 border-r border-slate-200 bg-slate-100/50 select-none">
                             {rowIdx + 1}
                           </td>
                           {sheetData[0]?.map((_, colIdx) => (
                             <td
                               key={colIdx}
-                              className="p-2 px-3.5 text-slate-200 border-r border-slate-800/70 last:border-0 whitespace-pre-wrap max-w-xs break-words"
+                              className="p-2 px-3.5 text-slate-800 border-r border-slate-200 last:border-0 whitespace-pre-wrap max-w-xs break-words"
                             >
                               {row[colIdx] !== undefined && row[colIdx] !== null
                                 ? String(row[colIdx])
@@ -362,7 +362,7 @@ export default function DocumentPreviewModal({
                     </tbody>
                   </table>
                   {sheetData.length > 100 && (
-                    <div className="p-2.5 text-center text-xs text-slate-400 bg-slate-900 border-t border-slate-800">
+                    <div className="p-2.5 text-center text-xs text-slate-600 bg-slate-50 border-t border-slate-200">
                       Showing first 100 of {sheetData.length} rows. Click Download above to inspect complete workbook.
                     </div>
                   )}
@@ -371,12 +371,12 @@ export default function DocumentPreviewModal({
             </div>
           ) : isWord && wordHtml ? (
             /* Word Document HTML Preview */
-            <div className="rounded-xl border border-slate-700/80 bg-white p-6 md:p-8 text-slate-900 text-sm max-h-[70vh] overflow-y-auto shadow-2xl leading-relaxed prose prose-sm max-w-none">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 md:p-8 text-slate-900 text-sm max-h-[70vh] overflow-y-auto shadow-sm leading-relaxed prose prose-sm max-w-none">
               <div dangerouslySetInnerHTML={{ __html: wordHtml }} />
             </div>
           ) : isPdf ? (
             /* PDF Embedded Preview */
-            <div className="w-full h-[68vh] rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900 shadow-xl">
+            <div className="w-full h-[68vh] rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
               <iframe
                 src={`${documentUrl}#toolbar=1`}
                 title={documentName}
@@ -385,18 +385,18 @@ export default function DocumentPreviewModal({
             </div>
           ) : isText ? (
             /* Text File Viewer */
-            <div className="rounded-xl border border-slate-700/80 bg-slate-900/90 p-4 font-mono text-xs text-slate-200 whitespace-pre-wrap leading-relaxed overflow-x-auto max-h-[65vh]">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed overflow-x-auto max-h-[65vh] shadow-sm">
               {textContent}
             </div>
           ) : (
             /* Fallback generic document preview */
-            <div className="h-72 flex flex-col items-center justify-center space-y-4 text-center p-6 bg-slate-900/60 rounded-2xl border border-slate-800">
-              <div className="w-16 h-16 rounded-2xl bg-violet-500/15 border border-violet-500/30 text-violet-400 flex items-center justify-center shadow-lg shadow-violet-500/10">
+            <div className="h-72 flex flex-col items-center justify-center space-y-4 text-center p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <div className="w-16 h-16 rounded-2xl bg-violet-50 border border-violet-200 text-violet-600 flex items-center justify-center shadow-sm">
                 <FileText size={32} />
               </div>
               <div className="space-y-1">
-                <p className="text-base font-bold text-white">{documentName}</p>
-                <p className="text-xs text-slate-400">
+                <p className="text-base font-bold text-slate-900">{documentName}</p>
+                <p className="text-xs text-slate-600">
                   {documentSize ? formatSize(documentSize) + ' • ' : ''}{ext.toUpperCase()} Document
                 </p>
                 <p className="text-xs text-slate-500 max-w-sm">
@@ -405,7 +405,7 @@ export default function DocumentPreviewModal({
               </div>
               <button
                 onClick={handleDownload}
-                className="btn-primary text-xs py-2.5 px-5 flex items-center gap-2 font-semibold shadow-lg shadow-primary-500/20"
+                className="btn-primary text-xs py-2.5 px-5 flex items-center gap-2 font-semibold shadow-sm"
               >
                 <Download size={15} /> Download Document
               </button>
@@ -414,11 +414,11 @@ export default function DocumentPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="p-3.5 px-5 border-t border-slate-800 bg-slate-900/95 flex items-center justify-between text-xs text-slate-400">
+        <div className="p-3.5 px-5 border-t border-slate-200 bg-white flex items-center justify-between text-xs text-slate-600">
           <span>Click Download at any time to save a local copy.</span>
           <button
             onClick={onClose}
-            className="btn-ghost text-xs py-1.5 px-3.5 border border-slate-700 hover:bg-slate-800"
+            className="btn bg-white text-xs py-1.5 px-3.5 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
           >
             Close
           </button>

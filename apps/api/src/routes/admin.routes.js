@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const managerController = require('../controllers/manager.controller');
+const overtimeController = require('../controllers/overtime.controller');
 
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
@@ -13,6 +14,10 @@ router.get('/status', adminController.getStatus);
 router.get('/dashboard', isAdmin, adminController.getDashboard);
 
 router.get('/employees', isAdmin, adminController.getEmployees);
+router.get('/employees/:id/profile', isAdmin, adminController.getEmployeeProfile);
+router.get('/employees/:id/attendance', isAdmin, adminController.getEmployeeAttendanceHistory);
+router.get('/employees/:id/daily-logs', isAdmin, adminController.getEmployeeDailyLogs);
+router.get('/employees/:id/overtime', isAdmin, adminController.getEmployeeOvertimeHistory);
 router.get('/teams', isAdmin, adminController.getTeams);
 router.post('/teams', isAdmin, adminController.createTeam);
 router.patch('/teams/:id', isAdmin, adminController.updateTeam);
@@ -37,8 +42,19 @@ router.post('/manual-attendance/:id/decision', isAdmin, managerController.handle
 router.get('/attendance-method/active', isAdminOrManager, adminController.getActiveAttendanceMethod);
 router.patch('/attendance-method/switch', isAdminOrManager, adminController.switchAttendanceMethod);
 
-// Manager Permissions
+// Manager Permissions & MFA
 router.get('/manager-permissions', isAdmin, adminController.getManagerPermissions);
 router.patch('/manager-permissions/:userId', isAdmin, adminController.updateManagerPermission);
+router.post('/managers/:id/reset-mfa', isAdmin, adminController.resetManagerMfa);
+
+// Attendance Records
+router.get('/attendance', isAdmin, adminController.getAttendance);
+
+// Leave Requests
+router.get('/leave-requests', isAdmin, adminController.getLeaveRequests);
+router.post('/leave/:id/decision', isAdmin, adminController.handleLeaveDecision);
+
+// Overtime Oversight
+router.get('/overtime', isAdmin, overtimeController.getAllCompanyOvertime);
 
 module.exports = router;
