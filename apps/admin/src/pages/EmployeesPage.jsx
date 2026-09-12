@@ -6,6 +6,7 @@ import {
   Calendar, ChevronRight, Filter, Smartphone
 } from 'lucide-react';
 import EmployeeProfileModal from '../components/EmployeeProfileModal';
+import EmployeeCreationModal from '../components/EmployeeCreationModal';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState([]);
@@ -17,7 +18,8 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'working' | 'on_break' | 'checked_out' | 'offline' | 'inactive'
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
 
-  const [showForm, setShowForm] = useState(false);
+  const [showCreationModal, setShowCreationModal] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -91,7 +93,7 @@ export default function EmployeesPage() {
         await api.post('/admin/users', form);
         setMessage({ type: 'success', text: 'User created successfully.' });
       }
-      setShowForm(false);
+      setShowEditForm(false);
       setEditUser(null);
       setShowPassword(false);
       setForm({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
@@ -126,7 +128,7 @@ export default function EmployeesPage() {
       phone: user.phone || '',
     });
     setShowPassword(false);
-    setShowForm(true);
+    setShowEditForm(true);
   };
 
   const getStatusBadge = (emp) => {
@@ -223,12 +225,7 @@ export default function EmployeesPage() {
 
           <button
             id="add-user-btn"
-            onClick={() => {
-              setShowForm(true);
-              setEditUser(null);
-              setShowPassword(false);
-              setForm({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
-            }}
+            onClick={() => setShowCreationModal(true)}
             className="btn bg-violet-600 hover:bg-violet-700 text-white font-bold px-4 py-2 rounded-xl shadow-sm shadow-violet-500/20 flex items-center gap-2 text-xs"
           >
             <Plus size={16} /> Add User
@@ -660,13 +657,13 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* ── Form Modal (Create / Edit User) ── */}
-      {showForm && (
+      {/* ── Form Modal (Edit User) ── */}
+      {showEditForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-slide-up">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-black text-slate-900">{editUser ? 'Edit User Details' : 'Create New Employee'}</h2>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-700 p-1"><X size={18} /></button>
+              <h2 className="text-lg font-black text-slate-900">Edit User Details</h2>
+              <button onClick={() => setShowEditForm(false)} className="text-slate-400 hover:text-slate-700 p-1"><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
@@ -725,9 +722,9 @@ export default function EmployeesPage() {
               </div>
               <div className="flex gap-3 pt-3">
                 <button type="submit" disabled={submitting} className="btn bg-violet-600 hover:bg-violet-700 text-white font-bold flex-1 py-2.5 rounded-xl shadow-xs">
-                  {submitting ? <Loader2 size={16} className="animate-spin mx-auto" /> : editUser ? 'Update User' : 'Create User'}
+                  {submitting ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Update User'}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-ghost flex-1 py-2.5 rounded-xl">Cancel</button>
+                <button type="button" onClick={() => setShowEditForm(false)} className="btn-ghost flex-1 py-2.5 rounded-xl">Cancel</button>
               </div>
             </form>
           </div>
@@ -735,11 +732,21 @@ export default function EmployeesPage() {
       )}
 
       {/* ── 360 Degree Performance & Profile Modal ── */}
-      <EmployeeProfileModal
-        isOpen={!!selectedMemberId}
+      <EmployeeProfileModal isOpen={!!selectedMemberId}
         memberId={selectedMemberId}
         onClose={() => setSelectedMemberId(null)}
       />
+
+      {showCreationModal && (
+        <EmployeeCreationModal
+          onClose={() => setShowCreationModal(false)}
+          onSuccess={() => {
+            setShowCreationModal(false);
+            fetchData();
+          }}
+          teams={teams}
+        />
+      )}
     </div>
   );
 }

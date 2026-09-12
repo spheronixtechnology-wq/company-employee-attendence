@@ -168,7 +168,7 @@ function enrichAttendanceRecord(att) {
 const getEmployeeProfile = async (employeeId, queryParams = {}) => {
   const query = typeof queryParams === 'string' ? { preset: queryParams } : (queryParams || {});
   const member = await User.findById(employeeId)
-    .select('name email phone designation avatarUrl teamId role isActive createdAt registeredDevice')
+    .select('name middleName lastName dob gender email companyEmail phone currentAddress emergencyContactName emergencyContactNumber emergencyContactRelation designation department jobType joinedDate workLocation country officeBranch teamShift avatarUrl teamId role isActive createdAt registeredDevice')
     .populate('teamId', 'name description')
     .lean();
 
@@ -449,9 +449,25 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
     member: {
       _id: member._id,
       name: member.name,
+      middleName: member.middleName,
+      lastName: member.lastName,
       email: member.email,
+      companyEmail: member.companyEmail,
       phone: member.phone,
+      dob: member.dob,
+      gender: member.gender,
+      currentAddress: member.currentAddress,
+      emergencyContactName: member.emergencyContactName,
+      emergencyContactNumber: member.emergencyContactNumber,
+      emergencyContactRelation: member.emergencyContactRelation,
+      department: member.department,
       designation: member.designation || 'Employee',
+      jobType: member.jobType,
+      joinedDate: member.joinedDate,
+      workLocation: member.workLocation,
+      country: member.country,
+      officeBranch: member.officeBranch,
+      teamShift: member.teamShift,
       avatarUrl: member.avatarUrl,
       team: member.teamId ? { _id: member.teamId._id, name: member.teamId.name } : null,
       role: member.role,

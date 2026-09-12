@@ -191,8 +191,17 @@ const createTeam = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { name, email, password, role, teamId, designation, phone } = req.body;
+    const { 
+      name, middleName, lastName, dob, gender,
+      email, companyEmail, mobileNumber, phone, currentAddress, 
+      emergencyContactName, emergencyContactNumber, emergencyContactRelation,
+      department, designation, jobType, dateOfJoining, workLocation, 
+      country, officeBranch, teamShift, teamId, password, role
+    } = req.body;
     
+    // Support both `mobileNumber` (from EmployeeCreationModal) and legacy `phone`
+    const finalPhone = mobileNumber || phone || null;
+
     if (!name || !email || !password) {
       return badRequest(res, 'Name, email and password are required.');
     }
@@ -203,13 +212,15 @@ const createUser = async (req, res) => {
     }
     
     const user = new User({
-      name,
-      email,
+      name, middleName, lastName, dob, gender,
+      email, companyEmail, phone: finalPhone, currentAddress,
+      emergencyContactName, emergencyContactNumber, emergencyContactRelation,
+      department, designation, jobType, joinedDate: dateOfJoining,
+      workLocation, country, officeBranch, teamShift,
       passwordHash: password,
       role: role || 'employee',
       teamId: teamId && teamId.trim() !== '' ? teamId : null,
-      designation: designation || null,
-      phone: phone || null
+      forcePasswordChange: true
     });
     
     await user.save();

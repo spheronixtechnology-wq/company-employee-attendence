@@ -96,7 +96,7 @@ export default function Layout({ children }) {
             <img
               src={companyLogo}
               alt="Spheronix"
-              className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
+              className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
             />
             <span className="hidden shrink-0 items-center rounded-full bg-sky-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-sky-700 ring-1 ring-sky-200/70 sm:inline-flex">
               Employee
@@ -128,26 +128,26 @@ export default function Layout({ children }) {
 
           {/* Right: Profile chip + controls */}
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:border-l sm:border-slate-200/70 sm:pl-4">
-            <div className="hidden items-center gap-2.5 rounded-full bg-white/70 py-1 pl-1 pr-3.5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur sm:flex">
+            <Link to="/profile" className="hidden items-center gap-3 rounded-full bg-white/70 py-1.5 pl-1.5 pr-5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur transition-transform hover:scale-105 active:scale-95 sm:flex">
               <div className="relative">
                 {user?.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
                     alt={user.name}
-                    className="h-8 w-8 rounded-full object-cover shadow-[0_3px_10px_-2px_rgba(2,132,199,0.5)] ring-2 ring-white"
+                    className="h-10 w-10 rounded-full object-cover shadow-[0_3px_10px_-2px_rgba(2,132,199,0.5)] ring-2 ring-white"
                   />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-sky-500 via-indigo-500 to-violet-500 text-[11px] font-bold text-white shadow-[0_3px_10px_-2px_rgba(2,132,199,0.5)] ring-2 ring-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr from-sky-500 via-indigo-500 to-violet-500 text-[14px] font-bold text-white shadow-[0_3px_10px_-2px_rgba(2,132,199,0.5)] ring-2 ring-white">
                     {user?.name?.[0]?.toUpperCase() || 'U'}
                   </div>
                 )}
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white" />
               </div>
               <div className="leading-tight">
-                <p className="text-[11.5px] font-semibold text-slate-800">{user?.name}</p>
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-sky-600">{user?.teamId?.name || 'Employee'}</p>
+                <p className="text-[14px] font-semibold text-slate-800">{user?.name}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-600">{user?.teamId?.name || 'Employee'}</p>
               </div>
-            </div>
+            </Link>
 
               {/* Mobile Hamburger Toggle */}
               <button
@@ -167,7 +167,7 @@ export default function Layout({ children }) {
           <div className="bg-white border-r border-slate-200 w-72 h-full flex flex-col p-4 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <img src={companyLogo} alt="Spheronix" className="h-8 w-auto max-h-8 object-contain" />
+                <img src={companyLogo} alt="Spheronix" className="h-14 w-auto max-h-14 object-contain" />
                 <span className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider bg-sky-50 px-1.5 py-0.5 rounded-full border border-sky-200">
                   Employee
                 </span>

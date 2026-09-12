@@ -9,6 +9,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: [100, 'Name cannot exceed 100 characters'],
     },
+    middleName: { type: String, trim: true, default: null },
+    lastName: { type: String, trim: true, default: null },
+    dob: { type: Date, default: null },
+    gender: { type: String, trim: true, default: null },
     email: {
       type: String,
       required: [true, 'Email is required'],
@@ -36,6 +40,18 @@ const userSchema = new mongoose.Schema(
       ref: 'Team',
       default: null, // Admin may have no team
     },
+    department: { type: String, trim: true, default: null },
+    designation: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    jobType: { type: String, enum: ['Full-Time', 'Part-Time', 'Intern', 'Contract'], default: 'Full-Time' },
+    workLocation: { type: String, trim: true, default: null },
+    country: { type: String, trim: true, default: null },
+    officeBranch: { type: String, trim: true, default: null },
+    reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    teamShift: { type: String, trim: true, default: null },
     joinedDate: {
       type: Date,
       default: Date.now,
@@ -44,17 +60,22 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    forcePasswordChange: {
+      type: Boolean,
+      default: false,
+    },
     // Optional profile fields
     phone: {
       type: String,
       trim: true,
       default: null,
     },
-    designation: {
-      type: String,
-      trim: true,
-      default: null,
-    },
+    companyEmail: { type: String, trim: true, default: null },
+    currentAddress: { type: String, trim: true, default: null },
+    emergencyContactName: { type: String, trim: true, default: null },
+    emergencyContactNumber: { type: String, trim: true, default: null },
+    emergencyContactRelation: { type: String, trim: true, default: null },
+
     avatarUrl: {
       type: String,
       default: null,
@@ -113,5 +134,6 @@ userSchema.methods.toSafeObject = function () {
 
 userSchema.index({ role: 1, teamId: 1 });
 userSchema.index({ isActive: 1 });
+userSchema.index({ reportingManager: 1 });
 
 module.exports = mongoose.model('User', userSchema);

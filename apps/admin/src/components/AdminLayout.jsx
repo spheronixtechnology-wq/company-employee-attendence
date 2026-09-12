@@ -87,7 +87,7 @@ export default function AdminLayout({ children }) {
       {/* Logo */}
       <div className="p-5 border-b border-slate-700">
         <div className="flex items-center gap-3">
-          <img src={companyLogo} alt="Spheronix" className="h-8 w-auto object-contain" />
+          <img src={companyLogo} alt="Spheronix" className="h-14 w-auto object-contain" />
           <span className="text-slate-400 text-xs font-semibold">Admin</span>
         </div>
       </div>
@@ -165,7 +165,7 @@ export default function AdminLayout({ children }) {
             <img
               src={companyLogo}
               alt="Spheronix"
-              className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
+              className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
             />
             <span className="hidden shrink-0 items-center rounded-full bg-violet-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-violet-700 ring-1 ring-violet-200/70 sm:inline-flex">
               Admin
@@ -275,7 +275,7 @@ export default function AdminLayout({ children }) {
           <div className="bg-white border-r border-slate-200 w-72 h-full flex flex-col p-4 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <img src={companyLogo} alt="Spheronix" className="h-8 w-auto max-h-8 object-contain" />
+                <img src={companyLogo} alt="Spheronix" className="h-14 w-auto max-h-14 object-contain" />
                 <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
                   Admin
                 </span>

@@ -421,11 +421,12 @@ const MainWorkTimerKpi = ({ checkInTime, completedBreakMinutes = 0, activeBreak 
     return () => clearInterval(interval);
   }, [checkInTime, completedBreakMinutes, activeBreak]);
 
-  if (!checkInTime) return <span>--:--</span>;
+  if (!checkInTime) return <span>--:--:--</span>;
   const hours = Math.floor(netSeconds / 3600);
   const minutes = Math.floor((netSeconds % 3600) / 60);
+  const seconds = netSeconds % 60;
   const pad = (n) => String(n).padStart(2, '0');
-  return <span>{pad(hours)}:{pad(minutes)}</span>;
+  return <span>{pad(hours)}:{pad(minutes)}:{pad(seconds)}</span>;
 };
 
 // ── Break Timer Component (Runs continuously from break startedAt) ────────────
@@ -946,6 +947,13 @@ export default function EmployeeDashboard() {
       showMessage('success', '✅ Biometric authentication enabled successfully on this device!');
       fetchBiometricStatus();
     } catch (err) {
+      // If the authenticator is already registered on this device, treat it as success
+      // and refresh status so the "Verify Biometric & Check In" button appears.
+      if (err.name === 'InvalidStateError' || (err.message || '').toLowerCase().includes('already registered')) {
+        showMessage('success', '✅ Biometric is already registered on this device. You can now verify and check in.');
+        fetchBiometricStatus();
+        return;
+      }
       showMessage('error', formatWebAuthnError(err));
     } finally {
       setActionLoading('');
@@ -968,7 +976,7 @@ export default function EmployeeDashboard() {
 
     if (!isLogSubmitted) {
       showMessage('error', '⚠️ Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
-      setShowDailyLogModal(true);
+      navigate('/daily-log');
       return;
     }
 
@@ -1157,8 +1165,9 @@ export default function EmployeeDashboard() {
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
-    if (tabId === 'log') setShowDailyLogModal(true);
+    if (tabId === 'log') navigate('/daily-log');
     if (tabId === 'leave') navigate('/leave');
+    if (tabId === 'attendance') navigate('/attendance');
   };
 
   if (loading) {
@@ -1271,7 +1280,7 @@ export default function EmployeeDashboard() {
           value={isLogSubmitted ? 'Submitted' : 'Mandatory'}
           variant={isLogSubmitted ? 'green' : 'amber'}
           subtext="Step 1 Req"
-          onClick={() => setShowDailyLogModal(true)}
+          onClick={() => navigate('/daily-log')}
         />
         <KpiTile
           icon={Calendar}
@@ -1503,10 +1512,10 @@ export default function EmployeeDashboard() {
                     {/* Biometric Method */}
                     {activeMethod === 'biometric' && (
                       <div className="space-y-3">
-                        {biometricStatus?.enrolled ? (
+                        {biometricStatus?.isBiometricEnrolled ? (
                           <div className="space-y-3">
                             <div className="p-3 bg-emerald-50/80 border border-emerald-100 rounded-2xl flex items-center gap-2 text-xs text-emerald-600 font-medium shadow-[inset_0_1px_2px_rgba(16,185,129,0.1)]">
-                              <CheckCircle size={16} /> Device Biometric Ready ({biometricStatus.credentialCount || 1} registered)
+                              <CheckCircle size={16} /> Device Biometric Ready ({biometricStatus.credentialCount ?? 1} credential{(biometricStatus.credentialCount ?? 1) !== 1 ? 's' : ''} registered)
                             </div>
                             <button
                               id="biometric-checkin-btn"
@@ -1604,7 +1613,7 @@ export default function EmployeeDashboard() {
                     {!isLogSubmitted ? (
                       <button
                         id="open-daily-log-btn"
-                        onClick={() => setShowDailyLogModal(true)}
+                        onClick={() => navigate('/daily-log')}
                         className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
                       >
                         <FileText size={15} /> Fill & Submit Daily Log Sheet
@@ -1612,7 +1621,7 @@ export default function EmployeeDashboard() {
                     ) : (
                       <button
                         id="view-daily-log-btn"
-                        onClick={() => setShowDailyLogModal(true)}
+                        onClick={() => navigate('/daily-log')}
                         className="btn-ghost w-full py-1.5 text-xs text-slate-700 hover:text-slate-900 flex items-center justify-center gap-1.5 border border-slate-200"
                       >
                         <FileText size={13} /> Update Submitted Daily Log
@@ -1638,7 +1647,7 @@ export default function EmployeeDashboard() {
                           disabled={true}
                           onClick={() => {
                             showMessage('error', '⚠️ Log sheet is mandatory before check-out. Please complete Step 1 first.');
-                            setShowDailyLogModal(true);
+                            navigate('/daily-log');
                           }}
                           className="w-full py-3.5 px-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-75"
                         >

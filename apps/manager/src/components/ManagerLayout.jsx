@@ -30,6 +30,20 @@ export default function ManagerLayout({ children }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [manualPendingCount, setManualPendingCount] = useState(0);
+
+  // Fetch pending manual attendance request count
+  const fetchManualPending = useCallback(() => {
+    api.get('/manager/team/attendance?date=' + new Date().toISOString().split('T')[0])
+      .then(res => {
+        const records = res.data?.data?.attendance || [];
+        const count = records.filter(r =>
+          r.status === 'manual_pending' || (r.manualRequest && r.manualRequest.status === 'pending')
+        ).length;
+        setManualPendingCount(count);
+      })
+      .catch(() => {});
+  }, []);
 
   // Poll unread notification count (new team requests etc.) every 30s + on tab focus
   const fetchUnread = useCallback(() => {
@@ -40,36 +54,43 @@ export default function ManagerLayout({ children }) {
 
   useEffect(() => {
     fetchUnread();
+    fetchManualPending();
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') fetchUnread();
+      if (document.visibilityState === 'visible') fetchManualPending();
     }, 30000);
     const onVisibility = () => {
       if (document.visibilityState === 'visible') fetchUnread();
+      if (document.visibilityState === 'visible') fetchManualPending();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [fetchUnread, location.pathname]);
+  }, [fetchUnread, fetchManualPending, location.pathname]);
 
   // Real-time WebSocket listener for instant badge counter bumps and clears
   useEffect(() => {
     if (!socket) return;
     const onNewEvent = () => fetchUnread();
+    const onManualRequest = () => fetchManualPending();
     socket.on('notification:new', onNewEvent);
     socket.on('device:request_created', onNewEvent);
     socket.on('device:request_resolved', onNewEvent);
     socket.on('leave:request_created', onNewEvent);
     socket.on('leave:request_resolved', onNewEvent);
+    // Instantly bump the Team Attendance badge when a manual request comes in
+    socket.on('attendance:manual_request_created', onManualRequest);
     return () => {
       socket.off('notification:new', onNewEvent);
       socket.off('device:request_created', onNewEvent);
       socket.off('device:request_resolved', onNewEvent);
       socket.off('leave:request_created', onNewEvent);
       socket.off('leave:request_resolved', onNewEvent);
+      socket.off('attendance:manual_request_created', onManualRequest);
     };
-  }, [socket, fetchUnread]);
+  }, [socket, fetchUnread, fetchManualPending]);
 
   const handleLogout = async () => {
     await logout();
@@ -82,33 +103,23 @@ export default function ManagerLayout({ children }) {
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] transition-all">
         <div className="mx-auto flex h-[84px] max-w-[1600px] items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
           
-          {/* Left: Brand Identity Chip */}
-          <Link
-            to="/dashboard"
-            className="group flex shrink-0 items-center gap-3 rounded-2xl bg-white/70 py-1.5 pl-2 pr-4 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur transition-all duration-200 hover:bg-white hover:shadow-[0_6px_20px_-4px_rgba(109,40,217,0.35)]"
-          >
-            <div className="flex h-11 w-auto items-center justify-center overflow-hidden rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-fuchsia-600 p-1.5 shadow-[0_4px_14px_-2px_rgba(109,40,217,0.6)]">
-              <img
-                src={companyLogo}
-                alt="Spheronix"
-                className="h-full w-auto object-contain transition-transform duration-300 group-hover:scale-105"
-              />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[13px] font-black uppercase tracking-[0.2em] text-slate-900 drop-shadow-sm">
-                SPHERONIX
-              </span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-600">
-                MANAGER PORTAL
-              </span>
-            </div>
+          {/* Brand */}
+          <Link to="/dashboard" className="group flex shrink-0 items-center gap-2.5">
+            <img
+              src={companyLogo}
+              alt="Spheronix"
+              className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
+            />
+            <span className="hidden shrink-0 items-center rounded-full bg-violet-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-violet-700 ring-1 ring-violet-200/70 sm:inline-flex">
+              Manager
+            </span>
           </Link>
 
           {/* Desktop Navigation Links (Full on xl+) */}
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-2 py-3.5 -my-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:flex">
             {navItems.map((item) => {
               const active = location.pathname === item.path;
-              const showBadge = unreadCount > 0 && item.id === 'nav-device-requests';
+                const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') || (manualPendingCount > 0 && item.id === 'nav-attendance');
               return (
                 <Link
                   key={item.path}
@@ -136,7 +147,7 @@ export default function ManagerLayout({ children }) {
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-2 py-3.5 -my-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex xl:hidden">
             {navItems.slice(0, 6).map((item) => {
               const active = location.pathname === item.path;
-              const showBadge = unreadCount > 0 && item.id === 'nav-device-requests';
+                const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') || (manualPendingCount > 0 && item.id === 'nav-attendance');
               return (
                 <Link
                   key={item.path}
@@ -169,12 +180,18 @@ export default function ManagerLayout({ children }) {
                     src={user.avatarUrl}
                     alt={user.name}
                     className="h-8 w-8 rounded-full object-cover shadow-[0_3px_10px_-2px_rgba(139,92,246,0.55)] ring-2 ring-white"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextSibling.style.display = 'flex';
+                    }}
                   />
-                ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 via-fuchsia-500 to-rose-400 text-[11px] font-bold text-white shadow-[0_3px_10px_-2px_rgba(139,92,246,0.55)] ring-2 ring-white">
-                    {user?.name?.[0]?.toUpperCase() || 'M'}
-                  </div>
-                )}
+                ) : null}
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 via-fuchsia-500 to-rose-400 text-[11px] font-bold text-white shadow-[0_3px_10px_-2px_rgba(139,92,246,0.55)] ring-2 ring-white"
+                  style={{ display: user?.avatarUrl ? 'none' : 'flex' }}
+                >
+                  {user?.name?.[0]?.toUpperCase() || 'M'}
+                </div>
                 <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
               </div>
               <div className="leading-tight">
@@ -202,7 +219,7 @@ export default function ManagerLayout({ children }) {
           <div className="bg-white border-r border-slate-200 w-72 h-full flex flex-col p-4 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <img src={companyLogo} alt="Spheronix" className="h-8 w-auto max-h-8 object-contain" />
+                <img src={companyLogo} alt="Spheronix" className="h-14 w-auto max-h-14 object-contain" />
                 <span className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-200">
                   Manager
                 </span>
@@ -219,12 +236,18 @@ export default function ManagerLayout({ children }) {
                   src={user.avatarUrl}
                   alt={user.name}
                   className="w-10 h-10 rounded-full object-cover ring-2 ring-violet-100 shadow-sm"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                  {user?.name?.[0]?.toUpperCase() || 'M'}
-                </div>
-              )}
+              ) : null}
+              <div
+                className="w-10 h-10 rounded-full bg-gradient-to-tr from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm"
+                style={{ display: user?.avatarUrl ? 'none' : 'flex' }}
+              >
+                {user?.name?.[0]?.toUpperCase() || 'M'}
+              </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
                 <p className="text-xs text-slate-500 truncate">{user?.teamId?.name || 'Manager'}</p>
@@ -235,7 +258,7 @@ export default function ManagerLayout({ children }) {
             <nav className="flex-1 py-3 overflow-y-auto space-y-1">
               {navItems.map((item) => {
                 const active = location.pathname === item.path;
-                const showBadge = unreadCount > 0 && item.id === 'nav-device-requests';
+                  const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') || (manualPendingCount > 0 && item.id === 'nav-attendance');
                 return (
                   <Link
                     key={item.path}

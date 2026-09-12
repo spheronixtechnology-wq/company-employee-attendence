@@ -6,6 +6,7 @@ const employeeController = require('../controllers/employee.controller');
 const overtimeController = require('../controllers/overtime.controller');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
+const { uploadDailyLogDoc } = require('../middleware/upload.middleware');
 
 const isManager = [authenticate, authorize('manager')];
 
@@ -21,6 +22,12 @@ router.get('/team/members/:id/daily-logs', isManager, managerController.getMembe
 router.get('/team/members/:id/overtime', isManager, managerController.getMemberOvertimeHistory);
 router.get('/team/daily-logs', isManager, managerController.getTeamDailyLogs);
 
+// Manager Log Management
+router.post('/team/daily-log', isManager, uploadDailyLogDoc, managerController.submitTeamMemberDailyLog);
+router.patch('/team/daily-log/:logId', isManager, uploadDailyLogDoc, managerController.updateTeamMemberDailyLog);
+
+// Team Members
+router.post('/team/members', isManager, managerController.createTeamMember);
 router.get('/team/leave-requests', isManager, managerController.getTeamLeaveRequests);
 router.post('/team/leave/:id/decision', isManager, managerController.handleLeaveDecision);
 

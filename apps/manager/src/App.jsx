@@ -8,11 +8,13 @@ import AttendanceMethodPage from './pages/AttendanceMethodPage';
 import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
 import TeamOvertimePage from './pages/TeamOvertimePage';
-import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from './lib/api';
 import DocumentPreviewModal from './components/DocumentPreviewModal';
 import EmployeeProfileModal from './components/EmployeeProfileModal';
+import EmployeeCreationModal from './components/EmployeeCreationModal';
+import UploadDailyLogModal from './components/UploadDailyLogModal';
 
 // ── Login Page (shared design) ──────────────────────────────────────────────
 import { EyeOff, LogIn, ShieldCheck, Shield, Copy, Check, ArrowLeft, KeyRound, QrCode } from 'lucide-react';
@@ -350,6 +352,7 @@ const TeamMembersPage = () => {
   const [data, setData] = useState({ teams: [], members: [] });
   const [loading, setLoading] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
+  const [showCreationModal, setShowCreationModal] = useState(false);
   const { socket } = useSocket();
 
   const fetchMembers = useCallback(() => {
@@ -391,6 +394,12 @@ const TeamMembersPage = () => {
             {data.teams.map(t => t.name).join(', ') || 'Managed Teams'} · {data.members.length} member{data.members.length === 1 ? '' : 's'}
           </p>
         </div>
+        <button
+          onClick={() => setShowCreationModal(true)}
+          className="px-4 py-2 bg-violet-600 text-white rounded-xl font-bold text-sm hover:bg-violet-700 transition-colors"
+        >
+          + Add Member
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -406,12 +415,18 @@ const TeamMembersPage = () => {
                   src={member.avatarUrl}
                   alt={member.name}
                   className="w-11 h-11 rounded-xl object-cover flex-shrink-0 shadow-sm ring-1 ring-violet-200 group-hover:scale-105 transition-transform"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-                  {member.name?.[0]?.toUpperCase()}
-                </div>
-              )}
+              ) : null}
+              <div
+                className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform"
+                style={{ display: member.avatarUrl ? 'none' : 'flex' }}
+              >
+                {member.name?.[0]?.toUpperCase()}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-slate-900 font-bold truncate group-hover:text-violet-600 transition-colors">{member.name}</p>
@@ -446,11 +461,23 @@ const TeamMembersPage = () => {
       )}
 
       {/* 360 Degree Performance & Profile Modal */}
-      <EmployeeProfileModal
-        isOpen={!!selectedMemberId}
-        memberId={selectedMemberId}
-        onClose={() => setSelectedMemberId(null)}
-      />
+      {selectedMemberId && (
+        <EmployeeProfileModal
+          memberId={selectedMemberId}
+          onClose={() => setSelectedMemberId(null)}
+        />
+      )}
+
+      {showCreationModal && (
+        <EmployeeCreationModal
+          onClose={() => setShowCreationModal(false)}
+          onSuccess={() => {
+            setShowCreationModal(false);
+            fetchMembers();
+          }}
+          teams={data.teams}
+        />
+      )}
     </div>
   );
 };
@@ -485,9 +512,12 @@ const TeamAttendancePage = () => {
     };
     socket.on('attendance:update', onUpdate);
     socket.on('break:update', onUpdate);
+    // Auto-refresh when an employee submits a manual attendance request
+    socket.on('attendance:manual_request_created', onUpdate);
     return () => {
       socket.off('attendance:update', onUpdate);
       socket.off('break:update', onUpdate);
+      socket.off('attendance:manual_request_created', onUpdate);
     };
   }, [socket, date]);
 
@@ -733,12 +763,18 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                 src={user.avatarUrl}
                 alt={user.name || 'Employee'}
                 className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-violet-500/20 ring-2 ring-violet-200"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextSibling.style.display = 'flex';
+                }}
               />
-            ) : (
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white font-bold text-lg flex items-center justify-center shadow-md shadow-violet-500/20">
-                {user.name?.[0]?.toUpperCase() || 'E'}
-              </div>
-            )}
+            ) : null}
+            <div
+              className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white font-bold text-lg flex items-center justify-center shadow-md shadow-violet-500/20"
+              style={{ display: user.avatarUrl ? 'none' : 'flex' }}
+            >
+              {user.name?.[0]?.toUpperCase() || 'E'}
+            </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900">{user.name || 'Employee'}</h2>
@@ -850,9 +886,49 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
               </span>
             </div>
 
-            {/* Document Submission Card (New Standard) */}
-            {(log.documentUrl || log.attachmentUrl) ? (
-              <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-3 shadow-sm">
+            <div className="space-y-2 mb-4">
+              {log.taskTitle && (
+                <div>
+                  <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Task Title</p>
+                  <p className="text-slate-900 font-medium bg-white p-2.5 rounded-lg border border-slate-200">{log.taskTitle}</p>
+                </div>
+              )}
+              {log.projectName && (
+                <div>
+                  <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Project Name</p>
+                  <p className="text-slate-900 font-medium bg-white p-2.5 rounded-lg border border-slate-200">{log.projectName}</p>
+                </div>
+              )}
+              {log.description && (
+                <div>
+                  <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Description</p>
+                  <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-slate-200 whitespace-pre-line">{log.description}</p>
+                </div>
+              )}
+              {log.blockers && (
+                <div>
+                  <p className="text-[11px] text-rose-600 font-semibold mb-0.5">Blockers</p>
+                  <p className="text-rose-800 bg-rose-50 p-2.5 rounded-lg border border-rose-200 whitespace-pre-line">{log.blockers}</p>
+                </div>
+              )}
+              {log.githubLink && (
+                <div>
+                  <p className="text-[11px] text-slate-600 font-semibold mb-0.5">GitHub Repository / PR</p>
+                  <a
+                    href={log.githubLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-violet-600 hover:text-violet-700 font-mono flex items-center gap-1.5 underline bg-white p-2 rounded-lg border border-slate-200"
+                  >
+                    <ExternalLink size={12} /> {log.githubLink}
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Document Submission Card */}
+            {(log.documentUrl || log.attachmentUrl) && (
+              <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-3 shadow-sm mb-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center flex-shrink-0">
@@ -882,7 +958,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                       </div>
                       <p className="text-[11px] text-slate-600">
                         {log.documentSize ? `${(log.documentSize / (1024 * 1024)).toFixed(2)} MB • ` : ''}
-                        64-base encoded link • Ready for preview & download
+                        {(log.documentUrl && log.documentUrl.startsWith('data:')) ? '64-base encoded link' : 'Uploaded document'} • Ready for preview & download
                       </p>
                     </div>
                   </div>
@@ -916,35 +992,6 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                   </button>
                 </div>
               </div>
-            ) : (
-              /* Fallback / Legacy text log display if no document attached */
-              <div className="space-y-2">
-                {log.taskTitle && (
-                  <div>
-                    <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Task Title</p>
-                    <p className="text-slate-900 font-medium bg-white p-2.5 rounded-lg border border-slate-200">{log.taskTitle}</p>
-                  </div>
-                )}
-                {log.description && (
-                  <div>
-                    <p className="text-[11px] text-slate-600 font-semibold mb-0.5">Description</p>
-                    <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-slate-200 whitespace-pre-line">{log.description}</p>
-                  </div>
-                )}
-                {log.githubLink && (
-                  <div>
-                    <p className="text-[11px] text-slate-600 font-semibold mb-0.5">GitHub Repository / PR</p>
-                    <a
-                      href={log.githubLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-violet-600 hover:text-violet-700 font-mono flex items-center gap-1.5 underline bg-white p-2 rounded-lg border border-slate-200"
-                    >
-                      <ExternalLink size={12} /> {log.githubLink}
-                    </a>
-                  </div>
-                )}
-              </div>
             )}
 
             <div className="pt-2 text-[11px] text-slate-500 flex justify-between border-t border-slate-200">
@@ -976,31 +1023,42 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
 
 // ── Team Daily Logs Page ──────────────────────────────────────────────────────
 const TeamDailyLogsPage = () => {
+  const today = new Date();
+  // Ensure we don't have timezone offset issues when rendering current month
+  const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
   const [logs, setLogs] = useState([]);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [totalTeamMembers, setTotalTeamMembers] = useState(0);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [missingMembers, setMissingMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [uploadLogData, setUploadLogData] = useState(null); // { user, isEdit, existingLog }
   const { socket } = useSocket();
 
   const fetchLogs = useCallback(() => {
     setLoading(true);
-    api.get(`/manager/team/daily-logs?date=${date}`)
-      .then(res => setLogs(res.data.data.logs || []))
+    const startStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth()+1).padStart(2, '0')}-01`;
+    const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    const endStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth()+1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    
+    api.get(`/manager/team/daily-logs?startDate=${startStr}&endDate=${endStr}`)
+      .then(res => {
+        setLogs(res.data.data.logs || []);
+        setTotalTeamMembers(res.data.data.totalTeamMembers || 0);
+        setTeamMembers(res.data.data.teamMembers || []);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [date]);
+  }, [currentMonth]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Real-time updates when employee submits daily log / sends report
   useEffect(() => {
     if (!socket) return;
-    const onLogSubmitted = () => {
-      console.log('⚡ [Manager] Received daily_log:submitted socket event');
-      fetchLogs();
-    };
+    const onLogSubmitted = () => fetchLogs();
     socket.on('daily_log:submitted', onLogSubmitted);
     socket.on('attendance:update', onLogSubmitted);
     return () => {
@@ -1009,59 +1067,256 @@ const TeamDailyLogsPage = () => {
     };
   }, [socket, fetchLogs]);
 
+  const handlePrevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+
+  const daysInMonth = getDaysInMonth(currentMonth.getFullYear(), currentMonth.getMonth());
+  const firstDay = getFirstDayOfMonth(currentMonth.getFullYear(), currentMonth.getMonth());
+  const blanks = Array.from({ length: firstDay });
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const logsByDate = useMemo(() => {
+    const map = {};
+    logs.forEach(log => {
+      if (!map[log.logDate]) map[log.logDate] = [];
+      map[log.logDate].push(log);
+    });
+    return map;
+  }, [logs]);
+
+  const selectedDateLogs = logsByDate[selectedDate] || [];
+
+  // Compute missing members dynamically for the selected date
+  useEffect(() => {
+    const d = new Date(selectedDate);
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    if (isWeekend) {
+      setMissingMembers([]);
+      return;
+    }
+    
+    const submittedIds = new Set(selectedDateLogs.map(l => l.userId?._id?.toString()).filter(Boolean));
+    const missing = teamMembers.filter(m => {
+      // Check joined date
+      if (m.joinedDate && new Date(m.joinedDate) > d) return false;
+      return !submittedIds.has(m._id.toString());
+    });
+    setMissingMembers(missing);
+  }, [selectedDate, selectedDateLogs, teamMembers]);
+
   return (
-    <div className="page-container space-y-5 animate-fade-in">
+    <div className="page-container space-y-6 animate-fade-in max-w-6xl mx-auto">
+      {/* Calendar Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Team Daily Logs</h1>
-          <p className="text-slate-600 text-xs mt-0.5">Click any employee card to view their complete daily report & shift details</p>
+          <p className="text-slate-600 text-sm mt-1">Select a date to view your team's submitted daily logs.</p>
         </div>
-        <input type="date" className="input w-auto border-slate-200 bg-white text-slate-900 shadow-sm" value={date} onChange={e => setDate(e.target.value)} />
       </div>
-      {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-violet-600" size={28} /></div> : (
-        <div className="space-y-3">
-          {logs.map(log => (
-            <div
-              key={log._id}
-              onClick={() => setSelectedLog(log)}
-              className="card cursor-pointer hover:border-violet-300 hover:bg-slate-50/80 transition-all duration-200 group relative border-slate-200 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-slate-900 font-bold group-hover:text-violet-700 transition-colors">{log.userId?.name}</p>
-                  {log.userId?.designation && (
-                    <span className="text-[11px] text-slate-500">· {log.userId.designation}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-xs font-bold font-mono">
-                    {log.attendance?.actualWorkMinutes ? formatDuration(log.attendance.actualWorkMinutes) : (log.hoursSpent ? `${log.hoursSpent}h` : '—')}
-                  </span>
-                  <ChevronRight size={16} className="text-slate-400 group-hover:text-violet-600 group-hover:translate-x-0.5 transition-all" />
-                </div>
-              </div>
-              {log.taskTitle && <p className="text-slate-800 text-xs font-medium">Task: {log.taskTitle}</p>}
-              {log.projectName && <p className="text-slate-600 text-xs mt-0.5">Project: {log.projectName}</p>}
-              {log.campaignName && <p className="text-slate-600 text-xs mt-0.5">Campaign: {log.campaignName}</p>}
-              {log.blockers && <p className="text-amber-700 text-xs mt-1">⚠ Blockers: {log.blockers}</p>}
 
-              <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
-                <span>{log.attendance?.checkInTime ? `Checked in: ${formatTime(log.attendance.checkInTime)}` : 'Logged today'}</span>
-                <span className="text-violet-600 group-hover:text-violet-700 font-medium flex items-center gap-1">
-                  View Full Report & Breakdown →
-                </span>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left: Calendar Component */}
+        <div className="lg:col-span-5 flex flex-col gap-4">
+          <div className="card border-slate-200 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-slate-800">
+                {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </h2>
+              <div className="flex items-center gap-1">
+                <button onClick={handlePrevMonth} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-600">
+                  <ChevronLeft size={20} />
+                </button>
+                <button onClick={handleNextMonth} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-600">
+                  <ChevronRight size={20} />
+                </button>
               </div>
             </div>
-          ))}
-          {logs.length === 0 && <p className="text-slate-500 text-center py-8">No daily logs for {date}.</p>}
-        </div>
-      )}
 
-      {/* Employee Detail Modal */}
-      <EmployeeLogDetailModal
-        log={selectedLog}
-        onClose={() => setSelectedLog(null)}
-      />
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                <div key={d} className="text-[11px] font-bold uppercase tracking-wider text-slate-400 py-1">{d}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {blanks.map((_, i) => <div key={`blank-${i}`} className="p-2" />)}
+              {days.map(day => {
+                const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isSelected = selectedDate === dateStr;
+                const isTodayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                const isToday = dateStr === isTodayStr;
+                const dayOfWeek = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day).getDay();
+                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                const isFuture = new Date(dateStr) > today;
+                
+                const logCount = logsByDate[dateStr]?.length || 0;
+                let dotColor = null;
+                if (!isFuture) {
+                  if (logCount >= totalTeamMembers && totalTeamMembers > 0) dotColor = 'bg-emerald-500';
+                  else if (logCount > 0) dotColor = 'bg-amber-400';
+                  else if (!isWeekend) dotColor = 'bg-rose-400'; 
+                }
+
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDate(dateStr)}
+                    className={`relative flex flex-col items-center justify-center aspect-square rounded-xl text-sm font-medium transition-all duration-200 hover:bg-violet-50 hover:text-violet-700
+                      ${isSelected ? 'bg-violet-600 text-white shadow-md hover:bg-violet-600 hover:text-white' : 'text-slate-700 bg-slate-50/50'}
+                      ${isToday && !isSelected ? 'ring-1 ring-violet-400 text-violet-700 font-bold' : ''}
+                    `}
+                  >
+                    <span>{day}</span>
+                    {dotColor && (
+                      <span className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/90' : dotColor}`}></span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> All Logs</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400"></span> Partial</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-400"></span> Missing</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Selected Date Detailed Table */}
+        <div className="lg:col-span-7">
+          <div className="card border-slate-200 shadow-sm p-0 overflow-hidden flex flex-col h-full min-h-[400px]">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-bold text-slate-800">
+                  Daily Logs — {new Date(selectedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">{selectedDateLogs.length} logs submitted</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-x-auto">
+              {loading ? (
+                <div className="flex items-center justify-center h-48"><Loader2 className="animate-spin text-violet-600" size={24} /></div>
+              ) : selectedDateLogs.length === 0 && missingMembers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full py-16 text-center px-4">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                    <FileText className="text-slate-400" size={24} />
+                  </div>
+                  <p className="text-slate-600 font-medium">No logs expected or submitted</p>
+                  <p className="text-slate-400 text-sm mt-1">There are no daily logs available or missing for this date.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="px-5 py-3">Employee</th>
+                      <th className="px-5 py-3">Check-In</th>
+                      <th className="px-5 py-3">Check-Out</th>
+                      <th className="px-5 py-3">Work Hours</th>
+                      <th className="px-5 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {selectedDateLogs.map(log => {
+                      const att = log.attendance;
+                      const checkIn = att?.checkInTime ? formatTime(att.checkInTime) : '—';
+                      const checkOut = att?.checkOutTime ? formatTime(att.checkOutTime) : '—';
+                      const hours = log.hoursSpent ? `${log.hoursSpent}h` : '—';
+                      
+                      return (
+                        <tr key={log._id} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              {log.userId?.avatarUrl ? (
+                                <img src={log.userId.avatarUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover shadow-sm" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                              ) : null}
+                              <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold flex items-center justify-center text-xs shadow-sm" style={{ display: log.userId?.avatarUrl ? 'none' : 'flex' }}>
+                                {log.userId?.name?.charAt(0) || 'U'}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-900">{log.userId?.name}</p>
+                                <p className="text-[11px] text-slate-500">{log.userId?.designation}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-slate-600 font-medium">{checkIn}</td>
+                          <td className="px-5 py-3.5 text-slate-600 font-medium">{checkOut}</td>
+                          <td className="px-5 py-3.5">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
+                              {hours}
+                            </span>
+                            {(log.submissionType === 'manager' || log.isEdited) && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                                {log.isEdited ? 'Edited by Manager' : 'Uploaded by Manager'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-right space-x-2">
+                            <button onClick={() => setUploadLogData({ user: log.userId, isEdit: true, existingLog: log })} className="text-slate-600 hover:text-violet-600 text-xs font-semibold px-2.5 py-1.5 rounded bg-slate-50 hover:bg-violet-50 transition-colors">
+                              Edit
+                            </button>
+                            <button onClick={() => setSelectedLog(log)} className="text-violet-600 hover:text-violet-800 text-xs font-semibold px-2.5 py-1.5 rounded bg-violet-50 hover:bg-violet-100 transition-colors">
+                              View Report
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Render Missing Members */}
+                    {missingMembers.map(member => (
+                      <tr key={member._id} className="bg-rose-50/40 hover:bg-rose-50/70 transition-colors group">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            {member.avatarUrl ? (
+                              <img src={member.avatarUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover shadow-sm" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                            ) : null}
+                            <div className="w-8 h-8 rounded-full bg-rose-200 text-rose-800 font-bold flex items-center justify-center text-xs shadow-sm" style={{ display: member.avatarUrl ? 'none' : 'flex' }}>
+                              {member.name?.charAt(0) || 'U'}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900">{member.name}</p>
+                              <p className="text-[11px] text-rose-600 font-medium">Missing Log</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-400 font-medium">—</td>
+                        <td className="px-5 py-3.5 text-slate-400 font-medium">—</td>
+                        <td className="px-5 py-3.5"><span className="text-rose-500 font-bold text-xs uppercase tracking-wider">Missing</span></td>
+                        <td className="px-5 py-3.5 text-right">
+                          <button onClick={() => setUploadLogData({ user: member, isEdit: false, existingLog: null })} className="text-rose-600 hover:text-rose-800 text-xs font-semibold px-3 py-1.5 rounded bg-rose-100 hover:bg-rose-200 transition-colors border border-rose-200">
+                            + Add Log
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <EmployeeLogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+      
+      {uploadLogData && (
+        <UploadDailyLogModal
+          targetUser={uploadLogData.user}
+          initialDate={selectedDate}
+          isEdit={uploadLogData.isEdit}
+          existingLog={uploadLogData.existingLog}
+          onClose={() => setUploadLogData(null)}
+          onSuccess={() => {
+            setUploadLogData(null);
+            fetchLogs(); // refresh
+          }}
+        />
+      )}
     </div>
   );
 };

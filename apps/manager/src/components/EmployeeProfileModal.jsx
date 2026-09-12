@@ -8,14 +8,14 @@ import {
 import api from '../lib/api';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
-export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
+export default function EmployeeProfileModal({ isOpen = true, memberId, onClose }) {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Period / Date filter state
+  //  Period / Date filter state
   const [preset, setPreset] = useState('current_month');
-  const [activeTab, setActiveTab] = useState('attendance'); // 'attendance' | 'logs' | 'overtime' | 'device'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'attendance' | 'logs' | 'overtime' | 'device'
 
   // Sub-tab pagination states
   const [attendancePage, setAttendancePage] = useState(1);
@@ -147,12 +147,18 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                   src={member.avatarUrl}
                   alt={member?.name || 'Employee'}
                   className="w-14 h-14 rounded-2xl object-cover ring-2 ring-violet-200 shadow-md shadow-violet-500/20 flex-shrink-0"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-fuchsia-500 flex items-center justify-center text-white font-black text-xl shadow-md shadow-violet-500/20 flex-shrink-0">
-                  {member?.name?.[0]?.toUpperCase() || <User size={24} />}
-                </div>
-              )}
+              ) : null}
+              <div
+                className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-fuchsia-500 flex items-center justify-center text-white font-black text-xl shadow-md shadow-violet-500/20 flex-shrink-0"
+                style={{ display: member?.avatarUrl ? 'none' : 'flex' }}
+              >
+                {member?.name?.[0]?.toUpperCase() || <User size={24} />}
+              </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-extrabold text-slate-900 truncate">
@@ -302,6 +308,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
           {/* ── Navigation Tabs ── */}
           <div className="flex items-center gap-1.5 mt-5 border-b border-slate-200 -mb-5 sm:-mb-6 pt-1">
             {[
+              { id: 'profile', label: 'Profile Info' },
               { id: 'attendance', label: 'Attendance Records', count: attendanceData?.totalCount },
               { id: 'logs', label: 'Daily Log Sheets', count: logsData?.totalCount },
               { id: 'overtime', label: 'Overtime (OT)', count: otData?.totalCount },
@@ -349,6 +356,139 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
             </div>
           ) : (
             <>
+              {/* ──────────────── TAB 0: PROFILE INFO ──────────────── */}
+              {activeTab === 'profile' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                  
+                  {/* Personal Info */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-violet-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                        <User size={14} />
+                      </div>
+                      Personal Information
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {[member?.name, member?.middleName, member?.lastName].filter(Boolean).join(' ') || '—'}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Date of Birth</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.dob ? new Date(member.dob).toLocaleDateString('en-GB') : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gender</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.gender || '—'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Address</p>
+                        <p className="text-sm font-semibold text-slate-800 leading-relaxed">{member?.currentAddress || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Job Info */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-blue-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <FileText size={14} />
+                      </div>
+                      Job Information
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Designation</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.designation || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.department || '—'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Job Type</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.jobType || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Date of Joining</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.joinedDate ? new Date(member.joinedDate).toLocaleDateString('en-GB') : '—'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Work Location</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.workLocation || '—'} {member?.country ? `(${member.country})` : ''}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Office Branch</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.officeBranch || '—'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Team Shift</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.teamShift || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Info */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-emerald-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <Mail size={14} />
+                      </div>
+                      Contact Details
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mobile Number</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.phone || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Personal Email</p>
+                        <p className="text-sm font-semibold text-slate-800 break-all">{member?.email || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Company Email</p>
+                        <p className="text-sm font-semibold text-slate-800 break-all">{member?.companyEmail || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Emergency Contact */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-rose-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <AlertCircle size={14} />
+                      </div>
+                      Emergency Contact
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Name</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.emergencyContactName || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Relationship</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.emergencyContactRelation || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.emergencyContactNumber || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
               {/* ──────────────── TAB 1: ATTENDANCE HISTORY ──────────────── */}
               {activeTab === 'attendance' && (
                 <div className="space-y-4">

@@ -333,26 +333,46 @@ const handleLeaveDecision = async (req, res) => {
 
 const getTeamDailyLogs = async (req, res) => {
   try {
-    const date = req.query.date || getTodayDateString();
+    const { startDate, endDate, date, recent } = req.query;
+    const isRecent = recent === 'true' || (!startDate && !endDate && !date);
+    
     const teams = await getManagedTeams(req.user);
-    if (!teams || teams.length === 0) return success(res, 'Fetched daily logs', { logs: [] });
+    if (!teams || teams.length === 0) return success(res, 'Fetched daily logs', { logs: [], totalTeamMembers: 0 });
 
     const memberIds = await getTeamMemberIds(teams.map(t => t._id));
-    const logs = await DailyLog.find({ userId: { $in: memberIds }, logDate: date })
+    
+    let query = { userId: { $in: memberIds } };
+    
+    if (startDate && endDate) {
+      query.logDate = { $gte: startDate, $lte: endDate };
+    } else if (date) {
+      query.logDate = date;
+    }
+
+    const logsQuery = DailyLog.find(query)
       .populate('userId', 'name email designation avatarUrl phone teamId')
       .populate('teamId', 'name')
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ logDate: -1, createdAt: -1 });
 
-    // Fetch attendance records for these members on this date to provide full shift insights
-    const attendances = await Attendance.find({ userId: { $in: memberIds }, date }).lean();
+    if (isRecent) logsQuery.limit(50);
+
+    const logs = await logsQuery.lean();
+
+    const uniqueDates = [...new Set(logs.map(l => l.logDate))];
+
+    // Fetch attendance records for these members on these dates to provide full shift insights
+    const attendances = await Attendance.find({ 
+      userId: { $in: memberIds }, 
+      date: { $in: uniqueDates } 
+    }).lean();
+    
     const attMap = new Map();
     for (const a of attendances) {
-      if (a.userId) attMap.set(a.userId.toString(), a);
+      if (a.userId) attMap.set(`${a.userId.toString()}_${a.date}`, a);
     }
 
     const enrichedLogs = logs.map(log => {
-      const rawAtt = log.userId?._id ? attMap.get(log.userId._id.toString()) || null : null;
+      const rawAtt = log.userId?._id ? attMap.get(`${log.userId._id.toString()}_${log.logDate}`) || null : null;
       const att = rawAtt ? employeeProfileService.enrichAttendanceRecord(rawAtt) : null;
 
       let hoursSpent = log.hoursSpent;
@@ -370,10 +390,224 @@ const getTeamDailyLogs = async (req, res) => {
       };
     });
 
-    return success(res, 'Fetched daily logs', { logs: enrichedLogs });
+    const teamMembers = await User.find({ _id: { $in: memberIds } })
+      .select('name email designation avatarUrl joinedDate')
+      .lean();
+
+    // Compute missing logs
+    const missingMembers = [];
+    if (date) {
+      const d = new Date(date);
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+      if (!isWeekend) {
+        const submittedIds = new Set(logs.map(l => l.userId._id.toString()));
+        for (const member of teamMembers) {
+          // If date is before joinedDate, skip
+          if (member.joinedDate && new Date(member.joinedDate) > d) continue;
+          if (!submittedIds.has(member._id.toString())) {
+            missingMembers.push(member);
+          }
+        }
+      }
+    }
+
+    return success(res, 'Fetched daily logs', { 
+      logs: enrichedLogs,
+      totalTeamMembers: memberIds.length,
+      teamMembers,
+      missingMembers
+    });
   } catch (error) {
     console.error('getTeamDailyLogs error:', error);
     return badRequest(res, 'Failed to fetch daily logs');
+  }
+};
+
+// ── Manager Creating Employees ─────────────────────────────
+const createTeamMember = async (req, res) => {
+  try {
+    const { 
+      name, middleName, lastName, dob, gender,
+      email, companyEmail, mobileNumber, currentAddress, 
+      emergencyContactName, emergencyContactNumber, emergencyContactRelation,
+      department, designation, jobType, dateOfJoining, workLocation, 
+      country, officeBranch, teamShift, teamId, password
+    } = req.body;
+
+    if (!name || !lastName || !email || !mobileNumber || !currentAddress || 
+        !emergencyContactName || !emergencyContactNumber || !emergencyContactRelation ||
+        !department || !designation || !jobType || !dateOfJoining || 
+        !workLocation || !country || !officeBranch || !teamShift || !password) {
+      return badRequest(res, 'Missing required fields.');
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return badRequest(res, 'User with this email already exists.');
+
+    const teams = await getManagedTeams(req.user);
+    if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any teams.');
+    
+    const validTeamIds = teams.map(t => t._id.toString());
+    let assignedTeamId = teamId;
+    if (validTeamIds.length === 1) {
+      assignedTeamId = validTeamIds[0];
+    } else if (!validTeamIds.includes(assignedTeamId)) {
+      return forbidden(res, 'You are not authorized to add members to this team.');
+    }
+
+    const user = new User({
+      name, middleName, lastName, dob, gender,
+      email, companyEmail, phone: mobileNumber, currentAddress,
+      emergencyContactName, emergencyContactNumber, emergencyContactRelation,
+      department, designation, jobType, joinedDate: dateOfJoining,
+      workLocation, country, officeBranch, teamShift,
+      passwordHash: password,
+      role: 'employee',
+      teamId: assignedTeamId,
+      reportingManager: req.user._id,
+      forcePasswordChange: true
+    });
+    
+    await user.save();
+    return success(res, 'Team member created successfully', { user: user.toSafeObject() });
+  } catch (error) {
+    console.error('createTeamMember error:', error);
+    return badRequest(res, 'Failed to create team member');
+  }
+};
+
+// ── Manager Log Management ─────────────────────────────────
+const submitTeamMemberDailyLog = async (req, res) => {
+  try {
+    const { userId, logDate, hoursSpent, taskTitle, projectName, description, blockers } = req.body;
+    if (!userId || !logDate || !hoursSpent) return badRequest(res, 'User ID, Date, and Hours are required');
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser || !targetUser.teamId) return badRequest(res, 'User not found or unassigned');
+
+    const teams = await getManagedTeams(req.user);
+    if (!teams.some(t => t._id.toString() === targetUser.teamId.toString())) {
+      return forbidden(res, 'Not authorized to upload logs for this employee');
+    }
+
+    const existingLog = await DailyLog.findOne({ userId, logDate });
+    if (existingLog) return badRequest(res, 'A log already exists for this date. Use edit instead.');
+
+    let docParams = {};
+    if (req.file) {
+      const extMatch = (req.file.originalname || '').split('.').pop();
+      const doctype = extMatch ? extMatch.toLowerCase() : 'doc';
+      let documentUrl = null;
+      if (req.file.buffer) {
+        const base64Data = req.file.buffer.toString('base64');
+        const mime = req.file.mimetype || 'application/octet-stream';
+        documentUrl = `data:${mime};base64,${base64Data}`;
+      } else if (req.file.filename) {
+        documentUrl = `/uploads/${req.file.filename}`;
+      }
+      docParams = {
+        documentUrl,
+        attachmentUrl: documentUrl,
+        documentName: req.file.originalname,
+        documentSize: req.file.size,
+        documentMimeType: req.file.mimetype || 'application/octet-stream',
+        doctype,
+      };
+    }
+
+    const resolvedTaskTitle = (taskTitle || (req.file ? req.file.originalname : 'Daily Work Document')).trim();
+    const resolvedProjectName = (projectName || 'Daily Log').trim();
+    const resolvedDescription = (description || (req.file ? 'Submitted via daily work document upload.' : 'Submitted by Manager.')).trim();
+
+    const log = new DailyLog({
+      userId,
+      teamId: targetUser.teamId,
+      logDate,
+      hoursSpent: parseFloat(hoursSpent),
+      taskTitle: resolvedTaskTitle,
+      projectName: resolvedProjectName,
+      description: resolvedDescription,
+      blockers: blockers ? blockers.trim() : null,
+      ...docParams,
+      createdBy: req.user._id,
+      createdByRole: 'manager',
+      submissionType: 'manager',
+      isEdited: false,
+      submittedAt: new Date(),
+    });
+
+    await log.save();
+
+    // Mark dailyLogSubmitted in Attendance
+    await Attendance.updateOne(
+      { userId, date: logDate },
+      { $set: { dailyLogSubmitted: true } }
+    );
+
+    return success(res, 'Daily log submitted successfully', { log });
+  } catch (error) {
+    console.error('submitTeamMemberDailyLog error:', error);
+    return badRequest(res, 'Failed to submit log');
+  }
+};
+
+const updateTeamMemberDailyLog = async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const { hoursSpent, taskTitle, projectName, description, blockers } = req.body;
+
+    const log = await DailyLog.findById(logId);
+    if (!log) return badRequest(res, 'Log not found');
+
+    const targetUser = await User.findById(log.userId);
+    const teams = await getManagedTeams(req.user);
+    if (!teams.some(t => t._id.toString() === targetUser.teamId.toString())) {
+      return forbidden(res, 'Not authorized to edit logs for this employee');
+    }
+
+    if (hoursSpent) log.hoursSpent = parseFloat(hoursSpent);
+    if (taskTitle !== undefined) log.taskTitle = taskTitle;
+    if (projectName !== undefined) log.projectName = projectName;
+    if (description !== undefined) log.description = description;
+    if (blockers !== undefined) log.blockers = blockers;
+
+    if (req.file) {
+      const extMatch = (req.file.originalname || '').split('.').pop();
+      const doctype = extMatch ? extMatch.toLowerCase() : 'doc';
+      let documentUrl = null;
+      if (req.file.buffer) {
+        const base64Data = req.file.buffer.toString('base64');
+        const mime = req.file.mimetype || 'application/octet-stream';
+        documentUrl = `data:${mime};base64,${base64Data}`;
+      } else if (req.file.filename) {
+        documentUrl = `/uploads/${req.file.filename}`;
+      }
+      log.documentUrl = documentUrl;
+      log.attachmentUrl = documentUrl;
+      log.documentName = req.file.originalname;
+      log.documentSize = req.file.size;
+      log.documentMimeType = req.file.mimetype || 'application/octet-stream';
+      log.doctype = doctype;
+      if (!log.taskTitle) log.taskTitle = req.file.originalname;
+      if (!log.projectName) log.projectName = 'Daily Log';
+      if (!log.description) log.description = 'Submitted via daily work document upload.';
+    }
+
+    log.isEdited = true;
+    log.editedBy = req.user._id;
+    log.editedAt = new Date();
+
+    await log.save();
+
+    await Attendance.updateOne(
+      { userId: log.userId, date: log.logDate },
+      { $set: { dailyLogSubmitted: true } }
+    );
+
+    return success(res, 'Daily log updated successfully', { log });
+  } catch (error) {
+    console.error('updateTeamMemberDailyLog error:', error);
+    return badRequest(res, 'Failed to update log');
   }
 };
 
@@ -384,17 +618,38 @@ const getDeviceRequests = async (req, res) => {
 
     const status = req.query.status || 'pending';
     const teams = await getManagedTeams(req.user);
-    if (!teams || teams.length === 0) return success(res, 'Fetched device requests', { requests: [] });
+    if (!teams || teams.length === 0) {
+      return success(res, 'Fetched device requests', {
+        requests: [],
+        counts: { all: 0, pending: 0, approved: 0, rejected: 0 }
+      });
+    }
 
     const memberIds = await getTeamMemberIds(teams.map(t => t._id));
     
-    const query = { userId: { $in: memberIds } };
+    const baseQuery = { userId: { $in: memberIds } };
+    const query = { ...baseQuery };
     if (status !== 'all') query.status = status;
 
-    const rawRequests = await DeviceRequest.find(query)
-      .populate('userId', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
+    const [rawRequests, counts] = await Promise.all([
+      DeviceRequest.find(query)
+        .populate({
+          path: 'userId',
+          select: 'name email role designation teamId avatarUrl',
+          populate: { path: 'teamId', select: 'name' },
+        })
+        .sort({ createdAt: -1 })
+        .lean(),
+      (async () => {
+        const [all, pending, approved, rejected] = await Promise.all([
+          DeviceRequest.countDocuments(baseQuery),
+          DeviceRequest.countDocuments({ ...baseQuery, status: 'pending' }),
+          DeviceRequest.countDocuments({ ...baseQuery, status: 'approved' }),
+          DeviceRequest.countDocuments({ ...baseQuery, status: 'rejected' }),
+        ]);
+        return { all, pending, approved, rejected };
+      })(),
+    ]);
 
     const requests = rawRequests.map((r) => ({
       ...r,
@@ -403,11 +658,11 @@ const getDeviceRequests = async (req, res) => {
 
     // Mark notifications for device requests as read for this manager
     await Notification.updateMany(
-      { userId: req.user._id, isRead: false, type: { $in: ['device_request', 'new_device_request'] } },
+      { userId: req.user._id, isRead: false, type: { $in: ['device_request', 'new_device_request', 'device_request_submitted'] } },
       { $set: { isRead: true } }
     );
 
-    return success(res, 'Fetched device requests', { requests });
+    return success(res, 'Fetched device requests', { requests, counts });
   } catch (error) {
     console.error('getDeviceRequests error:', error);
     return badRequest(res, 'Failed to fetch device requests');
@@ -526,19 +781,41 @@ const getLocationRequests = async (req, res) => {
 
     const status = req.query.status || 'pending';
     const teams = await getManagedTeams(req.user);
-    if (!teams || teams.length === 0) return success(res, 'Fetched location requests', { requests: [] });
+    if (!teams || teams.length === 0) {
+      return success(res, 'Fetched location requests', {
+        requests: [],
+        counts: { all: 0, pending: 0, approved: 0, rejected: 0 }
+      });
+    }
 
     const memberIds = await getTeamMemberIds(teams.map(t => t._id));
     
-    const query = { userId: { $in: memberIds } };
+    const baseQuery = { userId: { $in: memberIds } };
+    const query = { ...baseQuery };
     if (status !== 'all') query.status = status;
 
-    const requests = await LocationRequest.find(query)
-      .populate('userId', 'name')
-      .populate('requestedLocationId', 'officeName')
-      .sort({ createdAt: -1 });
+    const [requests, counts] = await Promise.all([
+      LocationRequest.find(query)
+        .populate({
+          path: 'userId',
+          select: 'name email role designation teamId avatarUrl',
+          populate: { path: 'teamId', select: 'name' },
+        })
+        .populate('requestedLocationId', 'officeName address')
+        .sort({ createdAt: -1 })
+        .lean(),
+      (async () => {
+        const [all, pending, approved, rejected] = await Promise.all([
+          LocationRequest.countDocuments(baseQuery),
+          LocationRequest.countDocuments({ ...baseQuery, status: 'pending' }),
+          LocationRequest.countDocuments({ ...baseQuery, status: 'approved' }),
+          LocationRequest.countDocuments({ ...baseQuery, status: 'rejected' }),
+        ]);
+        return { all, pending, approved, rejected };
+      })(),
+    ]);
 
-    return success(res, 'Fetched location requests', { requests });
+    return success(res, 'Fetched location requests', { requests, counts });
   } catch (error) {
     console.error('getLocationRequests error:', error);
     return badRequest(res, 'Failed to fetch location requests');
@@ -868,6 +1145,9 @@ module.exports = {
   handleLocationRequestDecision,
   handleManualAttendanceDecision,
   getUnreadNotificationCount,
+  createTeamMember,
+  submitTeamMemberDailyLog,
+  updateTeamMemberDailyLog,
   getManagedTeams,
   getManagedTeam,
   getTeamMemberIds,

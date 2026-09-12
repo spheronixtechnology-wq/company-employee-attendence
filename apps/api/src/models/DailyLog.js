@@ -64,18 +64,31 @@ const dailyLogSchema = new mongoose.Schema(
       default: Date.now,
     },
 
-    // Override tracking
-    overriddenBy: {
+    // ── Audit Tracking ────────────────────────────────
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null, // If null, assume created by userId (the employee themselves)
+    },
+    createdByRole: {
+      type: String,
+      default: 'employee',
+    },
+    submissionType: {
+      type: String,
+      enum: ['employee', 'manager'],
+      default: 'employee',
+    },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    editedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null,
     },
-    overrideReason: {
-      type: String,
-      trim: true,
-      default: null,
-    },
-    overriddenAt: {
+    editedAt: {
       type: Date,
       default: null,
     },

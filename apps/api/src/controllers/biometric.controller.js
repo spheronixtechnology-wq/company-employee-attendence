@@ -22,9 +22,16 @@ const getStatus = async (req, res) => {
       isActive: true,
     });
 
+    const credentialCount = await BiometricCredential.countDocuments({
+      userId,
+      registeredDeviceId: activeDevice._id,
+      isActive: true,
+    });
+
     return success(res, 'Status fetched', {
       isDeviceRegistered: true,
       isBiometricEnrolled: !!cred,
+      credentialCount,
       lastUsedAt: cred?.lastUsedAt || null,
       deviceLabel: activeDevice.deviceLabel,
     });

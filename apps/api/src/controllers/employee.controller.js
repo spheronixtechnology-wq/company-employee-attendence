@@ -427,18 +427,26 @@ const checkIn = async (req, res) => {
         return badRequest(res, `Unknown attendance method: ${activeMethod}`);
     }
 
-    const newAttendance = new Attendance({
-      userId,
-      date: today,
-      checkInTime: new Date(),
-      status: 'present',
-      checkInMethod: activeMethod,
-      checkInIp: clientIp,
-    });
+    let attendance = existingAttendance;
+    if (attendance) {
+      attendance.checkInTime = new Date();
+      attendance.status = 'present';
+      attendance.checkInMethod = activeMethod;
+      attendance.checkInIp = clientIp;
+      await attendance.save();
+    } else {
+      attendance = new Attendance({
+        userId,
+        date: today,
+        checkInTime: new Date(),
+        status: 'present',
+        checkInMethod: activeMethod,
+        checkInIp: clientIp,
+      });
+      await attendance.save();
+    }
 
-    await newAttendance.save();
-
-    const populatedAttendance = await Attendance.findById(newAttendance._id)
+    const populatedAttendance = await Attendance.findById(attendance._id)
       .populate('userId', 'name designation email');
 
     const teamId = req.user.teamId?._id || req.user.teamId;
@@ -448,7 +456,7 @@ const checkIn = async (req, res) => {
         userId: req.user._id,
         userName: req.user.name,
         teamId,
-        attendance: populatedAttendance || newAttendance,
+        attendance: populatedAttendance || attendance,
       });
     }
     emitToManagers('attendance:update', {
@@ -456,7 +464,7 @@ const checkIn = async (req, res) => {
       userId: req.user._id,
       userName: req.user.name,
       teamId,
-      attendance: populatedAttendance || newAttendance,
+      attendance: populatedAttendance || attendance,
     });
 
     return success(res, 'Checked in successfully');

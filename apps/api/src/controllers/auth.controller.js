@@ -120,7 +120,7 @@ const requestDeviceAccess = async (req, res, next) => {
         if (team?.leadUserId) {
           await createNotification({
             userId: team.leadUserId,
-            type: 'device_request',
+            type: 'device_request_submitted',
             title: 'New Device Replacement Request',
             message: `${user.name} requested device replacement for ${requestedDeviceLabel || 'new device'}: "${reason}"`,
             relatedId: newRequest._id,
@@ -132,7 +132,7 @@ const requestDeviceAccess = async (req, res, next) => {
       for (const adm of admins) {
         await createNotification({
           userId: adm._id,
-          type: 'device_request',
+          type: 'device_request_submitted',
           title: 'New Device Replacement Request',
           message: `${user.name} requested device replacement for ${requestedDeviceLabel || 'new device'}: "${reason}"`,
           relatedId: newRequest._id,
@@ -253,6 +253,26 @@ const mfaVerify = async (req, res, next) => {
   }
 };
 
+const changePassword = async (req, res, next) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return badRequest(res, 'Password must be at least 6 characters long.');
+    }
+
+    const user = await User.findById(req.user._id).select('+passwordHash');
+    if (!user) return badRequest(res, 'User not found.');
+
+    user.passwordHash = newPassword;
+    user.forcePasswordChange = false;
+    await user.save();
+
+    return success(res, 'Password changed successfully', { user: user.toSafeObject() });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   login,
   logout,
@@ -260,4 +280,5 @@ module.exports = {
   requestDeviceAccess,
   mfaSetupVerify,
   mfaVerify,
+  changePassword,
 };

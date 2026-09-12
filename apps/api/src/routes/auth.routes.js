@@ -8,6 +8,7 @@ const {
   requestDeviceAccess,
   mfaSetupVerify,
   mfaVerify,
+  changePassword,
 } = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
 const { body, validationResult } = require('express-validator');
@@ -67,5 +68,8 @@ router.post('/logout', authenticate, logout);
  * @access  Private
  */
 router.get('/me', authenticate, getMe);
+
+// Change Password (requires valid token)
+router.post('/change-password', authenticate, changePassword);
 
 module.exports = router;

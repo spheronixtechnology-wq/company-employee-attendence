@@ -6,15 +6,16 @@ import {
   Timer, XCircle, Info, ChevronDown, Check, User
 } from 'lucide-react';
 import api from '../lib/api';
+import DocumentPreviewModal from './DocumentPreviewModal';
 
-export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
+export default function EmployeeProfileModal({ isOpen = true, memberId, onClose }) {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Period / Date filter state
+  //  Period / Date filter state
   const [preset, setPreset] = useState('current_month');
-  const [activeTab, setActiveTab] = useState('attendance'); // 'attendance' | 'logs' | 'overtime' | 'device'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'attendance' | 'logs' | 'overtime' | 'device'
 
   // Sub-tab pagination states
   const [attendancePage, setAttendancePage] = useState(1);
@@ -28,6 +29,9 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
   const [otPage, setOtPage] = useState(1);
   const [otLoading, setOtLoading] = useState(false);
   const [otData, setOtData] = useState(null);
+
+  // Document Preview Modal State
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   // Security audit toggle
   const [showSecurityAudit, setShowSecurityAudit] = useState(false);
@@ -142,13 +146,19 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                 <img
                   src={member.avatarUrl}
                   alt={member?.name || 'Employee'}
-                  className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-200 shadow-md shadow-indigo-500/20 flex-shrink-0"
+                  className="w-14 h-14 rounded-2xl object-cover ring-2 ring-violet-200 shadow-md shadow-violet-500/20 flex-shrink-0"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-md shadow-indigo-500/20 flex-shrink-0">
-                  {member?.name?.[0]?.toUpperCase() || <User size={24} />}
-                </div>
-              )}
+              ) : null}
+              <div
+                className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-fuchsia-500 flex items-center justify-center text-white font-black text-xl shadow-md shadow-violet-500/20 flex-shrink-0"
+                style={{ display: member?.avatarUrl ? 'none' : 'flex' }}
+              >
+                {member?.name?.[0]?.toUpperCase() || <User size={24} />}
+              </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-extrabold text-slate-900 truncate">
@@ -184,17 +194,17 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-1">
                   <span className="font-semibold text-slate-700">{member?.designation || 'Team Member'}</span>
                   {member?.team && (
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold text-[11px]">
+                    <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 font-semibold text-[11px]">
                       Team: {member.team.name}
                     </span>
                   )}
                   {member?.email && (
-                    <a href={`mailto:${member.email}`} className="flex items-center gap-1 text-slate-500 hover:text-indigo-600">
+                    <a href={`mailto:${member.email}`} className="flex items-center gap-1 text-slate-500 hover:text-violet-600">
                       <Mail size={12} /> {member.email}
                     </a>
                   )}
                   {member?.phone && (
-                    <a href={`tel:${member.phone}`} className="flex items-center gap-1 text-slate-500 hover:text-indigo-600">
+                    <a href={`tel:${member.phone}`} className="flex items-center gap-1 text-slate-500 hover:text-violet-600">
                       <Phone size={12} /> {member.phone}
                     </a>
                   )}
@@ -205,7 +215,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
             {/* Period Selector & Close Button */}
             <div className="flex items-center gap-2.5 self-end sm:self-center">
               <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
-                <Calendar size={13} className="text-indigo-600 flex-shrink-0" />
+                <Calendar size={13} className="text-violet-600 flex-shrink-0" />
                 <select
                   value={preset}
                   onChange={(e) => setPreset(e.target.value)}
@@ -298,6 +308,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
           {/* ── Navigation Tabs ── */}
           <div className="flex items-center gap-1.5 mt-5 border-b border-slate-200 -mb-5 sm:-mb-6 pt-1">
             {[
+              { id: 'profile', label: 'Profile Info' },
               { id: 'attendance', label: 'Attendance Records', count: attendanceData?.totalCount },
               { id: 'logs', label: 'Daily Log Sheets', count: logsData?.totalCount },
               { id: 'overtime', label: 'Overtime (OT)', count: otData?.totalCount },
@@ -310,14 +321,14 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-2 text-xs font-bold transition-all relative border-b-2 flex items-center gap-2 ${
                     active
-                      ? 'text-indigo-700 border-indigo-600 font-extrabold'
+                      ? 'text-violet-700 border-violet-600 font-extrabold'
                       : 'text-slate-500 hover:text-slate-800 border-transparent'
                   }`}
                 >
                   <span>{tab.label}</span>
                   {tab.count !== undefined && (
                     <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                      active ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'
+                      active ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-600'
                     }`}>
                       {tab.count}
                     </span>
@@ -332,7 +343,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Loader2 size={32} className="animate-spin text-indigo-600" />
+              <Loader2 size={32} className="animate-spin text-violet-600" />
               <p className="text-xs font-semibold text-slate-500">Retrieving employee records & performance metrics…</p>
             </div>
           ) : error ? (
@@ -345,6 +356,139 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
             </div>
           ) : (
             <>
+              {/* ──────────────── TAB 0: PROFILE INFO ──────────────── */}
+              {activeTab === 'profile' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                  
+                  {/* Personal Info */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-violet-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                        <User size={14} />
+                      </div>
+                      Personal Information
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</p>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {[member?.name, member?.middleName, member?.lastName].filter(Boolean).join(' ') || '—'}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Date of Birth</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.dob ? new Date(member.dob).toLocaleDateString('en-GB') : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gender</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.gender || '—'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Address</p>
+                        <p className="text-sm font-semibold text-slate-800 leading-relaxed">{member?.currentAddress || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Job Info */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-blue-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <FileText size={14} />
+                      </div>
+                      Job Information
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Designation</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.designation || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.department || '—'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Job Type</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.jobType || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Date of Joining</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.joinedDate ? new Date(member.joinedDate).toLocaleDateString('en-GB') : '—'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Work Location</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.workLocation || '—'} {member?.country ? `(${member.country})` : ''}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Office Branch</p>
+                          <p className="text-sm font-semibold text-slate-800">{member?.officeBranch || '—'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Team Shift</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.teamShift || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Info */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-emerald-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <Mail size={14} />
+                      </div>
+                      Contact Details
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mobile Number</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.phone || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Personal Email</p>
+                        <p className="text-sm font-semibold text-slate-800 break-all">{member?.email || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Company Email</p>
+                        <p className="text-sm font-semibold text-slate-800 break-all">{member?.companyEmail || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Emergency Contact */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-rose-200 transition-colors">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <AlertCircle size={14} />
+                      </div>
+                      Emergency Contact
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Name</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.emergencyContactName || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Relationship</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.emergencyContactRelation || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</p>
+                        <p className="text-sm font-semibold text-slate-800">{member?.emergencyContactNumber || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
               {/* ──────────────── TAB 1: ATTENDANCE HISTORY ──────────────── */}
               {activeTab === 'attendance' && (
                 <div className="space-y-4">
@@ -358,7 +502,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                   </div>
 
                   {attendanceLoading ? (
-                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-600" size={24} /></div>
+                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-violet-600" size={24} /></div>
                   ) : attendanceData?.records?.length > 0 ? (
                     <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-xs">
                       <table className="w-full text-xs text-left">
@@ -494,7 +638,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                   </div>
 
                   {logsLoading ? (
-                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-600" size={24} /></div>
+                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-violet-600" size={24} /></div>
                   ) : logsData?.records?.length > 0 ? (
                     <div className="space-y-3">
                       {logsData.records.map((log) => (
@@ -513,7 +657,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                                 <p className="text-xs font-bold text-slate-800 mt-1">{log.taskTitle}</p>
                               )}
                             </div>
-                            <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono font-bold text-xs flex-shrink-0">
+                            <span className="px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 font-mono font-bold text-xs flex-shrink-0">
                               {log.hoursSpent} Hours
                             </span>
                           </div>
@@ -537,7 +681,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                                 href={log.githubLink.startsWith('http') ? log.githubLink : `https://${log.githubLink}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-mono underline"
+                                className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 font-mono underline"
                               >
                                 <ExternalLink size={13} /> {log.githubLink}
                               </a>
@@ -548,21 +692,20 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                           {(log.documentUrl || log.attachmentUrl) && (
                             <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                               <div className="flex items-center gap-2 text-xs text-slate-600">
-                                <FileText size={15} className="text-indigo-600" />
+                                <FileText size={15} className="text-violet-600" />
                                 <span className="font-semibold">{log.documentName || 'Attached Document'}</span>
                                 {log.documentSize && (
                                   <span className="text-[10px] text-slate-400">({(log.documentSize / (1024 * 1024)).toFixed(2)} MB)</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                <a
-                                  href={log.documentUrl || log.attachmentUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold rounded-lg shadow-xs"
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc(log)}
+                                  className="btn bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold rounded-lg shadow-xs"
                                 >
-                                  <Eye size={12} /> View
-                                </a>
+                                  <Eye size={12} /> Preview
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -629,7 +772,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                   </div>
 
                   {otLoading ? (
-                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-600" size={24} /></div>
+                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-violet-600" size={24} /></div>
                   ) : otData?.records?.length > 0 ? (
                     <div className="space-y-3">
                       {otData.records.map((ot) => {
@@ -660,7 +803,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
                                   <XCircle size={13} /> Work Rejected (0h Credited)
                                 </span>
                               ) : isStage2Pending ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-xs font-semibold">
                                   <Clock size={13} /> Review Pending (Credited: —)
                                 </span>
                               ) : isLiveTracking ? (
@@ -933,7 +1076,7 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
 
         {/* ── Modal Footer ── */}
         <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
-          <span>Employee ID: <code className="font-mono">{memberId}</code></span>
+          <span>Member ID: <code className="font-mono">{memberId}</code></span>
           <button
             type="button"
             onClick={onClose}
@@ -943,6 +1086,17 @@ export default function EmployeeProfileModal({ isOpen, memberId, onClose }) {
           </button>
         </div>
       </div>
+
+      {/* Embedded Document Previewer */}
+      {previewDoc && (
+        <DocumentPreviewModal
+          isOpen={!!previewDoc}
+          onClose={() => setPreviewDoc(null)}
+          documentUrl={previewDoc.documentUrl || previewDoc.attachmentUrl}
+          documentName={previewDoc.documentName || previewDoc.taskTitle || 'Daily Work Document'}
+          documentSize={previewDoc.documentSize}
+        />
+      )}
     </div>
   );
 }

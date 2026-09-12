@@ -300,12 +300,18 @@ export default function TeamOvertimePage() {
                           src={r.userId.avatarUrl}
                           alt={r.userId?.name || 'Employee'}
                           className="w-9 h-9 rounded-xl object-cover shadow-xs border border-amber-200"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextSibling.style.display = 'flex';
+                          }}
                         />
-                      ) : (
-                        <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-bold flex items-center justify-center text-xs">
-                          {r.userId?.name?.[0]?.toUpperCase() || 'U'}
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-bold flex items-center justify-center text-xs"
+                        style={{ display: r.userId?.avatarUrl ? 'none' : 'flex' }}
+                      >
+                        {r.userId?.name?.[0]?.toUpperCase() || 'U'}
+                      </div>
                       <div>
                         <h4 className="font-bold text-slate-900 text-xs">{r.userId?.name || 'Unknown Employee'}</h4>
                         <p className="text-[11px] text-slate-500">{r.userId?.designation || r.userId?.email}</p>
@@ -393,12 +399,18 @@ export default function TeamOvertimePage() {
                             src={r.userId.avatarUrl}
                             alt={r.userId?.name || 'Employee'}
                             className="w-10 h-10 rounded-xl object-cover shadow-xs border border-violet-200"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextSibling.style.display = 'flex';
+                            }}
                           />
-                        ) : (
-                          <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-200 text-violet-800 font-bold flex items-center justify-center text-sm">
-                            {r.userId?.name?.[0]?.toUpperCase() || 'U'}
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-200 text-violet-800 font-bold flex items-center justify-center text-sm"
+                          style={{ display: r.userId?.avatarUrl ? 'none' : 'flex' }}
+                        >
+                          {r.userId?.name?.[0]?.toUpperCase() || 'U'}
+                        </div>
                         <div>
                           <h4 className="font-bold text-slate-900 text-sm">{r.userId?.name || 'Unknown Employee'}</h4>
                           <p className="text-xs text-slate-500">{r.userId?.designation || r.userId?.email}</p>
