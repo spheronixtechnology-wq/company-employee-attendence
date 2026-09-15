@@ -54,9 +54,7 @@ export default function DailyLogPage() {
       const formData = new FormData();
       formData.append('document', selectedFile);
 
-      await api.post('/employee/daily-log/me', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post('/employee/daily-log/me', formData);
 
       setMessage({ type: 'success', text: '✅ Daily log document submitted successfully!' });
       setSelectedFile(null);

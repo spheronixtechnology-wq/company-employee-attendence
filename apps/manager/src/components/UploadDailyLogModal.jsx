@@ -150,13 +150,9 @@ const UploadDailyLogModal = ({ onClose, onSuccess, initialDate, targetUser, isEd
 
     try {
       if (isEdit) {
-        await api.patch(`/manager/team/daily-log/${existingLog._id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.patch(`/manager/team/daily-log/${existingLog._id}`, formData);
       } else {
-        await api.post('/manager/team/daily-log', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.post('/manager/team/daily-log', formData);
       }
       onSuccess();
     } catch (err) {

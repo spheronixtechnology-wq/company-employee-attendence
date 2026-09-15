@@ -24,6 +24,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   const token = localStorage.getItem('deviceToken');
   if (token) {
     config.headers['x-device-token'] = token;

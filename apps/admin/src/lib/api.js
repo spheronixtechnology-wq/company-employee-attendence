@@ -15,6 +15,13 @@ const api = axios.create({
   timeout: 30000,
 });
 
+api.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+  return config;
+});
+
 // Response interceptor — redirect to login on 401
 api.interceptors.response.use(
   (response) => response,

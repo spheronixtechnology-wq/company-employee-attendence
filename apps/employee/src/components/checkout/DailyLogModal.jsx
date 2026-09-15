@@ -26,9 +26,7 @@ export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
       const formData = new FormData();
       formData.append('document', selectedFile);
 
-      const res = await api.post('/employee/daily-log/me', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post('/employee/daily-log/me', formData);
 
       const savedLog = res.data?.data?.log;
       if (onSuccess) onSuccess(savedLog);
