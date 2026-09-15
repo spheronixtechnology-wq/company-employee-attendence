@@ -2,7 +2,6 @@ const DailyLog = require('../models/DailyLog');
 const Attendance = require('../models/Attendance');
 const { writeAuditLog } = require('./audit.service');
 const { getTodayDateString } = require('../utils/dateUtils');
-const { AUDIT_ACTIONS } = require('../../../../packages/shared/auditActions');
 const { getFileUrl } = require('./upload.service');
 
 /**
@@ -178,7 +177,7 @@ const overrideDailyLogLock = async ({ attendanceId, overriddenBy, reason }) => {
   await attendance.save();
 
   await writeAuditLog({
-    action: AUDIT_ACTIONS.DAILY_LOG_LOCK_OVERRIDE,
+    action: 'DAILY_LOG_LOCK_OVERRIDE',
     performedBy: overriddenBy,
     targetCollection: 'attendance',
     targetId: attendance._id,

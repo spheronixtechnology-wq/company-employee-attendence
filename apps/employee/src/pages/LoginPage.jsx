@@ -9,6 +9,7 @@ import { getDeviceFingerprint } from '../lib/fingerprint';
 import { getDeviceInfo } from '../lib/deviceNames';
 import api from '../lib/api';
 import { io } from 'socket.io-client';
+import companyLogo from '../images/company logo.png';
 
 const PRESET_REASONS = [
   'Bought a new phone',
@@ -168,11 +169,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo / Brand */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-blue-600 rounded-2xl mb-3 shadow-lg shadow-primary-500/30">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
+          <img src={companyLogo} alt="Spheronix Technologies" className="h-16 w-auto mx-auto mb-3 object-contain" />
           <h1 className="text-2xl font-bold text-white">Spheronix Attendance</h1>
           <p className="text-slate-400 mt-0.5 text-xs">Secure Employee & Attendance Portal</p>
         </div>
@@ -243,18 +240,7 @@ export default function LoginPage() {
                 )}
               </button>
 
-              <div className="pt-3 text-center border-t border-slate-700/40">
-                <p className="text-[11px] text-slate-400 mb-1.5">Test Employee Account (Click to fill):</p>
-                <button
-                  type="button"
-                  id="fill-demo-credentials-btn"
-                  onClick={() => setForm({ email: 'employee@spheronixtechnology.in', password: 'Employee@1234' })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono text-[11px] transition-colors cursor-pointer"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  employee@spheronixtechnology.in
-                </button>
-              </div>
+
             </form>
           </div>
         )}

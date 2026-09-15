@@ -14,17 +14,20 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: backendUrl,
           changeOrigin: true,
+          xfwd: true,
           secure: false, // Don't verify API SSL cert since it's local HTTP
         },
         '/socket.io': {
           target: backendUrl,
           ws: true,
           changeOrigin: true,
+          xfwd: true,
           secure: false,
         },
         '/uploads': {
           target: backendUrl,
           changeOrigin: true,
+          xfwd: true,
           secure: false,
         },
       },

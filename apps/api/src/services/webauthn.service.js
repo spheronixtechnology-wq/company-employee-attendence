@@ -119,6 +119,14 @@ const generateEnrollmentOptionsForUser = async (user, registeredDevice, req) => 
   // WebAuthn L3 hint to prioritize local platform authenticator
   options.hints = ['client-device'];
 
+  console.log('\n--- WEBAUTHN DEBUG (ENROLL) ---');
+  console.log('Headers Origin:', req.headers['origin']);
+  console.log('Headers Referer:', req.headers['referer']);
+  console.log('req.hostname:', req.hostname);
+  console.log('Generated RP_ID:', rpID);
+  console.log('Generated expectedOrigin:', expectedOrigin);
+  console.log('-------------------------------\n');
+
   challengeStore.set(userIdStr, {
     challenge: options.challenge,
     type: 'registration',

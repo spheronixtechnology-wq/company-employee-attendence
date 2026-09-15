@@ -33,7 +33,7 @@ export const formatWebAuthnError = (err) => {
   if (name === 'NotAllowedError' || msg.includes('not allowed') || msg.includes('timed out') || msg.includes('canceled') || msg.includes('cancelled')) {
     return 'Verification prompt was closed or timed out. If your fingerprint or face is unreadable, you can enter your device screen PIN/pattern on the prompt.';
   }
-  if (name === 'SecurityError' || msg.includes('relying party id') || msg.includes('origin')) {
+  if (name === 'SecurityError') {
     return 'Security domain mismatch: WebAuthn requires accessing via an authorized domain name or localhost (raw IP addresses are blocked by browser security).';
   }
   if (name === 'InvalidStateError' || msg.includes('already registered')) {

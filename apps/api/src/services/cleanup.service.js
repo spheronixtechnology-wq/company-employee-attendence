@@ -3,7 +3,7 @@ const EmployeeLocation = require('../models/EmployeeLocation');
 const LocationRequest = require('../models/LocationRequest');
 const DeviceRequest = require('../models/DeviceRequest');
 const { writeAuditLog } = require('./audit.service');
-const { AUDIT_ACTIONS } = require('../../../../packages/shared/auditActions');
+
 
 /**
  * Called once on app startup and then on a schedule.
