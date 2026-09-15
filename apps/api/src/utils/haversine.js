@@ -37,11 +37,33 @@ const haversineDistance = (lat1, lng1, lat2, lng2) => {
  * @param {number} radiusMeters
  * @returns {{ inside: boolean, distanceMeters: number }}
  */
-const isWithinGeofence = (userLat, userLng, officeLat, officeLng, radiusMeters) => {
+const isWithinGeofence = (userLat, userLng, officeLat, officeLng, radiusMeters, accuracyMeters = 0) => {
+  const accuracy = Number(accuracyMeters);
+
+  // Guard against malicious or completely invalid inputs
+  if (!Number.isFinite(accuracy) || accuracy < 0 || accuracy > 500) {
+    return { inside: false, uncertain: false, outside: true, error: 'Invalid accuracy reading' };
+  }
+
   const distanceMeters = haversineDistance(userLat, userLng, officeLat, officeLng);
+
+  // The closest they could possibly be
+  const minimumPossibleDistance = Math.max(0, distanceMeters - accuracy);
+  
+  // The furthest they could possibly be
+  const maximumPossibleDistance = distanceMeters + accuracy;
+
+  // Decision Logic
+  const definitelyInside = maximumPossibleDistance <= radiusMeters;
+  const definitelyOutside = minimumPossibleDistance > radiusMeters;
+  const uncertain = !definitelyInside && !definitelyOutside;
+
   return {
-    inside: distanceMeters <= radiusMeters,
+    inside: definitelyInside,
+    uncertain,
+    outside: definitelyOutside,
     distanceMeters: Math.round(distanceMeters),
+    accuracy: Math.round(accuracy)
   };
 };
 

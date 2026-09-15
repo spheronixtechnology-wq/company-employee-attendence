@@ -61,7 +61,12 @@ const attendanceSchema = new mongoose.Schema({
   autoCheckoutReason: {
     type: String,
     default: null
-  }
+  },
+  distanceFromOffice: { type: Number, default: null },
+  geofenceRadius: { type: Number, default: null },
+  geofenceStatus: { type: String, enum: ['VERIFIED', 'UNCERTAIN', 'OUTSIDE'], default: null },
+  locationAccuracy: { type: Number, default: null },
+  locationTimestamp: { type: Number, default: null }
 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

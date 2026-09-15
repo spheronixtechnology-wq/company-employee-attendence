@@ -587,30 +587,82 @@ const DailyAttendanceReport = ({ attendance }) => {
 // ── Geolocation Hook ───────────────────────────────────────────────────────────
 const useGeolocation = () => {
   const [geoError, setGeoError] = useState(null);
+  const [geoStatus, setGeoStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+
   const getLocation = useCallback(() => new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject(new Error('Geolocation not supported.')); return; }
+    
     setLoading(true);
-    navigator.geolocation.getCurrentPosition(
+    setGeoError(null);
+    setGeoStatus('Getting precise location...');
+
+    let readings = [];
+    const MAX_READINGS = 5;
+    const MAX_ACCURACY = 50; // meters
+
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setGeoError(null);
-        setLoading(false);
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-        });
+        const { latitude, longitude, accuracy } = pos.coords;
+        readings.push({ lat: latitude, lng: longitude, accuracy, timestamp: pos.timestamp || Date.now() });
+        setGeoStatus(`Improving accuracy... (${readings.length}/${MAX_READINGS})`);
+        
+        // If we hit max readings OR if we get an excellent reading (<=15m) immediately, stop early
+        if (readings.length >= MAX_READINGS || readings.some(r => r.accuracy <= 15)) {
+          navigator.geolocation.clearWatch(watchId);
+          processReadings();
+        }
       },
       (err) => {
+        navigator.geolocation.clearWatch(watchId);
         const msg = err.code === 1
           ? 'Location Access Required — please allow location access to verify your work location.'
           : 'Unable to get your location. Please try again.';
-        setGeoError(msg); setLoading(false); reject(new Error(msg));
+        setGeoError(msg); 
+        setGeoStatus(null);
+        setLoading(false); 
+        reject(new Error(msg));
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  }), []);
-  return { geoError, loading, getLocation };
+    
+    const processReadings = () => {
+      if (readings.length === 0) return;
+      // Filter out readings with very poor accuracy
+      const validReadings = readings.filter(r => r.accuracy <= MAX_ACCURACY);
+      const pool = validReadings.length > 0 ? validReadings : readings;
+
+      // Select the most accurate reading from the pool
+      pool.sort((a, b) => a.accuracy - b.accuracy);
+      const bestReading = pool[0];
+
+      setLoading(false);
+      setGeoStatus(null);
+      
+      if (bestReading.accuracy > MAX_ACCURACY) {
+        setGeoError(`GPS accuracy is too poor (${Math.round(bestReading.accuracy)}m). Please move outdoors and try again.`);
+        reject(new Error('GPS accuracy is too poor.'));
+      } else {
+        resolve(bestReading);
+      }
+    };
+
+    // Safety timeout in case watchPosition stalls
+    setTimeout(() => {
+      navigator.geolocation.clearWatch(watchId);
+      if (loading && readings.length > 0) {
+        processReadings();
+      } else if (loading && readings.length === 0) {
+        setGeoError('Location request timed out. Please try again.');
+        setGeoStatus(null);
+        setLoading(false);
+        reject(new Error('Location timeout'));
+      }
+    }, 8000);
+
+  }), [loading]);
+
+  return { geoError, geoStatus, loading, getLocation };
 };
 
 // ── Status Badge ───────────────────────────────────────────────────────────────
@@ -698,7 +750,7 @@ const formatAttendanceError = (rawMessage) => {
 export default function EmployeeDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { getLocation, geoError, loading: geoLoading } = useGeolocation();
+  const { getLocation, geoError, geoStatus, loading: geoLoading } = useGeolocation();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
@@ -714,7 +766,6 @@ export default function EmployeeDashboard() {
   const [reportData, setReportData] = useState(null);
   const [todayDailyLog, setTodayDailyLog] = useState(null);
   const [showPermissionsGate, setShowPermissionsGate] = useState(false);
-  const [cachedLocation, setCachedLocation] = useState(null);
   const [biometricStatus, setBiometricStatus] = useState(null);
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [networkStatus, setNetworkStatus] = useState(null);
@@ -898,8 +949,7 @@ export default function EmployeeDashboard() {
     setShowPermissionsGate(true);
   };
 
-  const handlePermissionsGranted = (coords) => {
-    if (coords) setCachedLocation(coords);
+  const handlePermissionsGranted = () => {
     setShowPermissionsGate(false);
     setShowScanner(true);
   };
@@ -912,15 +962,13 @@ export default function EmployeeDashboard() {
       if (dashboard?.activeMethod === 'qr_code' && !finalQrValue) {
         throw new Error('Please scan the office QR code to check in.');
       }
-      let loc = cachedLocation;
-      if (!loc) {
-        loc = await getLocation();
-      }
+      const loc = await getLocation();
       const fp = await getDeviceFingerprint();
       const payload = {
         lat: loc.lat,
         lng: loc.lng,
         accuracy: loc.accuracy,
+        timestamp: loc.timestamp || Date.now(),
         deviceFingerprint: fp,
         ...extraPayload,
       };
@@ -928,7 +976,6 @@ export default function EmployeeDashboard() {
 
       await api.post('/employee/attendance/check-in', payload);
       showMessage('success', '✅ Attendance Marked Successfully! You are checked in.');
-      setCachedLocation(null);
       fetchDashboard();
       fetchBiometricStatus();
       fetchNetworkStatus();
@@ -1004,6 +1051,8 @@ export default function EmployeeDashboard() {
       const payload = {
         lat: loc.lat,
         lng: loc.lng,
+        accuracy: loc.accuracy,
+        timestamp: loc.timestamp || Date.now(),
         deviceFingerprint: fp,
         ...extraPayload,
       };
@@ -1230,7 +1279,13 @@ export default function EmployeeDashboard() {
         </div>
       )}
 
-      {/* GeoError Banner */}
+      {/* GeoStatus / GeoError Banner */}
+      {geoStatus && (
+        <div className="flex items-center gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl text-xs text-blue-400 animate-pulse">
+          <Loader2 size={14} className="mt-0.5 flex-shrink-0 animate-spin" />
+          {geoStatus}
+        </div>
+      )}
       {geoError && (
         <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-400">
           <MapPin size={14} className="mt-0.5 flex-shrink-0" />

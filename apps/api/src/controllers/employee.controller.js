@@ -522,7 +522,12 @@ const checkOut = async (req, res) => {
     const userId = req.user._id;
     const userIdStr = userId.toString();
     const today = getTodayDateString();
-    const { lat, lng, token, deviceFingerprint } = req.body;
+    const { lat, lng, accuracy, timestamp, token, deviceFingerprint } = req.body;
+
+    // Timestamp validation (anti-spoofing)
+    if (timestamp && (Date.now() - timestamp > 60000)) {
+      return badRequest(res, 'Location data is stale. Please refresh your location and try again.');
+    }
 
     const attendance = await Attendance.findOne({ userId, date: today });
     if (!attendance || !attendance.checkInTime) {
@@ -562,8 +567,11 @@ const checkOut = async (req, res) => {
         return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
       }
 
-      const geoCheck = isWithinGeofence(lat, lng, matchingOffice.latitude, matchingOffice.longitude, matchingOffice.radiusMeters);
+      const geoCheck = isWithinGeofence(lat, lng, matchingOffice.latitude, matchingOffice.longitude, matchingOffice.radiusMeters, accuracy);
       if (!geoCheck.inside) {
+        if (geoCheck.uncertain) {
+          return badRequest(res, 'Location is uncertain. Please wait a moment, ensure high-accuracy GPS is on, and try again.');
+        }
         return badRequest(
           res,
           `Outside Office Location — You are connected to ${matchingOffice.officeName}'s network, but you are outside its physical perimeter (${geoCheck.distanceMeters}m away).`
@@ -577,14 +585,18 @@ const checkOut = async (req, res) => {
 
       const activeOffices = await OfficeLocation.find({ status: 'active' });
       let passedGeofence = false;
+      let isUncertain = false;
       let minDistance = Infinity;
 
       if (activeOffices.length > 0) {
         for (const office of activeOffices) {
-          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters, accuracy);
           if (geoCheck.inside) {
             passedGeofence = true;
             break;
+          }
+          if (geoCheck.uncertain) {
+            isUncertain = true;
           }
           if (geoCheck.distanceMeters < minDistance) {
             minDistance = geoCheck.distanceMeters;
@@ -592,14 +604,20 @@ const checkOut = async (req, res) => {
         }
 
         if (!passedGeofence) {
+          if (isUncertain) {
+            return badRequest(res, 'Location is uncertain. Please wait a moment, ensure high-accuracy GPS is on, and try again.');
+          }
           return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
         }
       } else {
         // Fallback to legacy GeofenceSetting
         const geofence = await GeofenceSetting.findOne({ isActive: true });
         if (geofence) {
-          const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters);
+          const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters, accuracy);
           if (!geoCheck.inside) {
+            if (geoCheck.uncertain) {
+              return badRequest(res, 'Location is uncertain. Please wait a moment, ensure high-accuracy GPS is on, and try again.');
+            }
             return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
           }
         }
