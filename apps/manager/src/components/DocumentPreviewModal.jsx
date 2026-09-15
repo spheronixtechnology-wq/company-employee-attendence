@@ -207,66 +207,77 @@ export default function DocumentPreviewModal({
   if (!isOpen || !documentUrl) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col" style={{ height: '92vh', maxHeight: '92vh' }}>
-        {/* Header Bar */}
-        <div className="p-4 px-5 border-b border-slate-200 bg-white flex items-center justify-between gap-3 sticky top-0 z-20 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-5xl bg-white/95 backdrop-blur-xl border border-white/90 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[88vh] h-[85vh] animate-in zoom-in-95 duration-200">
+        {/* Top Decorative Gradient Accent */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-violet-600 via-indigo-600 to-primary-600 shrink-0" />
+
+        {/* ── Sticky Header with Generous Spacing ── */}
+        <div className="px-7 sm:px-8 pt-6 pb-5 border-b border-slate-100/90 bg-white/90 backdrop-blur-md flex items-center justify-between gap-4 sticky top-0 z-20 shrink-0">
+          <div className="flex items-center gap-4 min-w-0">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 border shadow-md ${
                 isExcel
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-emerald-500/10'
                   : isPdf
-                  ? 'bg-rose-50 border-rose-200 text-rose-600'
+                  ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-rose-500/10'
                   : isWord
-                  ? 'bg-blue-50 border-blue-200 text-blue-600'
-                  : 'bg-violet-50 border-violet-200 text-violet-600'
+                  ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-blue-500/10'
+                  : 'bg-violet-50 border-violet-200 text-violet-600 shadow-violet-500/10'
               }`}
             >
               {isExcel ? (
-                <FileSpreadsheet size={20} />
+                <FileSpreadsheet size={22} />
               ) : isPdf ? (
-                <FileText size={20} />
+                <FileText size={22} />
               ) : isText ? (
-                <FileCode size={20} />
+                <FileCode size={22} />
               ) : (
-                <File size={20} />
+                <File size={22} />
               )}
             </div>
 
             <div className="min-w-0">
-              <h2 className="text-sm md:text-base font-bold text-slate-900 truncate" title={documentName}>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate" title={documentName}>
                 {documentName}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <span className="uppercase font-semibold text-primary-600">{ext} file</span>
-                {documentSize && <span>• {formatSize(documentSize)}</span>}
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs text-slate-500">
+                <span className="uppercase font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-200/60 text-[10px]">
+                  {ext} file
+                </span>
+                {documentSize && (
+                  <span className="font-medium text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-md text-[11px]">
+                    {formatSize(documentSize)}
+                  </span>
+                )}
                 {isExcel && sheetNames.length > 0 && (
-                  <span>• {sheetNames.length} sheet{sheetNames.length > 1 ? 's' : ''}</span>
+                  <span className="font-medium text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-md text-[11px]">
+                    {sheetNames.length} sheet{sheetNames.length > 1 ? 's' : ''}
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2.5 flex-shrink-0">
             {/* Explicit Download Button */}
             <button
               id="preview-modal-download-btn"
               onClick={handleDownload}
-              className="btn-primary text-xs py-2 px-3.5 flex items-center gap-1.5 font-semibold shadow-sm"
+              className="px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-violet-600 via-indigo-600 to-primary-600 hover:from-violet-500 hover:to-indigo-500 rounded-xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
               title="Download original file"
             >
-              <Download size={15} />
+              <Download size={14} />
               <span className="hidden sm:inline">Download</span>
             </button>
 
-            {/* Close Button */}
+            {/* Circular Close Button */}
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="w-9 h-9 rounded-full bg-slate-100/90 hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all cursor-pointer flex items-center justify-center border border-slate-200/60 shadow-2xs hover:scale-105 active:scale-95"
               title="Close Preview"
             >
-              <X size={18} />
+              <X size={17} />
             </button>
           </div>
         </div>

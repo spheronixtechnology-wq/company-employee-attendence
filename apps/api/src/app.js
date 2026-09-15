@@ -26,24 +26,8 @@ app.use(helmet({
 }));
 
 // ── CORS ────────────────────────────────────────────────────────────────────────
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
-  .split(',')
-  .map((o) => o.trim());
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    // In development, allow all origins to easily support mobile testing on any network/IP
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS: Origin ${origin} not allowed.`));
-    }
-  },
-  credentials: true, // Required for httpOnly cookies to be sent cross-origin
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-device-fingerprint', 'x-portal-role', 'x-device-token'],
-}));
+const { corsOptions } = require('./config/cors');
+app.use(cors(corsOptions));
 
 // ── Rate Limiting ───────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({

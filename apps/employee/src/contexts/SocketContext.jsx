@@ -22,7 +22,10 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    const socket = io({
+    // In browser with HTTPS (e.g. https://localhost:3002), avoid mixed-content blocks by using same-origin proxy
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const socketUrl = isHttps ? undefined : (import.meta.env.VITE_BACKEND_URL || undefined);
+    const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList, Shield,
   QrCode, Wifi, MapPin, Fingerprint, Settings, ScrollText,
   TrendingUp, LogOut, Menu, X, ChevronRight, BarChart3,
-  UserCog, GitBranch, Building2, Smartphone, Monitor, Clock
+  UserCog, GitBranch, Building2, Smartphone, Monitor, Clock, UserCircle2
 } from 'lucide-react';
 
 const navSections = [
@@ -41,6 +41,7 @@ const navSections = [
       { path: '/attendance-method', label: 'Attendance Method', icon: Settings, id: 'nav-method' },
       { path: '/wifi-settings', label: 'WiFi / IP Settings', icon: Wifi, id: 'nav-wifi' },
       { path: '/office-locations', label: 'Office Locations', icon: Building2, id: 'nav-locations' },
+      { path: '/profile', label: 'My Profile', icon: UserCircle2, id: 'nav-profile' },
     ],
   },
 ];
@@ -92,9 +93,14 @@ export default function AdminLayout({ children }) {
         </div>
       </div>
 
-      {/* User Info */}
+      {/* User Info — clickable → /profile */}
       <div className="p-4 border-b border-slate-700">
-        <div className="flex items-center gap-3">
+        <Link
+          to="/profile"
+          id="admin-profile-link"
+          onClick={() => setSidebarOpen(false)}
+          className="flex items-center gap-3 rounded-xl p-2 -m-2 hover:bg-slate-700/60 transition-all group"
+        >
           {user?.avatarUrl ? (
             <img
               src={user.avatarUrl}
@@ -106,11 +112,11 @@ export default function AdminLayout({ children }) {
               {user?.name?.[0]?.toUpperCase()}
             </div>
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-white text-sm font-medium truncate">{user?.name}</p>
-            <span className="badge-danger text-xs">Admin</span>
+            <p className="text-slate-400 text-[10px] font-medium group-hover:text-red-400 transition-colors">View Profile →</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Nav */}
@@ -235,7 +241,11 @@ export default function AdminLayout({ children }) {
 
           {/* Right: Profile chip + controls */}
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:border-l sm:border-slate-200/70 sm:pl-4">
-            <div className="hidden items-center gap-2.5 rounded-full bg-white/70 py-1 pl-1 pr-3.5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur sm:flex">
+            <Link
+              to="/profile"
+              id="admin-navbar-profile-chip"
+              className="hidden items-center gap-2.5 rounded-full bg-white/70 py-1 pl-1 pr-3.5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur sm:flex hover:bg-white hover:shadow-[0_4px_14px_-4px_rgba(109,40,217,0.22)] transition-all"
+            >
               <div className="relative">
                 {user?.avatarUrl ? (
                   <img
@@ -254,7 +264,8 @@ export default function AdminLayout({ children }) {
                 <p className="text-[11.5px] font-semibold text-slate-800">{user?.name}</p>
                 <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-violet-500">Super Admin</p>
               </div>
-            </div>
+            </Link>
+
 
               {/* Mobile Hamburger Toggle */}
               <button

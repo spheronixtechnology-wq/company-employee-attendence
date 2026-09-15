@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import AdminLayout from './components/AdminLayout';
@@ -12,6 +12,7 @@ import WifiSettingsPage from './pages/WifiSettingsPage';
 import AttendanceRecordsPage from './pages/AttendanceRecordsPage';
 import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import AdminOvertimePage from './pages/AdminOvertimePage';
+import ProfilePage from './pages/ProfilePage';
 import { Loader2, QrCode, Wifi, Smartphone, Fingerprint, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from './lib/api';
@@ -216,15 +217,16 @@ const ProtectedRoute = ({ children }) => {
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><Loader2 className="animate-spin text-primary-600" size={40} /></div>;
 
   return (
-    <Routes>
+    <Routes location={location}>
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/*" element={
         <ProtectedRoute>
           <AdminLayout>
-            <Routes>
+            <Routes location={location} key={location.pathname}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/employees" element={<EmployeesPage />} />
               <Route path="/teams" element={<TeamsPage />} />
@@ -237,6 +239,7 @@ function AppRoutes() {
 
               <Route path="/device-requests" element={<DeviceRequestsPage />} />
               <Route path="/office-locations" element={<OfficeLocationsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
@@ -249,7 +252,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <SocketProvider>
           <AppRoutes />

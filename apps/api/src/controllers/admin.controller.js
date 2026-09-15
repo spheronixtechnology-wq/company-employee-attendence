@@ -13,6 +13,7 @@ const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
 const ManagerPermission = require('../models/ManagerPermission');
 const Attendance = require('../models/Attendance');
+const DailyLog = require('../models/DailyLog');
 const LeaveRequest = require('../models/LeaveRequest');
 const LocationRequest = require('../models/LocationRequest');
 const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
@@ -30,40 +31,152 @@ const getStatus = (req, res) => {
 
 const getDashboard = async (req, res) => {
   try {
+    const { date, viewMode = 'Day', startDate, endDate } = req.query;
+    const todayStr = getTodayDateString();
+    const targetDate = date || todayStr;
+
     const validUserIds = await User.distinct('_id');
     const totalStaff = await User.countDocuments({ role: { $in: ['employee', 'manager'] }, isActive: true });
-    const todayStr = getTodayDateString();
+
+    let isRange = false;
+    let rangeStart = targetDate;
+    let rangeEnd = targetDate;
+
+    if (viewMode === 'Week' || viewMode === 'Month') {
+      isRange = true;
+      rangeStart = startDate || targetDate;
+      rangeEnd = endDate || targetDate;
+    }
 
     const [
       activeMethodDoc,
       pendingDeviceApprovals,
       pendingLeaveRequests,
       pendingLocationRequests,
-      checkedInToday,
-      onLeaveToday
     ] = await Promise.all([
       AttendanceMethodSetting.findOne({ isActive: true }).lean(),
       DeviceRequest.countDocuments({ userId: { $in: validUserIds }, status: 'pending' }),
       LeaveRequest.countDocuments({ status: 'pending' }),
       LocationRequest.countDocuments({ status: 'pending' }),
-      Attendance.countDocuments({ date: todayStr, status: { $in: ['present', 'half_day'] } }),
-      Attendance.countDocuments({ date: todayStr, status: 'on_leave' }),
     ]);
 
-    const absentToday = Math.max(0, totalStaff - checkedInToday - onLeaveToday);
+    let checkedInCount = 0;
+    let onLeaveCount = 0;
+    let missingDailyLogs = 0;
+
+    if (!isRange) {
+      // Single day analysis
+      const [checkedInUsers, onLeaveUsers, loggedUserIds] = await Promise.all([
+        Attendance.distinct('userId', {
+          date: targetDate,
+          status: { $in: ['present', 'half_day'] },
+        }),
+        LeaveRequest.distinct('userId', {
+          status: 'approved',
+          startDate: { $lte: targetDate },
+          endDate: { $gte: targetDate },
+        }),
+        DailyLog.distinct('userId', { logDate: targetDate }),
+      ]);
+
+      const attendanceOnLeave = await Attendance.distinct('userId', {
+        date: targetDate,
+        status: 'on_leave',
+      });
+      const combinedOnLeaveSet = new Set([
+        ...onLeaveUsers.map((id) => id.toString()),
+        ...attendanceOnLeave.map((id) => id.toString()),
+      ]);
+
+      checkedInCount = checkedInUsers.length;
+      onLeaveCount = combinedOnLeaveSet.size;
+
+      const loggedSet = new Set(loggedUserIds.map((id) => id.toString()));
+      missingDailyLogs = checkedInUsers.filter((id) => !loggedSet.has(id.toString())).length;
+    } else {
+      // Range analysis (Week or Month)
+      const [distinctCheckedIn, distinctOnLeave, distinctLogged] = await Promise.all([
+        Attendance.distinct('userId', {
+          date: { $gte: rangeStart, $lte: rangeEnd },
+          status: { $in: ['present', 'half_day'] },
+        }),
+        LeaveRequest.distinct('userId', {
+          status: 'approved',
+          startDate: { $lte: rangeEnd },
+          endDate: { $gte: rangeStart },
+        }),
+        DailyLog.distinct('userId', {
+          logDate: { $gte: rangeStart, $lte: rangeEnd },
+        }),
+      ]);
+
+      checkedInCount = distinctCheckedIn.length;
+      onLeaveCount = distinctOnLeave.length;
+
+      const loggedSet = new Set(distinctLogged.map((id) => id.toString()));
+      missingDailyLogs = distinctCheckedIn.filter((id) => !loggedSet.has(id.toString())).length;
+    }
+
+    const absentCount = Math.max(0, totalStaff - checkedInCount - onLeaveCount);
+
+    // Build 14-day historical trend data ending at targetDate
+    const baseDate = new Date(targetDate + 'T12:00:00Z');
+    const trendDates = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().split('T')[0];
+      trendDates.push(iso);
+    }
+
+    const attendanceTrendAgg = await Attendance.aggregate([
+      {
+        $match: {
+          date: { $in: trendDates },
+          status: { $in: ['present', 'half_day'] },
+        },
+      },
+      {
+        $group: {
+          _id: '$date',
+          present: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const trendMap = new Map(attendanceTrendAgg.map((t) => [t._id, t.present]));
+
+    const trendData = trendDates.map((dateStr) => {
+      const d = new Date(dateStr + 'T12:00:00Z');
+      const dayName = d.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      return {
+        date: dayName,
+        rawDate: dateStr,
+        present: trendMap.get(dateStr) || 0,
+        capacity: totalStaff,
+      };
+    });
 
     return success(res, 'Dashboard data retrieved', {
       activeAttendanceMethod: activeMethodDoc?.method || 'qr_code',
       totalStaff,
       totalEmployees: totalStaff,
-      checkedInToday,
-      absentToday,
-      onLeaveToday,
+      checkedInToday: checkedInCount,
+      absentToday: absentCount,
+      onLeaveToday: onLeaveCount,
       pendingLeaveRequests,
       pendingLocationRequests,
       pendingManualAttendanceRequests: 0,
       pendingDeviceApprovals,
-      missingDailyLogs: 0
+      missingDailyLogs,
+      selectedDate: targetDate,
+      viewMode,
+      dateRange: isRange ? { startDate: rangeStart, endDate: rangeEnd } : null,
+      trendData,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Dashboard fetch failed', error: err.message });
@@ -778,17 +891,25 @@ const getAttendance = async (req, res) => {
     ]);
 
     const memberIds = members.map((m) => m._id);
-    const [attendanceRecords, manualRequests] = await Promise.all([
+    const [attendanceRecords, manualRequests, dailyLogs] = await Promise.all([
       Attendance.find({ userId: { $in: memberIds }, date })
         .populate('userId', 'name designation email avatarUrl phone teamId role')
         .lean(),
       ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
+      DailyLog.find({ userId: { $in: memberIds }, logDate: date }).lean(),
     ]);
 
     const manualRequestMap = new Map();
     for (const mr of manualRequests) {
       if (mr.userId) {
         manualRequestMap.set(mr.userId.toString(), mr);
+      }
+    }
+
+    const dailyLogMap = new Map();
+    for (const dl of dailyLogs) {
+      if (dl.userId) {
+        dailyLogMap.set(dl.userId.toString(), dl);
       }
     }
 
@@ -802,11 +923,16 @@ const getAttendance = async (req, res) => {
     const fullAttendance = members.map((member) => {
       const existing = attendanceMap.get(member._id.toString());
       const manualReq = manualRequestMap.get(member._id.toString()) || null;
+      const dailyLog = dailyLogMap.get(member._id.toString()) || null;
+      const dailyLogSubmitted = Boolean(dailyLog);
 
       if (existing) {
         return {
           ...existing,
           manualRequest: manualReq,
+          dailyLogSubmitted,
+          dailyLog,
+          hoursSpent: dailyLog?.hoursSpent || 0,
         };
       }
       return {
@@ -820,12 +946,22 @@ const getAttendance = async (req, res) => {
         status: manualReq && manualReq.status === 'pending' ? 'manual_pending' : 'not_checked_in',
         breaks: [],
         manualRequest: manualReq,
+        dailyLogSubmitted,
+        dailyLog,
+        hoursSpent: dailyLog?.hoursSpent || 0,
       };
+    });
+
+    const monthPrefix = date.slice(0, 7);
+    const activeDatesInMonth = await Attendance.distinct('date', {
+      date: { $regex: `^${monthPrefix}` },
+      status: { $in: ['present', 'half_day'] },
     });
 
     return success(res, 'Fetched attendance records', {
       attendance: fullAttendance,
       teams,
+      activeDatesInMonth,
     });
   } catch (error) {
     console.error('admin getAttendance error:', error);

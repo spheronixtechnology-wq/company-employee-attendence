@@ -10,6 +10,8 @@ export default function PageHeader({
   date,
   onPrevDate,
   onNextDate,
+  onDateChange,
+  onTodayJump,
   viewMode = 'Day',
   onViewModeChange,
   badgeText,
@@ -20,6 +22,27 @@ export default function PageHeader({
   const formattedDate = date instanceof Date
     ? date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
     : (date || new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }));
+
+  const getIsoDateString = (d) => {
+    if (!d) return '';
+    const dateObj = d instanceof Date ? d : new Date(d);
+    if (isNaN(dateObj.getTime())) return '';
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isoDateVal = getIsoDateString(date);
+
+  const handleDateInputChange = (e) => {
+    if (!e.target.value) return;
+    const parts = e.target.value.split('-');
+    if (parts.length === 3) {
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      if (onDateChange) onDateChange(d);
+    }
+  };
 
   return (
     <div className="space-y-4 pb-2">
@@ -44,7 +67,7 @@ export default function PageHeader({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition-colors"
+                className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <span>{viewMode}</span>
                 <span className="text-[10px] text-slate-400">▼</span>
@@ -58,7 +81,7 @@ export default function PageHeader({
                         onViewModeChange(mode);
                         setDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 ${
+                      className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 cursor-pointer ${
                         viewMode === mode ? 'text-sky-600 font-bold bg-sky-50/50' : 'text-slate-700'
                       }`}
                     >
@@ -70,30 +93,51 @@ export default function PageHeader({
             </div>
           )}
 
-          {/* Date Navigator */}
-          <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden p-0.5 shadow-sm">
+          {/* Date Navigator with interactive Picker & Steppers */}
+          <div className="flex items-center bg-white border border-slate-200/90 rounded-xl overflow-hidden p-0.5 shadow-sm hover:border-slate-300 transition-all">
             {onPrevDate && (
               <button
                 type="button"
                 onClick={onPrevDate}
-                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 title="Previous Day"
               >
                 <ChevronLeft size={15} />
               </button>
             )}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700">
-              <Calendar size={13} className="text-sky-600" />
-              <span>{formattedDate}</span>
+
+            {/* Interactive Date Indicator & Hidden Native Picker */}
+            <div className="relative flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 cursor-pointer group hover:bg-slate-50 rounded-lg transition-colors">
+              <Calendar size={13} className="text-violet-600 shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="select-none tracking-tight">{formattedDate}</span>
+              <input
+                type="date"
+                value={isoDateVal}
+                onChange={handleDateInputChange}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                title="Click to choose a date from calendar"
+              />
             </div>
+
             {onNextDate && (
               <button
                 type="button"
                 onClick={onNextDate}
-                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 title="Next Day"
               >
                 <ChevronRight size={15} />
+              </button>
+            )}
+
+            {onTodayJump && (
+              <button
+                type="button"
+                onClick={onTodayJump}
+                className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200/60 ml-1 transition-all cursor-pointer shadow-2xs"
+                title="Jump to Today"
+              >
+                Today
               </button>
             )}
           </div>

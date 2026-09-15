@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const Team = require('./models/Team');
+const { corsOptions } = require('./config/cors');
 
 let io = null;
 
@@ -27,22 +28,8 @@ const parseCookies = (cookieHeader) => {
  * Initialize Socket.io with HTTP server.
  */
 const initSocket = (server) => {
-  const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
-    .split(',')
-    .map((o) => o.trim());
-
   io = new Server(server, {
-    cors: {
-      origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
-          callback(null, true);
-        } else {
-          callback(new Error(`CORS: Origin ${origin} not allowed.`));
-        }
-      },
-      credentials: true,
-      methods: ['GET', 'POST'],
-    },
+    cors: corsOptions,
     transports: ['websocket', 'polling'],
   });
 

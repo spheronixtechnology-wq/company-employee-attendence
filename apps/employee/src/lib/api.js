@@ -4,8 +4,20 @@ import { getDeviceFingerprint, getCachedDeviceFingerprint } from './fingerprint'
 // Eagerly initiate fingerprint calculation in background
 getDeviceFingerprint().catch(() => {});
 
+// Calculate base URL: always prefer relative /api when running in browser on HTTPS (e.g. https://localhost:3002)
+// to prevent mixed-content blocking and cross-origin SameSite cookie rejections
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    if (window.location.protocol === 'https:' && envUrl?.startsWith('http://localhost')) {
+      return '/api';
+    }
+  }
+  return envUrl || '/api';
+};
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseUrl(),
   withCredentials: true,
   headers: { 'Content-Type': 'application/json', 'x-portal-role': 'employee' },
   timeout: 30000,

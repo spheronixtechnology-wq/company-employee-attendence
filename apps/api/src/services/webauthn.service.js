@@ -26,7 +26,7 @@ setInterval(() => {
   for (const [jti, exp] of consumedJtis.entries()) {
     if (exp < now) consumedJtis.delete(jti);
   }
-}, 60000);
+}, 60000).unref();
 
 const getRpId = (req) => {
   if (process.env.RP_ID) return process.env.RP_ID;
@@ -45,15 +45,44 @@ const getRpId = (req) => {
   return host.split(':')[0];
 };
 
+/**
+ * Strictly returns allowed origins for WebAuthn operations.
+ * WebAuthn is security-sensitive: only portals explicitly configured
+ * (defaulting strictly to the Employee portal) are permitted.
+ *
+ * @returns {string[]} Array of allowed WebAuthn origin strings
+ */
+const getAllowedWebAuthnOrigins = () => {
+  if (process.env.WEBAUTHN_ORIGINS) {
+    return process.env.WEBAUTHN_ORIGINS.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  // Explicit fallback strictly restricted to the Employee portal (local & production)
+  const origins = [
+    process.env.EXPECTED_ORIGIN,
+    process.env.FRONTEND_EMPLOYEE_URL || 'https://employee.spheronixtechnology.in',
+    process.env.FRONTEND_EMPLOYEE_LOCAL_URL || 'http://localhost:3002',
+    'https://localhost:3002', // Local HTTPS for Employee WebAuthn / FIDO2 testing
+  ];
+
+  return Array.from(new Set(origins.filter(Boolean)));
+};
+
 const getOrigin = (req) => {
+  const allowed = getAllowedWebAuthnOrigins();
   const originHeader = req.headers['origin'] || req.headers['referer'];
   if (originHeader) {
     try {
       const url = new URL(originHeader);
-      return `${url.protocol}//${url.host}`;
+      const origin = `${url.protocol}//${url.host}`;
+      if (allowed.includes(origin)) {
+        return origin;
+      }
     } catch {}
   }
-  return process.env.EXPECTED_ORIGIN || 'https://localhost:3002';
+  return allowed[0] || 'https://employee.spheronixtechnology.in';
 };
 
 /**
@@ -119,7 +148,7 @@ const verifyEnrollmentResponseForUser = async (user, response, req) => {
   const verification = await verifyRegistrationResponse({
     response,
     expectedChallenge: stored.challenge,
-    expectedOrigin: stored.expectedOrigin,
+    expectedOrigin: getAllowedWebAuthnOrigins(),
     expectedRPID: stored.rpID,
     requireUserVerification: true,
   });
@@ -248,7 +277,7 @@ const verifyAuthResponseForUser = async (user, response, activeDeviceId, req) =>
   const verification = await verifyAuthenticationResponse({
     response,
     expectedChallenge: stored.challenge,
-    expectedOrigin: credential.expectedOrigin,
+    expectedOrigin: getAllowedWebAuthnOrigins(),
     expectedRPID: credential.rpID,
     authenticator: {
       credentialID: credential.credentialID,
@@ -343,4 +372,5 @@ module.exports = {
   generateAuthOptionsForUser,
   verifyAuthResponseForUser,
   verifyAndConsumeBiometricToken,
+  getAllowedWebAuthnOrigins,
 };

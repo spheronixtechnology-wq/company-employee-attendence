@@ -24,6 +24,19 @@ export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('Day');
 
+  // Convert currentDate to YYYY-MM-DD
+  const formatDateKey = (d) => {
+    const dateObj = d instanceof Date ? d : new Date(d);
+    if (isNaN(dateObj.getTime())) return '';
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const dateStr = useMemo(() => formatDateKey(currentDate), [currentDate]);
+  const isToday = useMemo(() => dateStr === formatDateKey(new Date()), [dateStr]);
+
   // Team members list for "Work Hours (Avg)" table
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(true);
@@ -36,21 +49,21 @@ export default function DashboardPage() {
   const [actionProcessing, setActionProcessing] = useState(null);
 
   const fetchDashboard = useCallback(() => {
-    api.get('/manager/dashboard')
+    api.get(`/manager/dashboard?date=${dateStr}`)
       .then(res => setData(res.data.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [dateStr]);
 
   const fetchMembers = useCallback(() => {
     setMembersLoading(true);
-    api.get('/manager/team/members')
+    api.get(`/manager/team/members?date=${dateStr}`)
       .then(res => {
         setMembers(res.data.data?.members || []);
       })
       .catch(console.error)
       .finally(() => setMembersLoading(false));
-  }, []);
+  }, [dateStr]);
 
   const fetchPendingApprovals = useCallback(() => {
     api.get('/manager/team/leave-requests?status=pending')
@@ -116,6 +129,16 @@ export default function DashboardPage() {
     setCurrentDate(d);
   };
 
+  const handleDateChange = (newDate) => {
+    if (newDate instanceof Date && !isNaN(newDate.getTime())) {
+      setCurrentDate(newDate);
+    }
+  };
+
+  const handleTodayJump = () => {
+    setCurrentDate(new Date());
+  };
+
   const handleLeaveDecision = async (id, status) => {
     setActionProcessing(id);
     try {
@@ -162,12 +185,27 @@ export default function DashboardPage() {
   const donutData = useMemo(() => {
     if (!data) return [];
     return [
-      { name: 'Checked In / Active', value: data.checkedIn || 0, color: '#10b981' },
-      { name: 'Not Checked In', value: data.notCheckedIn || 0, color: '#f43f5e' },
-      { name: 'On Approved Leave', value: data.onLeave || 0, color: '#f59e0b' },
-      { name: 'Missing Daily Logs', value: data.missingDailyLogs || 0, color: '#8b5cf6' },
+      { name: 'Checked In / Active', value: data.checkedIn || 0, color: '#10b981', key: 'present' },
+      { name: 'Not Checked In', value: data.notCheckedIn || 0, color: '#f43f5e', key: 'not_checked_in' },
+      { name: 'On Approved Leave', value: data.onLeave || 0, color: '#f59e0b', key: 'leave' },
+      { name: 'Missing Daily Logs', value: data.missingDailyLogs || 0, color: '#8b5cf6', key: 'missing' },
     ];
   }, [data]);
+
+  const handleDonutItemClick = (item) => {
+    if (!item) return;
+    const name = (item.name || '').toLowerCase();
+
+    if (name.includes('checked in') || name.includes('active') || name.includes('present')) {
+      navigate(`/team/attendance?date=${dateStr}&filter=present`);
+    } else if (name.includes('not checked in') || name.includes('absent')) {
+      navigate(`/team/attendance?date=${dateStr}&filter=not_checked_in`);
+    } else if (name.includes('leave')) {
+      navigate('/team/leave-requests?status=approved');
+    } else if (name.includes('missing') || name.includes('log')) {
+      navigate(`/team/daily-logs?date=${dateStr}&filter=missing`);
+    }
+  };
 
   // Paginated members
   const paginatedMembers = useMemo(() => {
@@ -197,6 +235,8 @@ export default function DashboardPage() {
         date={currentDate}
         onPrevDate={handlePrevDate}
         onNextDate={handleNextDate}
+        onDateChange={handleDateChange}
+        onTodayJump={handleTodayJump}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         badgeText={`Active Mode: ${data?.activeAttendanceMethod?.replace('_', ' ').toUpperCase() || 'QR CODE'}`}
@@ -207,7 +247,7 @@ export default function DashboardPage() {
               fetchMembers();
               fetchPendingApprovals();
             }}
-            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-sm transition-colors"
+            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-sm transition-colors cursor-pointer"
             title="Refresh statistics"
           >
             <RefreshCw size={15} />
@@ -239,7 +279,7 @@ export default function DashboardPage() {
           value={data?.checkedIn}
           variant="green"
           subtext="Present"
-          onClick={() => navigate('/team/attendance')}
+          onClick={() => navigate(`/team/attendance?date=${dateStr}&filter=present`)}
         />
         <KpiTile
           icon={AlertCircle}
@@ -247,6 +287,7 @@ export default function DashboardPage() {
           value={data?.notCheckedIn}
           variant="red"
           subtext="Absent"
+          onClick={() => navigate(`/team/attendance?date=${dateStr}&filter=not_checked_in`)}
         />
         <KpiTile
           icon={Calendar}
@@ -254,7 +295,7 @@ export default function DashboardPage() {
           value={data?.onLeave}
           variant="amber"
           subtext="Approved"
-          onClick={() => navigate('/team/leave-requests')}
+          onClick={() => navigate('/team/leave-requests?status=approved')}
         />
         <KpiTile
           icon={AlertCircle}
@@ -262,7 +303,7 @@ export default function DashboardPage() {
           value={data?.missingDailyLogs}
           variant="red"
           subtext="No Log"
-          onClick={() => navigate('/team/daily-logs')}
+          onClick={() => navigate(`/team/daily-logs?date=${dateStr}&filter=missing`)}
         />
         <KpiTile
           icon={ClipboardList}
@@ -270,7 +311,7 @@ export default function DashboardPage() {
           value={data?.pendingLeaveRequests}
           variant="amber"
           subtext="To Review"
-          onClick={() => navigate('/team/leave-requests')}
+          onClick={() => navigate('/team/leave-requests?status=pending')}
         />
       </div>
 
@@ -279,15 +320,16 @@ export default function DashboardPage() {
         {/* Left: Donut Chart Split */}
         <div className="lg:col-span-5 flex flex-col">
           <Panel
-            title="Team Attendance Today"
-            subtitle="Real-time distribution of assigned workforce"
-            badge="Live"
+            title={`Team Attendance ${isToday ? 'Today' : `(${new Date(currentDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })})`}`}
+            subtitle={isToday ? "Real-time distribution of assigned workforce" : `Attendance breakdown for ${new Date(currentDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+            badge={isToday ? "Live" : "Archive"}
             className="h-full"
           >
             <DonutChart
               data={donutData}
               centerValue={`${data?.checkedIn || 0}/${data?.teamTotal || 0}`}
               centerLabel="Checked In"
+              onItemClick={handleDonutItemClick}
             />
           </Panel>
         </div>
@@ -472,8 +514,14 @@ export default function DashboardPage() {
                           {hours}
                         </td>
                         <td className="py-3 pr-2 text-right">
-                          <span className="text-[11px] font-medium text-slate-500">
-                            {m.currentStatus === 'checked_out' ? '✅ Log Filed' : m.currentStatus === 'checked_in' ? 'Pending EOD' : '—'}
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                            m.dailyLogSubmitted
+                              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                              : m.currentStatus === 'checked_in'
+                              ? 'text-amber-700 bg-amber-50 border border-amber-200'
+                              : 'text-slate-400 bg-slate-50'
+                          }`}>
+                            {m.dailyLogSubmitted ? '✅ Log Filed' : m.currentStatus === 'checked_in' ? 'Pending EOD' : '—'}
                           </span>
                         </td>
                       </tr>

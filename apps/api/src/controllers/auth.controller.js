@@ -1,4 +1,5 @@
 const authService = require('../services/auth.service');
+const { getClearCookieOptions } = require('../config/cookie');
 const User = require('../models/User');
 const DeviceRequest = require('../models/DeviceRequest');
 const Team = require('../models/Team');
@@ -178,17 +179,8 @@ const requestDeviceAccess = async (req, res, next) => {
  * Clears the JWT cookie.
  */
 const logout = (req, res) => {
-  const isProd = process.env.NODE_ENV === 'production';
-  const clearOptions = {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-  };
-  if (isProd && process.env.COOKIE_DOMAIN) {
-    clearOptions.domain = process.env.COOKIE_DOMAIN;
-  }
   const portalRole = req.headers['x-portal-role'] || 'employee';
-  res.clearCookie(`token_${portalRole}`, clearOptions);
+  res.clearCookie(`token_${portalRole}`, getClearCookieOptions());
   return success(res, 'Logged out successfully');
 };
 

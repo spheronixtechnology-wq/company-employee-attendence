@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Loader2, Calendar, CheckCircle2, XCircle, Search, RefreshCw,
   Filter, Users, Clock, AlertTriangle, ChevronRight, MessageSquare,
@@ -8,15 +9,25 @@ import api from '../lib/api';
 import { useSocket } from '../contexts/SocketContext';
 
 export default function LeaveRequestsPage() {
+  const [searchParams] = useSearchParams();
+  const qStatus = searchParams.get('status') || searchParams.get('filter');
+
   const [requests, setRequests] = useState([]);
   const [teams, setTeams] = useState([]);
   const [counts, setCounts] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
-  const [filter, setFilter] = useState('pending');
+  const [filter, setFilter] = useState(() => (['pending', 'approved', 'rejected', 'all'].includes(qStatus) ? qStatus : 'pending'));
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [actionMessage, setActionMessage] = useState(null);
+
+  useEffect(() => {
+    const paramStatus = searchParams.get('status') || searchParams.get('filter');
+    if (paramStatus && ['pending', 'approved', 'rejected', 'all'].includes(paramStatus)) {
+      setFilter(paramStatus);
+    }
+  }, [searchParams]);
 
   // Rejection modal state
   const [rejectModal, setRejectModal] = useState({ open: false, requestId: null, reason: '' });
@@ -156,7 +167,14 @@ export default function LeaveRequestsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        <div className="card p-4 border border-slate-200 bg-white flex items-center gap-3 shadow-sm">
+        <div
+          onClick={() => setFilter('all')}
+          className={`card p-4 border cursor-pointer transition-all shadow-sm ${
+            filter === 'all'
+              ? 'border-slate-400 bg-slate-100 ring-1 ring-slate-300'
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          } flex items-center gap-3`}
+        >
           <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
             <FileText size={20} />
           </div>
@@ -165,6 +183,7 @@ export default function LeaveRequestsPage() {
             <p className="text-[11px] text-slate-600 font-medium">Total In View</p>
           </div>
         </div>
+
 
         <div
           onClick={() => setFilter('pending')}

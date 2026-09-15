@@ -108,24 +108,24 @@ const getDashboard = async (req, res) => {
       });
     }
 
-    const today = getTodayDateString();
+    const targetDate = req.query.date || getTodayDateString();
     const totalMembers = memberIds.length;
     
-    const checkedInToday = await Attendance.countDocuments({
+    const checkedInCount = await Attendance.countDocuments({
       userId: { $in: memberIds },
-      date: today,
+      date: targetDate,
       checkInTime: { $ne: null }
     });
 
-    const onLeaveToday = await LeaveRequest.countDocuments({
+    const onLeaveCount = await LeaveRequest.countDocuments({
       userId: { $in: memberIds },
       status: 'approved',
-      startDate: { $lte: today },
-      endDate: { $gte: today }
+      startDate: { $lte: targetDate },
+      endDate: { $gte: targetDate }
     });
 
-    const loggedUsers = await DailyLog.distinct('userId', { logDate: today });
-    const missingDailyLogs = checkedInToday - loggedUsers.filter(id => memberIds.map(m => m.toString()).includes(id.toString())).length;
+    const loggedUsers = await DailyLog.distinct('userId', { logDate: targetDate, userId: { $in: memberIds } });
+    const missingDailyLogs = Math.max(0, checkedInCount - loggedUsers.length);
 
     const pendingLeaveRequests = await LeaveRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
     const pendingDeviceRequests = await DeviceRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
@@ -135,12 +135,13 @@ const getDashboard = async (req, res) => {
     const activeAttendanceMethod = activeSetting?.method || 'qr_code';
 
     return success(res, 'Dashboard fetched', {
+      selectedDate: targetDate,
       activeAttendanceMethod,
       teamTotal: totalMembers,
-      checkedIn: checkedInToday,
-      onLeave: onLeaveToday,
-      notCheckedIn: Math.max(0, totalMembers - checkedInToday - onLeaveToday),
-      missingDailyLogs: Math.max(0, missingDailyLogs),
+      checkedIn: checkedInCount,
+      onLeave: onLeaveCount,
+      notCheckedIn: Math.max(0, totalMembers - checkedInCount - onLeaveCount),
+      missingDailyLogs,
       pendingLeaveRequests,
       pendingDeviceRequests,
       pendingLocationRequests
@@ -231,14 +232,18 @@ const getTeamMembers = async (req, res) => {
       .sort({ name: 1 })
       .lean();
 
-    const today = getTodayDateString();
+    const targetDate = req.query.date || getTodayDateString();
     const memberIds = members.map(m => m._id);
 
-    const attendances = await Attendance.find({ userId: { $in: memberIds }, date: today }).lean();
+    const attendances = await Attendance.find({ userId: { $in: memberIds }, date: targetDate }).lean();
     const attMap = new Map(attendances.map(a => [a.userId.toString(), a]));
+
+    const dailyLogs = await DailyLog.find({ userId: { $in: memberIds }, logDate: targetDate }).lean();
+    const logMap = new Map(dailyLogs.map(l => [l.userId.toString(), l]));
 
     const enrichedMembers = members.map(member => {
       const att = attMap.get(member._id.toString());
+      const dLog = logMap.get(member._id.toString());
       let currentStatus = 'not_checked_in';
       if (att) {
         if (att.checkOutTime) {
@@ -252,6 +257,10 @@ const getTeamMembers = async (req, res) => {
       return {
         ...member,
         currentStatus,
+        checkInTime: att?.checkInTime || (dLog?.checkInTime ? `${targetDate}T${dLog.checkInTime}:00` : null),
+        checkOutTime: att?.checkOutTime || (dLog?.checkOutTime ? `${targetDate}T${dLog.checkOutTime}:00` : null),
+        totalWorkMinutes: att?.actualWorkMinutes || att?.totalDurationMinutes || (dLog?.hoursSpent ? Math.round(dLog.hoursSpent * 60) : 0),
+        dailyLogSubmitted: Boolean(dLog || att?.dailyLogSubmitted),
         todayAttendance: att || null,
       };
     });
@@ -259,6 +268,7 @@ const getTeamMembers = async (req, res) => {
     return success(res, 'Team members fetched successfully', {
       teams: teams.map(t => ({ id: t._id, name: t.name, description: t.description })),
       members: enrichedMembers,
+      selectedDate: targetDate,
     });
   } catch (error) {
     console.error('getTeamMembers error:', error);
@@ -270,24 +280,32 @@ const getTeamLeaveRequests = async (req, res) => {
   try {
     const status = req.query.status || 'pending';
     const teams = await getManagedTeams(req.user);
-    if (!teams || teams.length === 0) return success(res, 'Fetched leave requests', { requests: [] });
+    if (!teams || teams.length === 0) return success(res, 'Fetched leave requests', { requests: [], counts: { total: 0, pending: 0, approved: 0, rejected: 0 } });
 
     const memberIds = await getTeamMemberIds(teams.map(t => t._id));
     
-    const query = { userId: { $in: memberIds } };
-    if (status !== 'all') query.status = status;
-
-    const requests = await LeaveRequest.find(query)
-      .populate('userId', 'name email')
+    // Always fetch all to compute counts
+    const allRequests = await LeaveRequest.find({ userId: { $in: memberIds } })
+      .populate('userId', 'name email designation teamId')
       .populate('leaveTypeId', 'name code')
       .sort({ createdAt: -1 });
 
-    return success(res, 'Fetched leave requests', { requests });
+    const counts = {
+      total: allRequests.length,
+      pending: allRequests.filter(r => r.status === 'pending').length,
+      approved: allRequests.filter(r => r.status === 'approved').length,
+      rejected: allRequests.filter(r => r.status === 'rejected').length,
+    };
+
+    const requests = status === 'all' ? allRequests : allRequests.filter(r => r.status === status);
+
+    return success(res, 'Fetched leave requests', { requests, counts });
   } catch (error) {
     console.error('getTeamLeaveRequests error:', error);
     return badRequest(res, 'Failed to fetch leave requests');
   }
 };
+
 
 const handleLeaveDecision = async (req, res) => {
   try {
@@ -385,6 +403,8 @@ const getTeamDailyLogs = async (req, res) => {
 
       return {
         ...log,
+        checkInTime: log.checkInTime || (att?.checkInTime ? att.checkInTime : null),
+        checkOutTime: log.checkOutTime || (att?.checkOutTime ? att.checkOutTime : null),
         hoursSpent,
         attendance: att,
       };
@@ -479,7 +499,7 @@ const createTeamMember = async (req, res) => {
 // ── Manager Log Management ─────────────────────────────────
 const submitTeamMemberDailyLog = async (req, res) => {
   try {
-    const { userId, logDate, hoursSpent, taskTitle, projectName, description, blockers } = req.body;
+    const { userId, logDate, hoursSpent, taskTitle, projectName, description, blockers, checkInTime, checkOutTime } = req.body;
     if (!userId || !logDate || !hoursSpent) return badRequest(res, 'User ID, Date, and Hours are required');
 
     const targetUser = await User.findById(userId);
@@ -524,6 +544,8 @@ const submitTeamMemberDailyLog = async (req, res) => {
       teamId: targetUser.teamId,
       logDate,
       hoursSpent: parseFloat(hoursSpent),
+      checkInTime: checkInTime || null,
+      checkOutTime: checkOutTime || null,
       taskTitle: resolvedTaskTitle,
       projectName: resolvedProjectName,
       description: resolvedDescription,
@@ -538,10 +560,27 @@ const submitTeamMemberDailyLog = async (req, res) => {
 
     await log.save();
 
-    // Mark dailyLogSubmitted in Attendance
+    // Mark dailyLogSubmitted in Attendance and sync check-in/out
+    const attUpdate = { dailyLogSubmitted: true };
+    if (checkInTime) {
+      const d = new Date(`${logDate}T${checkInTime}:00`);
+      if (!isNaN(d.getTime())) attUpdate.checkInTime = d;
+    }
+    if (checkOutTime) {
+      const d = new Date(`${logDate}T${checkOutTime}:00`);
+      if (!isNaN(d.getTime())) attUpdate.checkOutTime = d;
+    }
+    if (hoursSpent) {
+      const workMins = Math.round(parseFloat(hoursSpent) * 60);
+      attUpdate.actualWorkMinutes = workMins;
+      attUpdate.totalDurationMinutes = workMins;
+      attUpdate.status = 'present';
+    }
+
     await Attendance.updateOne(
       { userId, date: logDate },
-      { $set: { dailyLogSubmitted: true } }
+      { $set: attUpdate },
+      { upsert: true }
     );
 
     return success(res, 'Daily log submitted successfully', { log });
@@ -554,7 +593,7 @@ const submitTeamMemberDailyLog = async (req, res) => {
 const updateTeamMemberDailyLog = async (req, res) => {
   try {
     const { logId } = req.params;
-    const { hoursSpent, taskTitle, projectName, description, blockers } = req.body;
+    const { hoursSpent, taskTitle, projectName, description, blockers, checkInTime, checkOutTime } = req.body;
 
     const log = await DailyLog.findById(logId);
     if (!log) return badRequest(res, 'Log not found');
@@ -566,6 +605,8 @@ const updateTeamMemberDailyLog = async (req, res) => {
     }
 
     if (hoursSpent) log.hoursSpent = parseFloat(hoursSpent);
+    if (checkInTime !== undefined) log.checkInTime = checkInTime;
+    if (checkOutTime !== undefined) log.checkOutTime = checkOutTime;
     if (taskTitle !== undefined) log.taskTitle = taskTitle;
     if (projectName !== undefined) log.projectName = projectName;
     if (description !== undefined) log.description = description;
@@ -599,9 +640,26 @@ const updateTeamMemberDailyLog = async (req, res) => {
 
     await log.save();
 
+    const attUpdate = { dailyLogSubmitted: true };
+    if (checkInTime) {
+      const d = new Date(`${log.logDate}T${checkInTime}:00`);
+      if (!isNaN(d.getTime())) attUpdate.checkInTime = d;
+    }
+    if (checkOutTime) {
+      const d = new Date(`${log.logDate}T${checkOutTime}:00`);
+      if (!isNaN(d.getTime())) attUpdate.checkOutTime = d;
+    }
+    if (hoursSpent) {
+      const workMins = Math.round(parseFloat(hoursSpent) * 60);
+      attUpdate.actualWorkMinutes = workMins;
+      attUpdate.totalDurationMinutes = workMins;
+      attUpdate.status = 'present';
+    }
+
     await Attendance.updateOne(
       { userId: log.userId, date: log.logDate },
-      { $set: { dailyLogSubmitted: true } }
+      { $set: attUpdate },
+      { upsert: true }
     );
 
     return success(res, 'Daily log updated successfully', { log });

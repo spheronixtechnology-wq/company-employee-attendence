@@ -22,8 +22,8 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    // Connect to same host via Vite proxy with credentials
-    const socket = io({
+    const socketUrl = import.meta.env.VITE_BACKEND_URL || undefined;
+    const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,

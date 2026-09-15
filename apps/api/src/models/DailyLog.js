@@ -27,6 +27,8 @@ const dailyLogSchema = new mongoose.Schema(
       min: [0.5, 'Minimum 0.5 hours'],
       max: [24, 'Cannot exceed 24 hours'],
     },
+    checkInTime: { type: String, default: null }, // e.g. "09:30"
+    checkOutTime: { type: String, default: null }, // e.g. "17:00"
 
     // ── Unified Fields ─────────────────────────────────
     description: { type: String, trim: true, default: null },

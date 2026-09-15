@@ -8,6 +8,7 @@ export default function PageHeader({
   activeTab,
   onTabChange,
   date,
+  dateText,
   onPrevDate,
   onNextDate,
   viewMode = 'Day',
@@ -17,9 +18,9 @@ export default function PageHeader({
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const formattedDate = date instanceof Date
+  const formattedDate = dateText || (date instanceof Date
     ? date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
-    : (date || new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }));
+    : (date || new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })));
 
   return (
     <div className="space-y-4 pb-2">

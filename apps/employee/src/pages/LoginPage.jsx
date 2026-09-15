@@ -55,7 +55,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (viewMode !== 'pending' || !pendingReqId) return;
 
-    const socket = io({
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const socketUrl = isHttps ? undefined : (import.meta.env.VITE_BACKEND_URL || undefined);
+    const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
@@ -240,6 +242,19 @@ export default function LoginPage() {
                   </>
                 )}
               </button>
+
+              <div className="pt-3 text-center border-t border-slate-700/40">
+                <p className="text-[11px] text-slate-400 mb-1.5">Test Employee Account (Click to fill):</p>
+                <button
+                  type="button"
+                  id="fill-demo-credentials-btn"
+                  onClick={() => setForm({ email: 'employee@spheronixtechnology.in', password: 'Employee@1234' })}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono text-[11px] transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  employee@spheronixtechnology.in
+                </button>
+              </div>
             </form>
           </div>
         )}

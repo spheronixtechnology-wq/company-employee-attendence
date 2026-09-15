@@ -7,7 +7,7 @@ import companyLogo from '../images/company logo.png';
 import {
   LayoutDashboard, ClipboardList, Calendar, FileText,
   LogOut, Menu, X, Smartphone, MapPin, Users,
-  Settings, Wifi, Building2, Clock
+  Settings, Wifi, Building2, Clock, UserCircle2
 } from 'lucide-react';
 
 const navItems = [
@@ -21,6 +21,7 @@ const navItems = [
   { path: '/attendance-method', label: 'Attendance Method', icon: Settings, id: 'nav-method' },
   { path: '/wifi-settings', label: 'WiFi / IP Settings', icon: Wifi, id: 'nav-wifi' },
   { path: '/office-locations', label: 'Office Locations', icon: Building2, id: 'nav-locations' },
+  { path: '/profile', label: 'My Profile', icon: UserCircle2, id: 'nav-profile' },
 ];
 
 export default function ManagerLayout({ children }) {
@@ -100,7 +101,7 @@ export default function ManagerLayout({ children }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col relative">
       {/* ── Fixed Ultra-Premium Glass Floating Navbar ── */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] transition-all">
+      <header className="sticky top-0 z-40 border-b border-emerald-200/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(240,253,244,0.85)_100%)] backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_44px_-14px_rgba(16,185,129,0.55),0_6px_18px_-6px_rgba(16,185,129,0.3)] transition-all">
         <div className="mx-auto flex h-[84px] max-w-[1600px] items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
           
           {/* Brand */}
@@ -127,8 +128,8 @@ export default function ManagerLayout({ children }) {
                   id={item.id}
                   className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] tracking-[-0.01em] transition-all duration-200 ${
                     active
-                      ? 'bg-white font-semibold text-violet-700 shadow-[0_8px_22px_-6px_rgba(109,40,217,0.55),0_3px_8px_-2px_rgba(109,40,217,0.3)] ring-1 ring-violet-200/80'
-                      : 'font-medium text-slate-500 hover:bg-white/70 hover:text-violet-700 hover:shadow-[0_4px_14px_-6px_rgba(109,40,217,0.4)]'
+                      ? 'bg-white font-semibold text-rose-700 shadow-[0_8px_24px_-4px_rgba(244,63,94,0.6),0_3px_10px_-2px_rgba(244,63,94,0.35)] ring-1 ring-rose-300/80'
+                      : 'font-medium text-slate-500 hover:bg-white/80 hover:text-rose-600 hover:shadow-[0_4px_16px_-4px_rgba(244,63,94,0.45)]'
                   }`}
                 >
                   <item.icon size={14} />
@@ -155,8 +156,8 @@ export default function ManagerLayout({ children }) {
                   id={`md-${item.id}`}
                   className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] tracking-[-0.01em] transition-all duration-200 ${
                     active
-                      ? 'bg-white font-semibold text-violet-700 shadow-[0_2px_12px_-3px_rgba(109,40,217,0.35)] ring-1 ring-violet-100'
-                      : 'font-medium text-slate-500 hover:bg-white/70 hover:text-violet-700'
+                      ? 'bg-white font-semibold text-rose-700 shadow-[0_4px_16px_-3px_rgba(244,63,94,0.5)] ring-1 ring-rose-200'
+                      : 'font-medium text-slate-500 hover:bg-white/80 hover:text-rose-600 hover:shadow-[0_4px_12px_-3px_rgba(244,63,94,0.35)]'
                   }`}
                 >
                   <item.icon size={14} />
@@ -173,7 +174,11 @@ export default function ManagerLayout({ children }) {
 
           {/* Right: Profile chip + controls */}
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:border-l sm:border-slate-200/70 sm:pl-4">
-            <div className="hidden items-center gap-2.5 rounded-full bg-white/70 py-1 pl-1 pr-3.5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur sm:flex">
+            <Link
+              to="/profile"
+              id="nav-profile-chip"
+              className="hidden items-center gap-2.5 rounded-full bg-white/70 py-1 pl-1 pr-3.5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.18)] ring-1 ring-white/90 backdrop-blur sm:flex hover:bg-white hover:shadow-[0_4px_14px_-4px_rgba(109,40,217,0.25)] transition-all"
+            >
               <div className="relative">
                 {user?.avatarUrl ? (
                   <img
@@ -198,7 +203,7 @@ export default function ManagerLayout({ children }) {
                 <p className="text-[11.5px] font-semibold text-slate-800">{user?.name}</p>
                 <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-violet-500">{user?.teamId?.name || 'Manager'}</p>
               </div>
-            </div>
+            </Link>
 
             {/* Mobile Hamburger Toggle */}
             <button
@@ -229,8 +234,13 @@ export default function ManagerLayout({ children }) {
               </button>
             </div>
 
-            {/* Profile */}
-            <div className="flex items-center gap-3 py-4 border-b border-slate-200">
+            {/* Profile — clickable → /profile */}
+            <Link
+              to="/profile"
+              id="drawer-nav-profile"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 py-4 border-b border-slate-200 hover:bg-violet-50/50 rounded-xl px-2 transition-all -mx-2"
+            >
               {user?.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
@@ -248,11 +258,11 @@ export default function ManagerLayout({ children }) {
               >
                 {user?.name?.[0]?.toUpperCase() || 'M'}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
-                <p className="text-xs text-slate-500 truncate">{user?.teamId?.name || 'Manager'}</p>
+                <p className="text-xs text-violet-600 font-medium">View Profile →</p>
               </div>
-            </div>
+            </Link>
 
             {/* Nav */}
             <nav className="flex-1 py-3 overflow-y-auto space-y-1">
@@ -310,7 +320,7 @@ export default function ManagerLayout({ children }) {
         <button
           id="floating-manager-logout-btn"
           onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white border border-rose-200 text-rose-600 font-semibold text-xs shadow-lg hover:bg-rose-50 hover:border-rose-300 hover:shadow-xl transition-all duration-200 group active:scale-95"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white border border-rose-200 text-rose-600 font-semibold text-xs shadow-[0_8px_25px_-4px_rgba(244,63,94,0.5),0_2px_10px_-2px_rgba(244,63,94,0.25)] hover:bg-rose-50 hover:border-rose-300 hover:shadow-[0_12px_30px_-4px_rgba(244,63,94,0.65)] transition-all duration-200 group active:scale-95"
           title="Log out of Manager account"
         >
           <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 group-hover:bg-rose-200 transition-colors">

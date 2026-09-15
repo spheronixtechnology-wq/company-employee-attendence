@@ -18,22 +18,7 @@ const generateToken = (userId, tokenVersion = 0) => {
   });
 };
 
-/**
- * Cookie options — HttpOnly, Secure in production.
- */
-const getCookieOptions = () => {
-  const isProd = process.env.NODE_ENV === 'production';
-  const options = {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-  };
-  if (isProd && process.env.COOKIE_DOMAIN) {
-    options.domain = process.env.COOKIE_DOMAIN; // .spheronixtechnology.in
-  }
-  return options;
-};
+const { getCookieOptions } = require('../config/cookie');
 
 /**
  * Builds the user payload to return on login/me.
