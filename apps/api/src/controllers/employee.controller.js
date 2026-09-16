@@ -214,6 +214,10 @@ const getDashboard = async (req, res) => {
 const checkIn = async (req, res) => {
   try {
     const { lat, lng, accuracy, qrCodeValue } = req.body;
+    
+    // Log incoming coordinates for debugging
+    console.log(`\n📍 CHECK-IN ATTEMPT - Lat: ${lat}, Lng: ${lng}, Accuracy: ${accuracy}m\n`);
+    
     const userId = req.user._id;
     const today = getTodayDateString();
 
@@ -233,7 +237,7 @@ const checkIn = async (req, res) => {
 
     if (activeOffices.length > 0) {
       for (const office of activeOffices) {
-        const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+        const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters, accuracy);
         if (geoCheck.inside) {
           passedGeofence = true;
           break;
@@ -250,7 +254,7 @@ const checkIn = async (req, res) => {
       // Fallback to legacy GeofenceSetting
       const geofence = await GeofenceSetting.findOne({ isActive: true });
       if (geofence) {
-        const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters);
+        const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters, accuracy);
         if (!geoCheck.inside) {
           return badRequest(res, 'Outside Office Location — you must be within the authorized office to mark attendance.');
         }
@@ -372,7 +376,7 @@ const checkIn = async (req, res) => {
         let targetOfficeName = matchingOffices[0].officeName;
 
         for (const office of matchingOffices) {
-          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters);
+          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters, accuracy);
           if (geoCheck.inside) {
             pairedGeofencePassed = true;
             targetOfficeName = office.officeName;
@@ -433,6 +437,14 @@ const checkIn = async (req, res) => {
       attendance.status = 'present';
       attendance.checkInMethod = activeMethod;
       attendance.checkInIp = clientIp;
+      if (lat !== undefined && lng !== undefined) {
+        attendance.checkInLocation = {
+          lat: Number(lat),
+          lng: Number(lng),
+          accuracy: accuracy !== undefined ? Number(accuracy) : undefined,
+          capturedAt: new Date(),
+        };
+      }
       await attendance.save();
     } else {
       attendance = new Attendance({
@@ -442,6 +454,12 @@ const checkIn = async (req, res) => {
         status: 'present',
         checkInMethod: activeMethod,
         checkInIp: clientIp,
+        checkInLocation: (lat !== undefined && lng !== undefined) ? {
+          lat: Number(lat),
+          lng: Number(lng),
+          accuracy: accuracy !== undefined ? Number(accuracy) : undefined,
+          capturedAt: new Date(),
+        } : undefined
       });
       await attendance.save();
     }
@@ -569,9 +587,6 @@ const checkOut = async (req, res) => {
 
       const geoCheck = isWithinGeofence(lat, lng, matchingOffice.latitude, matchingOffice.longitude, matchingOffice.radiusMeters, accuracy);
       if (!geoCheck.inside) {
-        if (geoCheck.uncertain) {
-          return badRequest(res, 'Location is uncertain. Please wait a moment, ensure high-accuracy GPS is on, and try again.');
-        }
         return badRequest(
           res,
           `Outside Office Location — You are connected to ${matchingOffice.officeName}'s network, but you are outside its physical perimeter (${geoCheck.distanceMeters}m away).`
@@ -585,7 +600,6 @@ const checkOut = async (req, res) => {
 
       const activeOffices = await OfficeLocation.find({ status: 'active' });
       let passedGeofence = false;
-      let isUncertain = false;
       let minDistance = Infinity;
 
       if (activeOffices.length > 0) {
@@ -595,18 +609,12 @@ const checkOut = async (req, res) => {
             passedGeofence = true;
             break;
           }
-          if (geoCheck.uncertain) {
-            isUncertain = true;
-          }
           if (geoCheck.distanceMeters < minDistance) {
             minDistance = geoCheck.distanceMeters;
           }
         }
 
         if (!passedGeofence) {
-          if (isUncertain) {
-            return badRequest(res, 'Location is uncertain. Please wait a moment, ensure high-accuracy GPS is on, and try again.');
-          }
           return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
         }
       } else {
@@ -615,9 +623,6 @@ const checkOut = async (req, res) => {
         if (geofence) {
           const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters, accuracy);
           if (!geoCheck.inside) {
-            if (geoCheck.uncertain) {
-              return badRequest(res, 'Location is uncertain. Please wait a moment, ensure high-accuracy GPS is on, and try again.');
-            }
             return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
           }
         }
@@ -648,6 +653,16 @@ const checkOut = async (req, res) => {
     const metrics = finalizeAttendanceCheckout(attendance, checkOutTime);
     attendance.status = calcAttendanceStatus(metrics.actualWorkMinutes);
     attendance.checkOutTime = checkOutTime;
+    
+    if (lat !== undefined && lng !== undefined) {
+      attendance.checkOutLocation = {
+        lat: Number(lat),
+        lng: Number(lng),
+        accuracy: accuracy !== undefined ? Number(accuracy) : undefined,
+        capturedAt: new Date(),
+      };
+    }
+    
     await attendance.save();
 
     // Synchronize daily log hours with finalized actual work duration

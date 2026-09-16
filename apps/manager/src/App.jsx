@@ -8,7 +8,7 @@ import AttendanceMethodPage from './pages/AttendanceMethodPage';
 import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
 import TeamOvertimePage from './pages/TeamOvertimePage';
-import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3 } from 'lucide-react';
+import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from './lib/api';
 import DocumentPreviewModal from './components/DocumentPreviewModal';
@@ -16,8 +16,8 @@ import EmployeeProfileModal from './components/EmployeeProfileModal';
 import EmployeeCreationModal from './components/EmployeeCreationModal';
 import UploadDailyLogModal from './components/UploadDailyLogModal';
 
-// ── Login Page (shared design) ──────────────────────────────────────────────
 import { EyeOff, LogIn, ShieldCheck, Copy, Check, ArrowLeft, KeyRound, QrCode } from 'lucide-react';
+import companyLogo from './images/company logo.png';
 
 const LoginPage = () => {
   const { login, verifyMfaSetup, verifyMfa } = useAuth();
@@ -129,15 +129,7 @@ const LoginPage = () => {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo / Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl mb-4 shadow-md shadow-violet-500/20">
-            {step === 'credentials' && (
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            )}
-            {step === 'mfa_setup' && <QrCode className="w-8 h-8 text-white" />}
-            {step === 'mfa_verify' && <ShieldCheck className="w-8 h-8 text-white" />}
-          </div>
+          <img src={companyLogo} alt="Spheronix" className="h-16 w-auto mx-auto mb-4 object-contain" />
           <h1 className="text-2xl font-bold text-slate-900">Manager Portal</h1>
           <p className="text-slate-600 mt-1 text-xs">Spheronix Technology</p>
         </div>
@@ -353,6 +345,9 @@ const TeamMembersPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [showCreationModal, setShowCreationModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { socket } = useSocket();
 
   const fetchMembers = useCallback(() => {
@@ -366,6 +361,26 @@ const TeamMembersPage = () => {
   useEffect(() => {
     fetchMembers();
   }, [fetchMembers]);
+
+  const openDelete = (member, e) => {
+    if (e) e.stopPropagation();
+    setMemberToDelete(member);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteMember = async () => {
+    setIsDeleting(true);
+    try {
+      await api.delete(`/manager/team/members/${memberToDelete._id}`);
+      setShowDeleteModal(false);
+      setMemberToDelete(null);
+      fetchMembers();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to archive team member.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Real-time updates for team member status
   useEffect(() => {
@@ -433,14 +448,21 @@ const TeamMembersPage = () => {
                   <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
                     member.currentStatus === 'checked_in' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                     member.currentStatus === 'on_break' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                    member.currentStatus === 'checked_out' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                    'bg-slate-100 text-slate-600 border border-slate-200'
-                  }`}>
-                    {member.currentStatus === 'checked_in' ? '● Working' :
-                     member.currentStatus === 'on_break' ? '☕ On Break' :
-                     member.currentStatus === 'checked_out' ? '✓ Checked Out' : 'Offline'}
-                  </span>
-                </div>
+                      member.currentStatus === 'checked_out' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                      'bg-slate-100 text-slate-600 border border-slate-200'
+                    }`}>
+                      {member.currentStatus === 'checked_in' ? '● Working' :
+                       member.currentStatus === 'on_break' ? '☕ On Break' :
+                       member.currentStatus === 'checked_out' ? '✓ Checked Out' : 'Offline'}
+                    </span>
+                    <button
+                      onClick={(e) => openDelete(member, e)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Archive Member"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 <p className="text-slate-600 text-xs mt-0.5 truncate">{member.designation || 'Employee'}</p>
                 <p className="text-slate-500 text-xs truncate">{member.email}</p>
               </div>
@@ -477,6 +499,37 @@ const TeamMembersPage = () => {
           }}
           teams={data.teams}
         />
+      )}
+
+      {/* ── Confirmation Modal (Delete/Archive Member) ── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up text-center">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={24} />
+            </div>
+            <h2 className="text-lg font-black text-slate-900 mb-2">Archive Team Member?</h2>
+            <p className="text-slate-500 text-xs mb-6">
+              Are you sure you want to remove <strong>{memberToDelete?.name}</strong>? They will no longer appear in the team member list, but their attendance history will be preserved.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)} 
+                className="btn-ghost flex-1 py-2.5 rounded-xl text-slate-600 font-bold"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeleteMember} 
+                disabled={isDeleting} 
+                className="btn bg-rose-600 hover:bg-rose-700 text-white font-bold flex-1 py-2.5 rounded-xl shadow-xs flex justify-center items-center gap-2"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : 'Yes, Archive'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

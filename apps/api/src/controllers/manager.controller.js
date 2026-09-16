@@ -58,7 +58,7 @@ const getManagedTeam = async (userId) => {
 const getTeamMemberIds = async (teamIds, excludeUserId = null) => {
   const ids = Array.isArray(teamIds) ? teamIds : (teamIds ? [teamIds] : []);
   if (!ids.length) return [];
-  const query = { teamId: { $in: ids }, role: { $in: ['employee'] } };
+  const query = { teamId: { $in: ids }, role: { $in: ['employee'] }, deletedAt: null };
   if (excludeUserId) query._id = { $ne: excludeUserId };
   const members = await User.find(query).select('_id');
   return members.map(m => m._id);
@@ -159,7 +159,7 @@ const getTeamAttendance = async (req, res) => {
     if (!teams || teams.length === 0) return success(res, 'Fetched attendance', { attendance: [] });
 
     const teamIds = teams.map(t => t._id);
-    const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true })
+    const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true, deletedAt: null })
       .select('name designation email avatarUrl phone')
       .sort({ name: 1 });
 
@@ -226,7 +226,7 @@ const getTeamMembers = async (req, res) => {
     }
 
     const teamIds = teams.map(t => t._id);
-    const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true })
+    const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true, deletedAt: null })
       .select('name email phone designation avatarUrl teamId createdAt')
       .populate('teamId', 'name')
       .sort({ name: 1 })
@@ -1189,6 +1189,37 @@ const getMemberOvertimeHistory = async (req, res) => {
   }
 };
 
+const deleteTeamMember = async (req, res) => {
+  try {
+    const memberId = req.params.id;
+    const authCheck = await verifyManagerMemberAuthority(req.user, memberId);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
+    }
+
+    const user = await User.findById(memberId);
+    if (!user) {
+      return badRequest(res, 'Member not found');
+    }
+
+    user.isActive = false;
+    user.deletedAt = new Date();
+    await user.save();
+
+    await writeAuditLog({
+      action: 'DELETE_TEAM_MEMBER',
+      performedBy: req.user._id,
+      targetUser: memberId,
+      details: `Team member ${user.name} (${user.email}) was archived by manager.`,
+    });
+
+    return success(res, 'Team member archived successfully');
+  } catch (error) {
+    console.error('Error deleting team member:', error);
+    return badRequest(res, 'Failed to archive team member');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -1204,6 +1235,7 @@ module.exports = {
   handleManualAttendanceDecision,
   getUnreadNotificationCount,
   createTeamMember,
+  deleteTeamMember,
   submitTeamMemberDailyLog,
   updateTeamMemberDailyLog,
   getManagedTeams,

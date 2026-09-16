@@ -3,7 +3,7 @@ import api from '../lib/api';
 import {
   Users, Plus, Search, Loader2, UserCheck, UserX, Pencil, X, Eye, EyeOff,
   LayoutGrid, List, Mail, Phone, Clock, Coffee, CheckCircle2,
-  Calendar, ChevronRight, Filter, Smartphone
+  Calendar, ChevronRight, Filter, Smartphone, Trash2
 } from 'lucide-react';
 import EmployeeProfileModal from '../components/EmployeeProfileModal';
 import EmployeeCreationModal from '../components/EmployeeCreationModal';
@@ -26,6 +26,10 @@ export default function EmployeesPage() {
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -112,6 +116,27 @@ export default function EmployeesPage() {
       fetchData();
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to update user status.' });
+    }
+  };
+
+  const openDelete = (user, e) => {
+    if (e) e.stopPropagation();
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteUser = async () => {
+    setIsDeleting(true);
+    try {
+      await api.delete(`/admin/users/${userToDelete._id}`);
+      setMessage({ type: 'success', text: 'Employee archived successfully.' });
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+      fetchData();
+    } catch (err) {
+      setMessage({ type: 'error', text: err.response?.data?.message || 'Failed to delete user.' });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -531,6 +556,13 @@ export default function EmployeesPage() {
                     >
                       {emp.isActive ? <UserX size={13} /> : <UserCheck size={13} />}
                     </button>
+                    <button
+                      onClick={(e) => openDelete(emp, e)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Archive User"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -646,6 +678,13 @@ export default function EmployeesPage() {
                           >
                             {emp.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
                           </button>
+                          <button
+                            onClick={(e) => openDelete(emp, e)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Archive User"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -746,6 +785,37 @@ export default function EmployeesPage() {
           }}
           teams={teams}
         />
+      )}
+
+      {/* ── Confirmation Modal (Delete/Archive User) ── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up text-center">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={24} />
+            </div>
+            <h2 className="text-lg font-black text-slate-900 mb-2">Archive Employee?</h2>
+            <p className="text-slate-500 text-xs mb-6">
+              Are you sure you want to remove <strong>{userToDelete?.name}</strong>? They will no longer appear in the active employee list, but their attendance history will be preserved.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)} 
+                className="btn-ghost flex-1 py-2.5 rounded-xl text-slate-600 font-bold"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeleteUser} 
+                disabled={isDeleting} 
+                className="btn bg-rose-600 hover:bg-rose-700 text-white font-bold flex-1 py-2.5 rounded-xl shadow-xs flex justify-center items-center gap-2"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : 'Yes, Archive'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

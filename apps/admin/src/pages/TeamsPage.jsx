@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { GitBranch, Users, UserCheck, Plus, Edit2, Loader2, Shield, X, Mail } from 'lucide-react';
+import { GitBranch, Users, UserCheck, Plus, Edit2, Loader2, Shield, X, Mail, Trash2 } from 'lucide-react';
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState([]);
@@ -9,6 +9,9 @@ export default function TeamsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [teamToDelete, setTeamToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', leadUserId: '' });
 
   const fetchData = async () => {
@@ -67,6 +70,27 @@ export default function TeamsPage() {
       setSubmitting(false);
     }
   };
+
+  const openDeleteModal = (team) => {
+    setTeamToDelete(team);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteTeam = async () => {
+    if (!teamToDelete) return;
+    setIsDeleting(true);
+    try {
+      await api.delete(`/admin/teams/${teamToDelete._id}`);
+      setShowDeleteModal(false);
+      setTeamToDelete(null);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete team');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -182,12 +206,18 @@ export default function TeamsPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-200 mt-4 flex justify-end">
+              <div className="pt-4 border-t border-slate-200 mt-4 flex justify-end gap-2">
                 <button
                   onClick={() => openEditModal(team)}
                   className="btn bg-white hover:bg-slate-50 text-slate-700 text-xs flex items-center gap-1.5 px-3 py-1.5 font-semibold border border-slate-200 shadow-sm transition-colors"
                 >
                   <Edit2 size={13} /> Edit Team
+                </button>
+                <button
+                  onClick={() => openDeleteModal(team)}
+                  className="btn bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 text-xs flex items-center gap-1.5 px-3 py-1.5 font-semibold border border-slate-200 hover:border-rose-200 shadow-sm transition-colors"
+                >
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>
@@ -272,6 +302,43 @@ export default function TeamsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up text-center relative">
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1"
+            >
+              <X size={20} />
+            </button>
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={24} />
+            </div>
+            <h2 className="text-lg font-black text-slate-900 mb-2">Delete Team?</h2>
+            <p className="text-slate-500 text-xs mb-6 px-2">
+              Are you sure you want to permanently delete the <strong>{teamToDelete?.name}</strong> team? All assigned employees will become unassigned. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)} 
+                className="btn-ghost flex-1 py-2.5 rounded-xl text-slate-600 font-bold"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeleteTeam} 
+                disabled={isDeleting} 
+                className="btn bg-rose-600 hover:bg-rose-700 text-white font-bold flex-1 py-2.5 rounded-xl shadow-xs flex justify-center items-center gap-2 transition-colors"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : 'Yes, Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -591,76 +591,104 @@ const useGeolocation = () => {
   const [loading, setLoading] = useState(false);
 
   const getLocation = useCallback(() => new Promise((resolve, reject) => {
-    if (!navigator.geolocation) { reject(new Error('Geolocation not supported.')); return; }
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported.'));
+      return;
+    }
     
     setLoading(true);
     setGeoError(null);
     setGeoStatus('Getting precise location...');
 
-    let readings = [];
-    const MAX_READINGS = 5;
-    const MAX_ACCURACY = 50; // meters
+    const readings = [];
+    let finished = false;
+    let watchId;
+    let timeoutId;
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        readings.push({ lat: latitude, lng: longitude, accuracy, timestamp: pos.timestamp || Date.now() });
-        setGeoStatus(`Improving accuracy... (${readings.length}/${MAX_READINGS})`);
-        
-        // If we hit max readings OR if we get an excellent reading (<=15m) immediately, stop early
-        if (readings.length >= MAX_READINGS || readings.some(r => r.accuracy <= 15)) {
-          navigator.geolocation.clearWatch(watchId);
-          processReadings();
-        }
-      },
-      (err) => {
-        navigator.geolocation.clearWatch(watchId);
-        const msg = err.code === 1
-          ? 'Location Access Required — please allow location access to verify your work location.'
-          : 'Unable to get your location. Please try again.';
-        setGeoError(msg); 
-        setGeoStatus(null);
-        setLoading(false); 
-        reject(new Error(msg));
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
-    
-    const processReadings = () => {
-      if (readings.length === 0) return;
-      // Filter out readings with very poor accuracy
-      const validReadings = readings.filter(r => r.accuracy <= MAX_ACCURACY);
-      const pool = validReadings.length > 0 ? validReadings : readings;
+    const finish = (locationError = null) => {
+      if (finished) return;
+      finished = true;
 
-      // Select the most accurate reading from the pool
-      pool.sort((a, b) => a.accuracy - b.accuracy);
-      const bestReading = pool[0];
+      if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
 
       setLoading(false);
       setGeoStatus(null);
-      
-      if (bestReading.accuracy > MAX_ACCURACY) {
-        setGeoError(`GPS accuracy is too poor (${Math.round(bestReading.accuracy)}m). Please move outdoors and try again.`);
-        reject(new Error('GPS accuracy is too poor.'));
-      } else {
-        resolve(bestReading);
+
+      if (locationError) {
+        setGeoError(locationError.message || 'Unable to get location');
+        reject(locationError);
+        return;
       }
+
+      if (readings.length === 0) {
+        const msg = 'Unable to obtain a valid GPS location. Please ensure you are outdoors or near a window.';
+        setGeoError(msg);
+        reject(new Error(msg));
+        return;
+      }
+
+      // Sort by best accuracy
+      readings.sort((a, b) => a.accuracy - b.accuracy);
+      resolve(readings[0]);
     };
 
-    // Safety timeout in case watchPosition stalls
-    setTimeout(() => {
-      navigator.geolocation.clearWatch(watchId);
-      if (loading && readings.length > 0) {
-        processReadings();
-      } else if (loading && readings.length === 0) {
-        setGeoError('Location request timed out. Please try again.');
-        setGeoStatus(null);
-        setLoading(false);
-        reject(new Error('Location timeout'));
-      }
-    }, 8000);
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (finished) return;
 
-  }), [loading]);
+        const { latitude, longitude, accuracy } = pos.coords;
+
+        if (
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude) &&
+          Number.isFinite(accuracy) &&
+          accuracy <= 100 // Ignore wildly inaccurate readings
+        ) {
+          readings.push({
+            lat: latitude,
+            lng: longitude,
+            accuracy,
+            timestamp: pos.timestamp || Date.now()
+          });
+
+          setGeoStatus(`Improving accuracy... (${readings.length}/5)`);
+
+          // Fast-track for excellent accuracy
+          if (accuracy <= 20) {
+            finish();
+            return;
+          }
+
+          // Stop collecting after 5 valid readings
+          if (readings.length >= 5) {
+            finish();
+            return;
+          }
+        }
+      },
+      (err) => {
+        if (finished) return;
+        const msg = err.code === 1
+          ? 'Location Access Required — please allow location access to verify your work location.'
+          : 'Unable to get your location. Please try again.';
+        finish(new Error(msg));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
+
+    // Safety timeout to ensure we always resolve
+    timeoutId = setTimeout(() => {
+      if (!finished) {
+        finish();
+      }
+    }, 15000);
+
+  }), []);
 
   return { geoError, geoStatus, loading, getLocation };
 };

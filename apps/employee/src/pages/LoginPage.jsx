@@ -169,7 +169,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo / Brand */}
         <div className="text-center mb-6">
-          <img src={companyLogo} alt="Spheronix Technologies" className="h-16 w-auto mx-auto mb-3 object-contain" />
+          <img src={companyLogo} alt="Spheronix" className="h-16 w-auto mx-auto mb-3 object-contain" />
           <h1 className="text-2xl font-bold text-white">Spheronix Attendance</h1>
           <p className="text-slate-400 mt-0.5 text-xs">Secure Employee & Attendance Portal</p>
         </div>

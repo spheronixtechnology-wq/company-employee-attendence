@@ -35,8 +35,8 @@ const getDashboard = async (req, res) => {
     const todayStr = getTodayDateString();
     const targetDate = date || todayStr;
 
-    const validUserIds = await User.distinct('_id');
-    const totalStaff = await User.countDocuments({ role: { $in: ['employee', 'manager'] }, isActive: true });
+    const validUserIds = await User.distinct('_id', { deletedAt: null });
+    const totalStaff = await User.countDocuments({ role: { $in: ['employee', 'manager'] }, isActive: true, deletedAt: null });
 
     let isRange = false;
     let rangeStart = targetDate;
@@ -186,7 +186,7 @@ const getDashboard = async (req, res) => {
 const getEmployees = async (req, res) => {
   try {
     const { search, role, teamId } = req.query;
-    const query = {};
+    const query = { deletedAt: null };
     
     // Filter by role if specified, otherwise return all employees and managers
     if (role && role !== 'all') {
@@ -404,6 +404,22 @@ const updateTeam = async (req, res) => {
   } catch (error) {
     console.error('Error updating team:', error);
     return badRequest(res, error.message || 'Failed to update team');
+  }
+};
+
+const deleteTeam = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const team = await Team.findByIdAndDelete(id);
+    if (!team) return badRequest(res, 'Team not found.');
+
+    // Unassign this team from all users
+    await User.updateMany({ teamId: id }, { $unset: { teamId: 1 } });
+
+    return success(res, 'Team deleted successfully', { team });
+  } catch (error) {
+    console.error('Error deleting team:', error);
+    return badRequest(res, 'Failed to delete team');
   }
 };
 
@@ -1150,6 +1166,36 @@ const getEmployeeOvertimeHistory = async (req, res) => {
   }
 };
 
+const deleteUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    if (req.user._id.toString() === userId) {
+      return badRequest(res, "You cannot delete your own account");
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return badRequest(res, 'User not found');
+    }
+
+    user.isActive = false;
+    user.deletedAt = new Date();
+    await user.save();
+
+    await writeAuditLog({
+      action: 'DELETE_USER',
+      performedBy: req.user._id,
+      targetUser: userId,
+      details: `User ${user.name} (${user.email}) was archived.`,
+    });
+
+    return success(res, 'User archived successfully');
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return badRequest(res, 'Failed to archive user');
+  }
+};
+
 module.exports = { 
   getStatus, 
   getDashboard, 
@@ -1157,8 +1203,10 @@ module.exports = {
   getTeams,
   createTeam,
   updateTeam,
+  deleteTeam,
   createUser,
   updateUser,
+  deleteUser,
   getOfficeLocations,
   createOfficeLocation,
   updateOfficeLocation,

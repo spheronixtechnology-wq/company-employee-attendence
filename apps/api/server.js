@@ -1,5 +1,6 @@
 require('dotenv').config();
 const http = require('http');
+const os = require('os');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const { initCronJobs } = require('./src/jobs/allJobs');
@@ -19,6 +20,29 @@ connectDB().then(() => {
     console.log(`║   Port: ${String(PORT).padEnd(42)} ║`);
     console.log(`║   WebSocket: Active (Socket.io)                          ║`);
     console.log(`╚══════════════════════════════════════════════════════════╝`);
+    
+    // Print local and network access links
+    console.log(`\n  Local:   http://localhost:${PORT}`);
+    
+    const networkInterfaces = os.networkInterfaces();
+    let networkAddress = null;
+    
+    for (const interfaceName in networkInterfaces) {
+      const interfaces = networkInterfaces[interfaceName];
+      for (const iface of interfaces) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          networkAddress = iface.address;
+          break;
+        }
+      }
+      if (networkAddress) break;
+    }
+    
+    if (networkAddress) {
+      console.log(`  Network: http://${networkAddress}:${PORT}\n`);
+    } else {
+      console.log();
+    }
   });
   
   // Initialize cron jobs

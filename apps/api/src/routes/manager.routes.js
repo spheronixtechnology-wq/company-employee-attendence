@@ -28,6 +28,7 @@ router.patch('/team/daily-log/:logId', isManager, uploadDailyLogDoc, managerCont
 
 // Team Members
 router.post('/team/members', isManager, managerController.createTeamMember);
+router.delete('/team/members/:id', isManager, managerController.deleteTeamMember);
 router.get('/team/leave-requests', isManager, managerController.getTeamLeaveRequests);
 router.post('/team/leave/:id/decision', isManager, managerController.handleLeaveDecision);
 

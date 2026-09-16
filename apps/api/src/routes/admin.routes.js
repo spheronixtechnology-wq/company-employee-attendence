@@ -21,8 +21,10 @@ router.get('/employees/:id/overtime', isAdmin, adminController.getEmployeeOverti
 router.get('/teams', isAdmin, adminController.getTeams);
 router.post('/teams', isAdmin, adminController.createTeam);
 router.patch('/teams/:id', isAdmin, adminController.updateTeam);
+router.delete('/teams/:id', isAdmin, adminController.deleteTeam);
 router.post('/users', isAdmin, adminController.createUser);
 router.patch('/users/:id', isAdmin, adminController.updateUser);
+router.delete('/users/:id', isAdmin, adminController.deleteUser);
 
 // Office Locations
 router.get('/office-locations', isAdminOrManager, adminController.getOfficeLocations);

@@ -23,6 +23,18 @@ const attendanceSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  checkInLocation: {
+    lat: { type: Number, required: false },
+    lng: { type: Number, required: false },
+    accuracy: { type: Number, required: false },
+    capturedAt: { type: Date, required: false },
+  },
+  checkOutLocation: {
+    lat: { type: Number, required: false },
+    lng: { type: Number, required: false },
+    accuracy: { type: Number, required: false },
+    capturedAt: { type: Date, required: false },
+  },
   breaks: [
     {
       type: {
