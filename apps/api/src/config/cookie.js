@@ -16,7 +16,7 @@
  * @returns {import('express').CookieOptions}
  */
 const getCookieOptions = (overrides = {}) => {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
   const options = {
     httpOnly: true,
     secure: isProd,
@@ -41,7 +41,7 @@ const getCookieOptions = (overrides = {}) => {
  * @returns {import('express').CookieOptions}
  */
 const getClearCookieOptions = (overrides = {}) => {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
   const options = {
     httpOnly: true,
     secure: isProd,
