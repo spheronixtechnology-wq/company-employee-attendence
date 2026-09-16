@@ -20,7 +20,7 @@ const getCookieOptions = (overrides = {}) => {
   const options = {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax',
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
     path: '/',
     ...overrides,
@@ -45,7 +45,7 @@ const getClearCookieOptions = (overrides = {}) => {
   const options = {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax',
+    sameSite: isProd ? 'none' : 'lax',
     path: '/',
     ...overrides,
   };
