@@ -44,7 +44,11 @@ const corsOptions = {
     const allowed = getAllowedOrigins();
     // Allow non-browser requests (mobile apps, Postman, curl, server-to-server)
     // In development mode, allow all origins to easily support mobile / network testing
-    if (!origin || allowed.includes(origin) || process.env.NODE_ENV === 'development') {
+    
+    // Automatically accept the 'www.' version if the base domain is allowed
+    const normalizedOrigin = origin ? origin.replace(/^https?:\/\/www\./, 'https://') : origin;
+    
+    if (!origin || allowed.includes(origin) || allowed.includes(normalizedOrigin) || process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       callback(new Error(`CORS: Origin ${origin} not allowed.`));
