@@ -45,6 +45,9 @@ const corsOptions = {
     // Allow non-browser requests (mobile apps, Postman, curl, server-to-server)
     // In development mode, allow all origins to easily support mobile / network testing
     
+    // Original logic:
+    // if (!origin || allowed.includes(origin) || process.env.NODE_ENV === 'development') {
+    
     // Automatically accept the 'www.' version if the base domain is allowed
     const normalizedOrigin = origin ? origin.replace(/^https?:\/\/www\./, 'https://') : origin;
     
