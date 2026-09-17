@@ -204,14 +204,23 @@ const overrideLeaveDecision = async ({ leaveId, adminUser, newDecision, override
 const initializeLeaveBalances = async (userId) => {
   const currentYear = getCurrentYear();
   const leaveTypes = await LeaveType.find({ isActive: true });
+  
+  // Fetch user to get their team's configured quotas
+  const user = await User.findById(userId).populate('teamId');
+  const teamQuotas = user?.teamId?.leaveQuotas || {};
 
-  const balanceOps = leaveTypes.map((lt) => ({
-    updateOne: {
-      filter: { userId, leaveTypeId: lt._id, year: currentYear },
-      update: { $setOnInsert: { userId, leaveTypeId: lt._id, year: currentYear, allocated: lt.annualQuota, used: 0 } },
-      upsert: true,
-    },
-  }));
+  const balanceOps = leaveTypes.map((lt) => {
+    // Fallback logic: Team quota (if configured) -> LeaveType global default
+    const quota = teamQuotas[lt.code] != null ? teamQuotas[lt.code] : lt.annualQuota;
+    
+    return {
+      updateOne: {
+        filter: { userId, leaveTypeId: lt._id, year: currentYear },
+        update: { $setOnInsert: { userId, leaveTypeId: lt._id, year: currentYear, allocated: quota, used: 0 } },
+        upsert: true,
+      },
+    };
+  });
 
   if (balanceOps.length > 0) {
     await LeaveBalance.bulkWrite(balanceOps);

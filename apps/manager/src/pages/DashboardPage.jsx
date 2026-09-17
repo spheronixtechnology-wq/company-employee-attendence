@@ -113,7 +113,6 @@ export default function DashboardPage() {
       socket.off('device:request_created', onUpdate);
       socket.off('device:request_resolved', onUpdate);
       socket.off('leave:request_created', onUpdate);
-      socket.off('leave:request_resolved', onUpdate);
     };
   }, [socket, fetchDashboard, fetchMembers, fetchPendingApprovals]);
 
@@ -508,7 +507,23 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="py-3 text-slate-600 font-mono">
-                          {m.checkInTime ? new Date(m.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          <div>
+                            {m.checkInTime ? new Date(m.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </div>
+                          {m.todayAttendance?.checkInLocation && m.todayAttendance.checkInLocation.lat && m.todayAttendance.checkInLocation.lng && (
+                            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                              📍
+                              <a 
+                                href={`https://www.google.com/maps/search/?api=1&query=${m.todayAttendance.checkInLocation.lat},${m.todayAttendance.checkInLocation.lng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-violet-600 hover:underline font-medium"
+                                title="View on Map"
+                              >
+                                {m.todayAttendance.checkInLocation.lat.toFixed(6)}, {m.todayAttendance.checkInLocation.lng.toFixed(6)}
+                              </a>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 font-mono font-semibold text-slate-900">
                           {hours}

@@ -227,7 +227,13 @@ const checkIn = async (req, res) => {
     }
 
     // Strict Geofencing Validation
-    if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (
+      lat === undefined || lat === null || lng === undefined || lng === null ||
+      !Number.isFinite(latNum) || !Number.isFinite(lngNum) ||
+      latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180
+    ) {
       return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
     }
     

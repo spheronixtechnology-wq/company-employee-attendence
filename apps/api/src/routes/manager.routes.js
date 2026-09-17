@@ -32,6 +32,11 @@ router.delete('/team/members/:id', isManager, managerController.deleteTeamMember
 router.get('/team/leave-requests', isManager, managerController.getTeamLeaveRequests);
 router.post('/team/leave/:id/decision', isManager, managerController.handleLeaveDecision);
 
+// Team Leave Quotas & Balances
+router.get('/team/:teamId/leave-quotas', isManager, managerController.getTeamLeaveQuotas);
+router.put('/team/:teamId/leave-quotas', isManager, managerController.updateTeamLeaveQuotas);
+router.get('/team/members/:id/leave-balances', isManager, managerController.getMemberLeaveBalances);
+
 // Overtime (Two-Stage Approvals: Stage 1 Permission & Stage 2 Work Verification)
 router.get('/team/overtime', isManager, overtimeController.getTeamOvertime);
 router.post('/team/overtime/:id/permission-decision', isManager, overtimeController.handlePermissionDecision);

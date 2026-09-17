@@ -14,6 +14,12 @@ const teamSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    leaveQuotas: {
+      SL: { type: Number, default: null },
+      CL: { type: Number, default: null },
+      EL: { type: Number, default: null },
+      UL: { type: Number, default: null },
+    },
     leadUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

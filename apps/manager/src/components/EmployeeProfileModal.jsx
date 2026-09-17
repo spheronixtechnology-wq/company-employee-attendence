@@ -12,6 +12,9 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const [leaveBalances, setLeaveBalances] = useState([]);
+  const [leaveBalancesLoading, setLeaveBalancesLoading] = useState(false);
 
   //  Period / Date filter state
   const [preset, setPreset] = useState('current_month');
@@ -70,11 +73,25 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
     }
   }, [memberId, preset]);
 
+  const fetchLeaveBalances = useCallback(async () => {
+    if (!memberId) return;
+    setLeaveBalancesLoading(true);
+    try {
+      const res = await api.get(`/manager/team/members/${memberId}/leave-balances`);
+      setLeaveBalances(res.data?.data?.balances || []);
+    } catch (err) {
+      console.error('Failed to load leave balances:', err);
+    } finally {
+      setLeaveBalancesLoading(false);
+    }
+  }, [memberId]);
+
   useEffect(() => {
     if (isOpen && memberId) {
       fetchProfile();
+      fetchLeaveBalances();
     }
-  }, [isOpen, memberId, fetchProfile]);
+  }, [isOpen, memberId, fetchProfile, fetchLeaveBalances]);
 
   // Paginated Attendance Fetch
   const fetchAttendancePage = async (page) => {
@@ -486,6 +503,36 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                     </div>
                   </div>
 
+                  {/* Leave Balances */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-violet-200 transition-colors md:col-span-2">
+                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-6 h-6 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                        <Timer size={14} />
+                      </div>
+                      Leave Balances
+                    </h3>
+                    
+                    {leaveBalancesLoading ? (
+                      <div className="flex justify-center py-4"><Loader2 className="animate-spin text-violet-600" size={20} /></div>
+                    ) : leaveBalances?.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {leaveBalances.map((bal, idx) => (
+                          <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center hover:bg-white hover:border-violet-300 transition-colors shadow-sm">
+                            <p className="text-xs font-bold text-slate-700 mb-2">{bal.name}</p>
+                            <div className="text-lg font-black text-violet-700">
+                              {bal.remaining} <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Remaining</span>
+                            </div>
+                            <div className="text-xs font-semibold text-slate-500 mt-1">
+                              / {bal.allocated} Allocated
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 text-center py-4">No leave balances found.</p>
+                    )}
+                  </div>
+
                 </div>
               )}
 
@@ -550,7 +597,21 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                                   {rec.date}
                                 </td>
                                 <td className="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
-                                  {checkInStr}
+                                  <div>{checkInStr}</div>
+                                  {rec.checkInLocation && rec.checkInLocation.lat && rec.checkInLocation.lng && (
+                                    <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                                      📍
+                                      <a 
+                                        href={`https://www.google.com/maps/search/?api=1&query=${rec.checkInLocation.lat},${rec.checkInLocation.lng}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-violet-600 hover:underline font-medium"
+                                        title="View on Map"
+                                      >
+                                        {rec.checkInLocation.lat.toFixed(6)}, {rec.checkInLocation.lng.toFixed(6)}
+                                      </a>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
                                   {checkOutStr}
@@ -650,6 +711,20 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                                 {log.projectName && (
                                   <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
                                     {log.projectName}
+                                  </span>
+                                )}
+                                {log.attendance?.checkInLocation && log.attendance.checkInLocation.lat && log.attendance.checkInLocation.lng && (
+                                  <span className="text-[10px] text-slate-500 flex items-center gap-1 ml-2">
+                                    📍
+                                    <a 
+                                      href={`https://www.google.com/maps/search/?api=1&query=${log.attendance.checkInLocation.lat},${log.attendance.checkInLocation.lng}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-violet-600 hover:underline font-medium"
+                                      title="View on Map"
+                                    >
+                                      {log.attendance.checkInLocation.lat.toFixed(6)}, {log.attendance.checkInLocation.lng.toFixed(6)}
+                                    </a>
                                   </span>
                                 )}
                               </div>

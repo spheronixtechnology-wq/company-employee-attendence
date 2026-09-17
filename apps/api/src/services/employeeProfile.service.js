@@ -549,6 +549,22 @@ const getPaginatedDailyLogs = async (employeeId, { page = 1, limit = 10, from, t
     DailyLog.find(query).sort({ logDate: -1, createdAt: -1 }).skip((p - 1) * l).limit(l).lean(),
     DailyLog.countDocuments(query),
   ]);
+
+  if (records.length > 0) {
+    const dates = records.map(r => r.logDate);
+    const attendances = await Attendance.find({ userId: employeeId, date: { $in: dates } }).lean();
+    const attMap = new Map();
+    for (const a of attendances) {
+      attMap.set(a.date, a);
+    }
+    for (const r of records) {
+      const att = attMap.get(r.logDate);
+      if (att) {
+        r.attendance = enrichAttendanceRecord(att);
+      }
+    }
+  }
+
   return {
     records,
     totalCount,

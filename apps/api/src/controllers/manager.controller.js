@@ -12,6 +12,8 @@ const EmployeeLocation = require('../models/EmployeeLocation');
 const BiometricCredential = require('../models/BiometricCredential');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
+const LeaveType = require('../models/LeaveType');
+const LeaveBalance = require('../models/LeaveBalance');
 
 const leaveService = require('../services/leave.service');
 const employeeProfileService = require('../services/employeeProfile.service');
@@ -90,6 +92,7 @@ const getDashboard = async (req, res) => {
         pendingLeaveRequests: 0,
         pendingDeviceRequests: 0,
         pendingLocationRequests: 0,
+        teams: [],
       });
     }
 
@@ -105,6 +108,7 @@ const getDashboard = async (req, res) => {
         pendingLeaveRequests: 0,
         pendingDeviceRequests: 0,
         pendingLocationRequests: 0,
+        teams,
       });
     }
 
@@ -144,7 +148,8 @@ const getDashboard = async (req, res) => {
       missingDailyLogs,
       pendingLeaveRequests,
       pendingDeviceRequests,
-      pendingLocationRequests
+      pendingLocationRequests,
+      teams,
     });
   } catch (error) {
     console.error('getDashboard error:', error);
@@ -1220,6 +1225,175 @@ const deleteTeamMember = async (req, res) => {
   }
 };
 
+// --- TEAM LEAVE QUOTAS & BALANCES ---
+
+/**
+ * Get the current leave quotas configured for a specific team.
+ * If not configured, returns the global LeaveType defaults.
+ */
+const getTeamLeaveQuotas = async (req, res) => {
+  try {
+    let teamId = req.params.teamId;
+    const teams = await getManagedTeams(req.user);
+    
+    if (teamId === 'primary') {
+      if (!teams || teams.length === 0) {
+        return res.status(404).json({ success: false, message: 'No teams found for this manager.' });
+      }
+      teamId = teams[0]._id.toString();
+    }
+    
+    // Verify manager manages this team
+    const managesTeam = teams.some(t => t._id.toString() === teamId);
+    if (!managesTeam) {
+      return res.status(403).json({ success: false, message: 'Not authorized to manage this team.' });
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ success: false, message: 'Team not found.' });
+    }
+
+    const leaveTypes = await LeaveType.find({ isActive: true });
+    
+    // Merge global defaults with team overrides
+    const quotas = {};
+    for (const lt of leaveTypes) {
+      const code = lt.code;
+      if (team.leaveQuotas && team.leaveQuotas[code] != null) {
+        quotas[code] = team.leaveQuotas[code];
+      } else {
+        quotas[code] = lt.annualQuota;
+      }
+    }
+
+    return success(res, 'Team leave quotas fetched', { quotas });
+  } catch (error) {
+    console.error('getTeamLeaveQuotas error:', error);
+    return serverError(res, 'Failed to fetch team leave quotas', error.message);
+  }
+};
+
+/**
+ * Update the leave quotas for a specific team.
+ */
+const updateTeamLeaveQuotas = async (req, res) => {
+  try {
+    let teamId = req.params.teamId;
+    const { SL, CL, EL, UL } = req.body;
+    
+    const teams = await getManagedTeams(req.user);
+    if (teamId === 'primary') {
+      if (!teams || teams.length === 0) {
+        return res.status(404).json({ success: false, message: 'No teams found for this manager.' });
+      }
+      teamId = teams[0]._id.toString();
+    }
+
+    // Verify manager manages this team
+    const managesTeam = teams.some(t => t._id.toString() === teamId);
+    if (!managesTeam) {
+      return res.status(403).json({ success: false, message: 'Not authorized to manage this team.' });
+    }
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({ success: false, message: 'Team not found.' });
+    }
+
+    // Validate inputs
+    const validateQuota = (val) => (typeof val === 'number' && val >= 0 ? val : null);
+    
+    team.leaveQuotas = {
+      SL: validateQuota(SL) ?? team.leaveQuotas?.SL ?? null,
+      CL: validateQuota(CL) ?? team.leaveQuotas?.CL ?? null,
+      EL: validateQuota(EL) ?? team.leaveQuotas?.EL ?? null,
+      UL: validateQuota(UL) ?? team.leaveQuotas?.UL ?? null,
+    };
+
+    await team.save();
+
+    // Now update all team members' allocated balances safely
+    const teamMembers = await User.find({ teamId, role: 'employee', isActive: true });
+    const leaveTypes = await LeaveType.find({ isActive: true });
+    const currentYear = new Date().getFullYear(); // Using JS date as util might not be imported
+
+    for (const member of teamMembers) {
+      // 1. Initialize balances safely via the standard service (creates them if missing)
+      await leaveService.initializeLeaveBalances(member._id);
+      
+      // 2. Bulk update ONLY the allocated amounts for this year
+      const bulkOps = leaveTypes.map(lt => {
+        const quota = team.leaveQuotas[lt.code];
+        if (quota == null) return null; // No override set for this code
+        
+        return {
+          updateOne: {
+            filter: { userId: member._id, leaveTypeId: lt._id, year: currentYear },
+            update: { $set: { allocated: quota } }
+            // Do NOT use upsert here, initializeLeaveBalances already handled creation.
+            // Do NOT touch 'used'.
+          }
+        };
+      }).filter(op => op !== null);
+
+      if (bulkOps.length > 0) {
+        await LeaveBalance.bulkWrite(bulkOps);
+      }
+    }
+
+    await writeAuditLog({
+      action: 'UPDATE_TEAM_QUOTA',
+      performedBy: req.user._id,
+      targetCollection: 'teams',
+      targetId: team._id,
+      details: `Manager updated leave quotas for team: ${team.name}`,
+    });
+
+    return success(res, 'Team leave quotas updated successfully');
+  } catch (error) {
+    console.error('updateTeamLeaveQuotas error:', error);
+    return serverError(res, 'Failed to update team leave quotas', error.message);
+  }
+};
+
+/**
+ * Get a specific member's leave balances.
+ */
+const getMemberLeaveBalances = async (req, res) => {
+  try {
+    const memberId = req.params.id;
+    
+    // Verify manager manages this member
+    const memberIds = await getTeamMemberIds(req.user);
+    if (!memberIds.some(id => id.toString() === memberId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this member.' });
+    }
+
+    const currentYear = new Date().getFullYear();
+    const balances = await LeaveBalance.find({ userId: memberId, year: currentYear })
+      .populate('leaveTypeId', 'name code')
+      .lean();
+
+    // Map to simple structure
+    const formattedBalances = balances.map(b => ({
+      code: b.leaveTypeId?.code,
+      name: b.leaveTypeId?.name,
+      allocated: b.allocated,
+      used: b.used,
+      remaining: Math.max(0, b.allocated - b.used), // Calculate virtually
+    }));
+
+    return success(res, 'Member leave balances fetched', {
+      employeeId: memberId,
+      balances: formattedBalances,
+    });
+  } catch (error) {
+    console.error('getMemberLeaveBalances error:', error);
+    return serverError(res, 'Failed to fetch member leave balances', error.message);
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -1245,4 +1419,7 @@ module.exports = {
   getMemberAttendanceHistory,
   getMemberDailyLogs,
   getMemberOvertimeHistory,
+  getTeamLeaveQuotas,
+  updateTeamLeaveQuotas,
+  getMemberLeaveBalances,
 };

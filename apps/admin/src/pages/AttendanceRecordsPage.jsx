@@ -749,6 +749,20 @@ export default function AttendanceRecordsPage() {
                                 ? 'Active now'
                                 : 'Session recorded'}
                             </p>
+                            {rec.checkInLocation && rec.checkInLocation.lat && rec.checkInLocation.lng && (
+                              <div className="text-[11px] text-slate-500 font-semibold flex items-center md:justify-end gap-1 mt-0.5">
+                                <span>📍</span>
+                                <a 
+                                  href={`https://www.google.com/maps/search/?api=1&query=${rec.checkInLocation.lat},${rec.checkInLocation.lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary-600 hover:underline"
+                                  title="View on Map"
+                                >
+                                  {rec.checkInLocation.lat.toFixed(6)}, {rec.checkInLocation.lng.toFixed(6)}
+                                </a>
+                              </div>
+                            )}
                           </>
                         ) : (
                           <>

@@ -1126,6 +1126,10 @@ const TeamLeaveRequestsPage = () => {
   const [rejectModal, setRejectModal] = useState({ open: false, requestId: null, reason: '' });
   const { socket } = useSocket();
 
+  // Leave Quotas State
+  const [leaveQuotas, setLeaveQuotas] = useState({ SL: 0, CL: 0, EL: 0, UL: 0 });
+  const [quotasLoading, setQuotasLoading] = useState(false);
+  const [quotaSuccessMsg, setQuotaSuccessMsg] = useState('');
   useEffect(() => {
     const paramStatus = searchParams.get('status') || searchParams.get('filter');
     if (paramStatus && ['pending', 'approved', 'rejected', 'all'].includes(paramStatus)) {
@@ -1147,6 +1151,32 @@ const TeamLeaveRequestsPage = () => {
   }, [filter]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  useEffect(() => {
+    api.get('/manager/team/primary/leave-quotas')
+      .then(res => {
+        if (res.data.data?.quotas) {
+          setLeaveQuotas(res.data.data.quotas);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const handleSaveQuotas = async (e) => {
+    e.preventDefault();
+    setQuotasLoading(true);
+    setQuotaSuccessMsg('');
+    try {
+      await api.put('/manager/team/primary/leave-quotas', leaveQuotas);
+      setQuotaSuccessMsg('Team leave quotas saved successfully!');
+      setTimeout(() => setQuotaSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setActionMessage({ type: 'error', text: err.response?.data?.message || 'Failed to save quotas' });
+    } finally {
+      setQuotasLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -1232,6 +1262,69 @@ const TeamLeaveRequestsPage = () => {
           {actionMessage.text}
         </div>
       )}
+
+      {/* ── Premium Team Leave Configuration ── */}
+      <div className="bg-gradient-to-br from-white to-slate-50/50 rounded-2xl p-6 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary-500/10 to-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <form onSubmit={handleSaveQuotas} className="relative z-10 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Sparkles size={18} className="text-primary-500" /> Team Leave Allocation
+              </h2>
+              <p className="text-xs text-slate-500 mt-1 max-w-xl leading-relaxed">
+                Configure default annual leave limits for your team. This immediately applies the limits to all members without affecting their already used leaves.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={quotasLoading}
+                className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-700 hover:to-indigo-700 text-white text-xs font-extrabold tracking-wide uppercase rounded-xl flex items-center justify-center min-w-[160px] transition-all transform hover:-translate-y-0.5 shadow-md shadow-primary-500/20 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {quotasLoading ? <Loader2 size={14} className="animate-spin mr-2" /> : <Check size={14} className="mr-2" />}
+                {quotasLoading ? 'Saving...' : 'Save Limits'}
+              </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 pt-2">
+            {[
+              { id: 'SL', label: 'Sick Leave', color: 'rose' },
+              { id: 'CL', label: 'Casual Leave', color: 'sky' },
+              { id: 'EL', label: 'Earned Leave', color: 'emerald' },
+              { id: 'UL', label: 'Unpaid Leave', color: 'slate' }
+            ].map((leave) => (
+              <div key={leave.id} className="relative group/input">
+                <div className={`absolute inset-0 bg-${leave.color}-500/5 rounded-xl transition-colors group-hover/input:bg-${leave.color}-500/10`}></div>
+                <div className="relative p-3.5 border border-slate-200/80 rounded-xl bg-white/60 backdrop-blur-sm transition-all hover:border-slate-300 shadow-sm">
+                  <label className="flex flex-col gap-1.5 cursor-text">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{leave.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full bg-${leave.color}-500 shadow-sm shadow-${leave.color}-500/40`}></span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={leaveQuotas[leave.id] || 0}
+                        onChange={(e) => setLeaveQuotas(prev => ({ ...prev, [leave.id]: parseInt(e.target.value) || 0 }))}
+                        className="w-full bg-transparent border-none p-0 text-xl font-black text-slate-800 focus:ring-0 focus:outline-none placeholder-slate-300"
+                        placeholder="0"
+                      />
+                      <span className="text-xs font-semibold text-slate-400">days</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          {quotaSuccessMsg && (
+            <div className="absolute -top-12 right-0 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-200 shadow-lg shadow-emerald-500/10 flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300 z-50">
+              <CheckCircle2 size={16} />
+              {quotaSuccessMsg}
+            </div>
+          )}
+        </form>
+      </div>
 
       {/* ── Stats Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
