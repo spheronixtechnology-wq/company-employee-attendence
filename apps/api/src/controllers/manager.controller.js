@@ -19,8 +19,9 @@ const leaveService = require('../services/leave.service');
 const employeeProfileService = require('../services/employeeProfile.service');
 const { writeAuditLog } = require('../services/audit.service');
 const { createNotification } = require('../services/notification.service');
+const sessionReactivationService = require('../services/sessionReactivation.service');
 
-const { emitToUser, emitToTeam, emitToManagers, emitToAdmins, emitToDeviceRequest } = require('../socket');
+const { emitToUser, emitToTeam, emitToManagers, emitToAdmins, emitToDeviceRequest, emitToAll } = require('../socket');
 
 const { success, badRequest, forbidden, notFound } = require('../utils/response');
 const { getTodayDateString } = require('../utils/dateUtils');
@@ -1394,6 +1395,80 @@ const getMemberLeaveBalances = async (req, res) => {
   }
 };
 
+const getSessionReactivations = async (req, res) => {
+  try {
+    const teams = await getManagedTeams(req.user);
+    const teamIds = teams.map((t) => t._id);
+    const { date, search } = req.query;
+
+    const data = await sessionReactivationService.getSessionReactivations({
+      date,
+      teamIds,
+      search,
+    });
+
+    return success(res, 'Session reactivations fetched successfully', data);
+  } catch (error) {
+    console.error('manager.getSessionReactivations error:', error);
+    return badRequest(res, 'Failed to fetch session reactivations');
+  }
+};
+
+const handleSessionReactivationDecision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { action, decision, notes } = req.body;
+    action = action || decision || (req.path.includes('approve') ? 'approve' : (req.path.includes('reject') ? 'reject' : null));
+
+    if (!['approve', 'reject'].includes(action)) {
+      return badRequest(res, "Action must be either 'approve' or 'reject'");
+    }
+
+    // Verify manager manages this employee's team
+    const attendance = await Attendance.findById(id).populate('userId', 'teamId');
+    if (!attendance) {
+      return notFound(res, 'Attendance record not found');
+    }
+
+    const managedTeams = await getManagedTeams(req.user);
+    const managedTeamIds = new Set(managedTeams.map((t) => t._id.toString()));
+    const employeeTeamId = attendance.userId?.teamId?.toString();
+
+    if (!employeeTeamId || !managedTeamIds.has(employeeTeamId)) {
+      return forbidden(res, 'You are not authorized to review attendance for this employee');
+    }
+
+    const reviewerUser = req.user;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+
+    let result;
+    if (action === 'approve') {
+      result = await sessionReactivationService.approveSessionReactivation({
+        attendanceId: id,
+        reviewerUser,
+        notes,
+        ipAddress,
+      });
+    } else {
+      result = await sessionReactivationService.rejectSessionReactivation({
+        attendanceId: id,
+        reviewerUser,
+        notes,
+        ipAddress,
+      });
+    }
+
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json(result);
+    }
+
+    return success(res, result.message, result);
+  } catch (error) {
+    console.error('manager.handleSessionReactivationDecision error:', error);
+    return badRequest(res, error.message || 'Failed to process session reactivation decision');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -1422,4 +1497,6 @@ module.exports = {
   getTeamLeaveQuotas,
   updateTeamLeaveQuotas,
   getMemberLeaveBalances,
+  getSessionReactivations,
+  handleSessionReactivationDecision,
 };

@@ -8,7 +8,7 @@ const DeviceRequest = require('../models/DeviceRequest');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const Notification = require('../models/Notification');
 const { createNotification } = require('../services/notification.service');
-const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest } = require('../socket');
+const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest, emitToAll } = require('../socket');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
 const ManagerPermission = require('../models/ManagerPermission');
@@ -23,6 +23,7 @@ const { writeAuditLog } = require('../services/audit.service');
 const { getClientIp, getActiveLocalInterfaces } = require('../utils/ipUtils');
 const { formatDeviceLabel } = require('../utils/deviceUtils');
 const { getTodayDateString } = require('../utils/dateUtils');
+const sessionReactivationService = require('../services/sessionReactivation.service');
 const ipaddr = require('ipaddr.js');
 
 const getStatus = (req, res) => {
@@ -232,7 +233,9 @@ const getEmployees = async (req, res) => {
       if (onLeave) {
         currentStatus = 'on_leave';
       } else if (att) {
-        if (att.checkOutTime) {
+        if (att.autoCheckedOut) {
+          currentStatus = 'auto_checked_out';
+        } else if (att.checkOutTime) {
           currentStatus = 'checked_out';
         } else if (att.activeBreak?.startedAt) {
           currentStatus = 'on_break';
@@ -245,11 +248,19 @@ const getEmployees = async (req, res) => {
         ...safe,
         currentStatus,
         todayAttendance: att ? {
+          _id: att._id,
           checkInTime: att.checkInTime,
           checkOutTime: att.checkOutTime,
           checkInMethod: att.checkInMethod || 'qr_code',
           status: att.status,
           totalBreakMinutes: att.completedBreakMinutes || att.totalBreakMinutes || 0,
+          autoCheckedOut: att.autoCheckedOut,
+          autoCheckoutReason: att.autoCheckoutReason,
+          autoCheckoutAt: att.autoCheckoutAt,
+          outOfBoundsReason: att.outOfBoundsReason,
+          reactivationStatus: att.reactivationStatus,
+          reactivationRequestedAt: att.reactivationRequestedAt,
+          reactivatedAt: att.reactivatedAt,
         } : null,
       };
     });
@@ -758,9 +769,14 @@ const handleDeviceRequestDecision = async (req, res) => {
 
 const getActiveAttendanceMethod = async (req, res) => {
   try {
-    const latest = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
-    const activeMethod = latest ? latest.activeMethod : 'qr_code';
-    return success(res, 'Active attendance method fetched', { activeMethod });
+    const setting = await AttendanceMethodSetting.getActiveSetting();
+    return success(res, 'Active attendance method fetched', {
+      activeMethod: setting.activeMethod || 'qr_code',
+      allowedMethods: setting.allowedMethods || ['biometric', 'wifi_ip', 'qr_code'],
+      heartbeatMonitoringEnabled: setting.heartbeatMonitoringEnabled === true,
+      heartbeatTimeoutMinutes: setting.heartbeatTimeoutMinutes || 8,
+      heartbeatMonitoringStartedAt: setting.heartbeatMonitoringStartedAt || null,
+    });
   } catch (error) {
     console.error('getActiveAttendanceMethod error:', error);
     return badRequest(res, 'Failed to fetch active attendance method');
@@ -782,28 +798,113 @@ const switchAttendanceMethod = async (req, res) => {
       return badRequest(res, 'Reason cannot exceed 300 characters');
     }
 
-    const newSetting = new AttendanceMethodSetting({
-      activeMethod: method,
-      changedBy: req.user._id,
-      reason: reason.trim(),
-      changedAt: new Date(),
-    });
-    await newSetting.save();
+    const now = new Date();
+    const setting = await AttendanceMethodSetting.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          activeMethod: method,
+          changedBy: req.user._id,
+          reason: reason.trim(),
+          changedAt: now,
+        },
+      },
+      { new: true, upsert: true, runValidators: true }
+    );
 
     await writeAuditLog({
       action: 'ATTENDANCE_METHOD_SWITCHED',
       performedBy: req.user,
       targetCollection: 'AttendanceMethodSetting',
-      targetId: newSetting._id,
+      targetId: setting._id,
       reason: reason.trim(),
       metadata: { newMethod: method },
       ipAddress: getClientIp(req),
     });
 
+    const payload = {
+      activeMethod: setting.activeMethod,
+      allowedMethods: setting.allowedMethods,
+      heartbeatMonitoringEnabled: setting.heartbeatMonitoringEnabled === true,
+      heartbeatTimeoutMinutes: setting.heartbeatTimeoutMinutes,
+      heartbeatMonitoringStartedAt: setting.heartbeatMonitoringStartedAt,
+    };
+
+    emitToManagers('attendance-setting:updated', payload);
+    emitToAll('attendance-setting:updated', payload);
+
     return success(res, 'Attendance method switched successfully', { activeMethod: method });
   } catch (error) {
     console.error('switchAttendanceMethod error:', error);
     return badRequest(res, 'Failed to switch attendance method');
+  }
+};
+
+const toggleHeartbeatMonitoring = async (req, res) => {
+  try {
+    const { enabled, timeoutMinutes, reason } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return badRequest(res, 'Field "enabled" must be a boolean');
+    }
+
+    const now = new Date();
+    const update = {
+      heartbeatMonitoringEnabled: enabled,
+      heartbeatMonitoringStartedAt: enabled ? now : null,
+      changedBy: req.user._id,
+      changedAt: now,
+      reason: (reason && reason.trim()) || `Heartbeat presence monitoring ${enabled ? 'enabled' : 'disabled'} by ${req.user.name || 'Management'}`,
+    };
+
+    if (typeof timeoutMinutes === 'number' && timeoutMinutes >= 1 && timeoutMinutes <= 60) {
+      update.heartbeatTimeoutMinutes = timeoutMinutes;
+    }
+
+    const setting = await AttendanceMethodSetting.findOneAndUpdate(
+      {},
+      { $set: update },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    // One-time batch update when turning OFF:
+    // Set active sessions for today to NOT_MONITORED once (prevents cron updateMany overhead)
+    if (!enabled) {
+      const today = getTodayDateString('Asia/Kolkata');
+      await Attendance.updateMany(
+        { date: today, checkOutTime: null },
+        { $set: { heartbeatStatus: 'NOT_MONITORED' } }
+      );
+    }
+
+    await writeAuditLog({
+      action: enabled ? 'HEARTBEAT_MONITORING_ENABLED' : 'HEARTBEAT_MONITORING_DISABLED',
+      performedBy: req.user,
+      targetCollection: 'AttendanceMethodSetting',
+      targetId: setting._id,
+      reason: setting.reason,
+      metadata: {
+        enabled,
+        timeoutMinutes: setting.heartbeatTimeoutMinutes,
+        startedAt: setting.heartbeatMonitoringStartedAt,
+      },
+      ipAddress: getClientIp(req),
+    });
+
+    const payload = {
+      activeMethod: setting.activeMethod,
+      allowedMethods: setting.allowedMethods,
+      heartbeatMonitoringEnabled: setting.heartbeatMonitoringEnabled === true,
+      heartbeatTimeoutMinutes: setting.heartbeatTimeoutMinutes,
+      heartbeatMonitoringStartedAt: setting.heartbeatMonitoringStartedAt,
+    };
+
+    emitToManagers('attendance-setting:updated', payload);
+    emitToAll('attendance-setting:updated', payload);
+
+    return success(res, `Heartbeat presence monitoring ${enabled ? 'enabled' : 'disabled'} successfully`, payload);
+  } catch (error) {
+    console.error('toggleHeartbeatMonitoring error:', error);
+    return badRequest(res, 'Failed to update heartbeat monitoring setting');
   }
 };
 
@@ -1196,10 +1297,66 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { 
-  getStatus, 
-  getDashboard, 
-  getEmployees, 
+const getSessionReactivations = async (req, res) => {
+  try {
+    const { date, search } = req.query;
+    const data = await sessionReactivationService.getSessionReactivations({
+      date,
+      teamIds: null,
+      search,
+    });
+    return success(res, 'Session reactivations fetched successfully', data);
+  } catch (error) {
+    console.error('admin.getSessionReactivations error:', error);
+    return badRequest(res, 'Failed to fetch session reactivations');
+  }
+};
+
+const handleSessionReactivationDecision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { action, decision, notes } = req.body;
+    action = action || decision || (req.path.includes('approve') ? 'approve' : (req.path.includes('reject') ? 'reject' : null));
+
+    if (!['approve', 'reject'].includes(action)) {
+      return badRequest(res, "Action must be either 'approve' or 'reject'");
+    }
+
+    const reviewerUser = req.user;
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+
+    let result;
+    if (action === 'approve') {
+      result = await sessionReactivationService.approveSessionReactivation({
+        attendanceId: id,
+        reviewerUser,
+        notes,
+        ipAddress,
+      });
+    } else {
+      result = await sessionReactivationService.rejectSessionReactivation({
+        attendanceId: id,
+        reviewerUser,
+        notes,
+        ipAddress,
+      });
+    }
+
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json(result);
+    }
+
+    return success(res, result.message, result);
+  } catch (error) {
+    console.error('admin.handleSessionReactivationDecision error:', error);
+    return badRequest(res, error.message || 'Failed to process session reactivation decision');
+  }
+};
+
+module.exports = {
+  getStatus,
+  getDashboard,
+  getEmployees,
   getTeams,
   createTeam,
   updateTeam,
@@ -1215,6 +1372,7 @@ module.exports = {
   handleDeviceRequestDecision,
   getActiveAttendanceMethod,
   switchAttendanceMethod,
+  toggleHeartbeatMonitoring,
   getCurrentIp,
   getManagerPermissions,
   updateManagerPermission,
@@ -1226,4 +1384,6 @@ module.exports = {
   getEmployeeAttendanceHistory,
   getEmployeeDailyLogs,
   getEmployeeOvertimeHistory,
+  getSessionReactivations,
+  handleSessionReactivationDecision,
 };

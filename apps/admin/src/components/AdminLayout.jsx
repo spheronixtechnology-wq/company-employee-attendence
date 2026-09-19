@@ -8,7 +8,8 @@ import {
   LayoutDashboard, Users, Calendar, ClipboardList, Shield,
   QrCode, Wifi, MapPin, Fingerprint, Settings, ScrollText,
   TrendingUp, LogOut, Menu, X, ChevronRight, BarChart3,
-  UserCog, GitBranch, Building2, Smartphone, Monitor, Clock, UserCircle2
+  UserCog, GitBranch, Building2, Smartphone, Monitor, Clock, UserCircle2,
+  ShieldAlert
 } from 'lucide-react';
 
 const navSections = [
@@ -30,6 +31,7 @@ const navSections = [
     label: 'Attendance',
     items: [
       { path: '/attendance', label: 'Attendance Records', icon: ClipboardList, id: 'nav-attendance' },
+      { path: '/session-reactivations', label: 'Session Reactivations', icon: ShieldAlert, id: 'nav-session-reactivations' },
       { path: '/overtime', label: 'Overtime Oversight', icon: Clock, id: 'nav-overtime' },
       { path: '/device-requests', label: 'Device Requests', icon: Smartphone, id: 'nav-device-requests' },
       { path: '/leave-requests', label: 'Leave Requests', icon: Calendar, id: 'nav-leaves' },
@@ -53,12 +55,17 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingDevicesCount, setPendingDevicesCount] = useState(0);
+  const [pendingReactivationsCount, setPendingReactivationsCount] = useState(0);
 
   const fetchPendingCounts = useCallback(async () => {
     try {
       const res = await api.get('/admin/device-requests?status=pending');
       const count = res.data?.data?.counts?.pending ?? (res.data?.data?.requests?.length || 0);
       setPendingDevicesCount(count);
+    } catch {}
+    try {
+      const reactRes = await api.get('/admin/session-reactivations');
+      setPendingReactivationsCount(reactRes.data?.data?.kpis?.pendingCount || 0);
     } catch {}
   }, []);
 
@@ -72,9 +79,13 @@ export default function AdminLayout({ children }) {
     const handleUpdate = () => fetchPendingCounts();
     socket.on('device:request_created', handleUpdate);
     socket.on('device:request_resolved', handleUpdate);
+    socket.on('reactivation:requested', handleUpdate);
+    socket.on('attendance:update', handleUpdate);
     return () => {
       socket.off('device:request_created', handleUpdate);
       socket.off('device:request_resolved', handleUpdate);
+      socket.off('reactivation:requested', handleUpdate);
+      socket.off('attendance:update', handleUpdate);
     };
   }, [socket, fetchPendingCounts]);
 
@@ -144,6 +155,11 @@ export default function AdminLayout({ children }) {
                         {pendingDevicesCount}
                       </span>
                     )}
+                    {item.id === 'nav-session-reactivations' && pendingReactivationsCount > 0 && (
+                      <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex-shrink-0 animate-pulse">
+                        {pendingReactivationsCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -201,6 +217,11 @@ export default function AdminLayout({ children }) {
                       {pendingDevicesCount}
                     </span>
                   )}
+                  {item.id === 'nav-session-reactivations' && pendingReactivationsCount > 0 && (
+                    <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-1 text-[9px] font-bold text-white shadow-sm animate-pulse">
+                      {pendingReactivationsCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -212,6 +233,7 @@ export default function AdminLayout({ children }) {
               { path: '/dashboard', label: 'Dashboard', id: 'nav-md-dashboard' },
               { path: '/employees', label: 'Employees', id: 'nav-md-employees' },
               { path: '/attendance', label: 'Attendance', id: 'nav-md-attendance' },
+              { path: '/session-reactivations', label: 'Reactivations', id: 'nav-md-reactivations' },
               { path: '/device-requests', label: 'Devices', id: 'nav-md-devices' },
               { path: '/leave-requests', label: 'Leaves', id: 'nav-md-leaves' },
               { path: '/attendance-method', label: 'Settings', id: 'nav-md-settings' },

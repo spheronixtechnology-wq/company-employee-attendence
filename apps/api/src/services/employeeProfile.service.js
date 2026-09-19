@@ -5,7 +5,7 @@ const Overtime = require('../models/Overtime');
 const LeaveRequest = require('../models/LeaveRequest');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const DeviceRequest = require('../models/DeviceRequest');
-const { getTodayDateString } = require('../utils/dateUtils');
+const { getTodayDateString, calcAttendanceMetrics } = require('../utils/dateUtils');
 
 /**
  * Calculates calendar days of an approved leave that overlap with the query period.
@@ -79,11 +79,7 @@ function formatMinutes(minutes) {
 
 /**
  * Computes net working duration in minutes for an attendance record:
- * 1. Total duration = checkOutTime - checkInTime
- *    (If checkOutTime is not set and it is today's active session, uses current time Date.now())
- * 2. Total break duration = sum of all completed or ongoing breaks
- * 3. Net work duration = max(0, totalDuration - totalBreakDuration)
- * 4. Fallback: att.actualWorkMinutes ?? (att.totalDurationMinutes - att.totalBreakMinutes)
+ * Uses unified calcAttendanceMetrics with interval union to prevent double counting.
  */
 function computeAttendanceMetrics(att) {
   if (!att || !att.checkInTime) {
@@ -94,59 +90,18 @@ function computeAttendanceMetrics(att) {
     };
   }
 
-  // 1. Calculate Break Minutes (stored or computed from break entries)
-  let breakMinutes = Number(att.totalBreakMinutes ?? att.completedBreakMinutes ?? 0);
-  if (Array.isArray(att.breaks) && att.breaks.length > 0) {
-    let computedBreaks = 0;
-    for (const b of att.breaks) {
-      if (b.startedAt) {
-        const bStart = new Date(b.startedAt).getTime();
-        const bEnd = b.endedAt
-          ? new Date(b.endedAt).getTime()
-          : (att.checkOutTime ? new Date(att.checkOutTime).getTime() : Date.now());
-        if (bEnd > bStart) {
-          computedBreaks += Math.floor((bEnd - bStart) / (1000 * 60));
-        }
-      }
-    }
-    breakMinutes = Math.max(breakMinutes, computedBreaks);
-  }
-
-  // 2. Total time from checkIn to checkOut
-  const checkInMs = new Date(att.checkInTime).getTime();
-  let checkOutMs = att.checkOutTime ? new Date(att.checkOutTime).getTime() : null;
-
-  if (!checkOutMs) {
-    const todayStr = getTodayDateString();
-    if (att.date === todayStr) {
-      // Currently active shift today: time elapsed from check-in until now
-      checkOutMs = Date.now();
-    } else if (Number(att.totalDurationMinutes) > 0) {
-      checkOutMs = checkInMs + Number(att.totalDurationMinutes) * 60000;
-    } else if (Number(att.actualWorkMinutes) > 0) {
-      checkOutMs = checkInMs + (Number(att.actualWorkMinutes) + breakMinutes) * 60000;
-    }
-  }
-
-  let totalDurationMinutes = 0;
-  if (checkOutMs && checkOutMs > checkInMs) {
-    totalDurationMinutes = Math.floor((checkOutMs - checkInMs) / (1000 * 60));
-  } else if (Number(att.totalDurationMinutes) > 0) {
-    totalDurationMinutes = Number(att.totalDurationMinutes);
-  }
-
-  // Net work duration = Total time from checkin to checkout minus break time
-  let workMinutes = Math.max(0, totalDurationMinutes - breakMinutes);
-
-  // If actualWorkMinutes exists in DB and is positive, ensure we preserve it if higher
-  if (workMinutes === 0 && Number(att.actualWorkMinutes) > 0) {
-    workMinutes = Number(att.actualWorkMinutes);
-  }
+  const metrics = calcAttendanceMetrics({
+    checkInTime: att.checkInTime,
+    checkOutTime: att.checkOutTime || null,
+    breaks: att.breaks || [],
+    activeBreak: att.activeBreak || null,
+    referenceTime: new Date(),
+  });
 
   return {
-    totalDurationMinutes,
-    totalBreakMinutes: breakMinutes,
-    workMinutes,
+    totalDurationMinutes: metrics.totalDurationMinutes,
+    totalBreakMinutes: metrics.totalBreakMinutes,
+    workMinutes: metrics.actualWorkMinutes,
   };
 }
 
@@ -221,7 +176,10 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
     Attendance.find({
       userId: member._id,
       date: { $gte: period.from, $lte: period.to },
-    }).sort({ date: -1 }).lean(),
+    })
+      .populate('reactivationDecisionBy', 'name email role')
+      .sort({ date: -1 })
+      .lean(),
 
     // Daily work logs in period
     DailyLog.find({
@@ -522,7 +480,12 @@ const getPaginatedAttendance = async (employeeId, { page = 1, limit = 10, from, 
     query.date = { $gte: from, $lte: to };
   }
   const [records, totalCount] = await Promise.all([
-    Attendance.find(query).sort({ date: -1 }).skip((p - 1) * l).limit(l).lean(),
+    Attendance.find(query)
+      .populate('reactivationDecisionBy', 'name email role')
+      .sort({ date: -1 })
+      .skip((p - 1) * l)
+      .limit(l)
+      .lean(),
     Attendance.countDocuments(query),
   ]);
   const enrichedRecords = records.map(att => enrichAttendanceRecord(att));

@@ -43,6 +43,7 @@ router.post('/manual-attendance/:id/decision', isAdmin, managerController.handle
 // Attendance Method Settings
 router.get('/attendance-method/active', isAdminOrManager, adminController.getActiveAttendanceMethod);
 router.patch('/attendance-method/switch', isAdminOrManager, adminController.switchAttendanceMethod);
+router.patch('/attendance-method/heartbeat', isAdminOrManager, adminController.toggleHeartbeatMonitoring);
 
 // Manager Permissions & MFA
 router.get('/manager-permissions', isAdmin, adminController.getManagerPermissions);
@@ -51,6 +52,12 @@ router.post('/managers/:id/reset-mfa', isAdmin, adminController.resetManagerMfa)
 
 // Attendance Records
 router.get('/attendance', isAdmin, adminController.getAttendance);
+
+// Session Reactivations (Auto-checkout reviews)
+router.get('/session-reactivations', isAdmin, adminController.getSessionReactivations);
+router.post('/session-reactivations/:id/decision', isAdmin, adminController.handleSessionReactivationDecision);
+router.post('/session-reactivations/:id/approve', isAdmin, adminController.handleSessionReactivationDecision);
+router.post('/session-reactivations/:id/reject', isAdmin, adminController.handleSessionReactivationDecision);
 
 // Leave Requests
 router.get('/leave-requests', isAdmin, adminController.getLeaveRequests);

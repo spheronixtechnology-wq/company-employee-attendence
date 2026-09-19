@@ -51,9 +51,16 @@ router.patch('/location-requests/:id/decision', isManager, managerController.han
 // Manual Attendance Decisions
 router.post('/team/manual-attendance/:id/decision', isManager, managerController.handleManualAttendanceDecision);
 
+// Session Reactivations (Auto-checkout reviews for manager's teams)
+router.get('/session-reactivations', isManager, managerController.getSessionReactivations);
+router.post('/session-reactivations/:id/decision', isManager, managerController.handleSessionReactivationDecision);
+router.post('/session-reactivations/:id/approve', isManager, managerController.handleSessionReactivationDecision);
+router.post('/session-reactivations/:id/reject', isManager, managerController.handleSessionReactivationDecision);
+
 // System Settings & Configuration (Attendance Method, WiFi/IP, Office Locations)
 router.get('/attendance-method/active', isManager, adminController.getActiveAttendanceMethod);
 router.patch('/attendance-method/switch', isManager, adminController.switchAttendanceMethod);
+router.patch('/attendance-method/heartbeat', isManager, adminController.toggleHeartbeatMonitoring);
 
 router.get('/office-locations', isManager, adminController.getOfficeLocations);
 router.post('/office-locations', isManager, adminController.createOfficeLocation);

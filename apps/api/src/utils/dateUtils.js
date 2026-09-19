@@ -81,12 +81,143 @@ const calcAttendanceStatus = (netWorkMinutes) => {
 };
 
 /**
+ * Computes attendance metrics (totalDurationMinutes, totalBreakMinutes, actualWorkMinutes)
+ * using interval union so breaks (suspensions, manual) and company lunch window (1:00 PM - 2:00 PM IST)
+ * are NEVER double-counted.
+ *
+ * @param {Object} params
+ * @param {Date|string|number} params.checkInTime - The check-in timestamp
+ * @param {Date|string|number|null} [params.checkOutTime=null] - The check-out timestamp if checked out
+ * @param {Array} [params.breaks=[]] - List of break objects with startedAt and endedAt
+ * @param {Object|null} [params.activeBreak=null] - Currently active break if ongoing
+ * @param {Date|string|number} [params.referenceTime=new Date()] - Reference time for live sessions
+ * @returns {{ totalDurationMinutes: number, totalBreakMinutes: number, actualWorkMinutes: number, totalDurationMs: number, totalBreakMs: number, actualWorkMs: number }}
+ */
+const calcAttendanceMetrics = ({
+  checkInTime,
+  checkOutTime = null,
+  breaks = [],
+  activeBreak = null,
+  referenceTime = new Date(),
+}) => {
+  if (!checkInTime) {
+    return {
+      totalDurationMinutes: 0,
+      totalBreakMinutes: 0,
+      actualWorkMinutes: 0,
+      totalDurationMs: 0,
+      totalBreakMs: 0,
+      actualWorkMs: 0,
+    };
+  }
+
+  const checkInDate = new Date(checkInTime);
+  if (isNaN(checkInDate.getTime())) {
+    return {
+      totalDurationMinutes: 0,
+      totalBreakMinutes: 0,
+      actualWorkMinutes: 0,
+      totalDurationMs: 0,
+      totalBreakMs: 0,
+      actualWorkMs: 0,
+    };
+  }
+
+  const checkInDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(checkInDate);
+
+  const shiftEndLimit = new Date(`${checkInDateStr}T18:00:00.000+05:30`).getTime();
+  const refMs = referenceTime ? new Date(referenceTime).getTime() : Date.now();
+
+  let effectiveEndTime = checkOutTime ? new Date(checkOutTime).getTime() : refMs;
+  if (effectiveEndTime > shiftEndLimit) {
+    effectiveEndTime = shiftEndLimit;
+  }
+  const checkInMs = checkInDate.getTime();
+  if (effectiveEndTime < checkInMs) {
+    effectiveEndTime = checkInMs;
+  }
+
+  const totalDurationMs = Math.max(0, effectiveEndTime - checkInMs);
+
+  // Collect all non-working break intervals within [checkInMs, effectiveEndTime]
+  const rawIntervals = [];
+
+  if (Array.isArray(breaks)) {
+    for (const b of breaks) {
+      if (b && b.startedAt) {
+        const bStart = new Date(b.startedAt).getTime();
+        const bEnd = b.endedAt ? new Date(b.endedAt).getTime() : effectiveEndTime;
+        const cStart = Math.max(checkInMs, bStart);
+        const cEnd = Math.min(effectiveEndTime, bEnd);
+        if (cEnd > cStart) {
+          rawIntervals.push({ start: cStart, end: cEnd });
+        }
+      }
+    }
+  }
+
+  if (activeBreak && activeBreak.startedAt) {
+    const bStart = new Date(activeBreak.startedAt).getTime();
+    const cStart = Math.max(checkInMs, bStart);
+    const cEnd = Math.min(effectiveEndTime, refMs);
+    if (cEnd > cStart) {
+      rawIntervals.push({ start: cStart, end: cEnd });
+    }
+  }
+
+  // Automatic Lunch Break Deduction (1:00 PM to 2:00 PM IST)
+  const lunchStart = new Date(`${checkInDateStr}T13:00:00.000+05:30`).getTime();
+  const lunchEnd = new Date(`${checkInDateStr}T14:00:00.000+05:30`).getTime();
+  const lStart = Math.max(checkInMs, lunchStart);
+  const lEnd = Math.min(effectiveEndTime, lunchEnd);
+  if (lEnd > lStart) {
+    rawIntervals.push({ start: lStart, end: lEnd });
+  }
+
+  // Interval Union: Sort and merge overlapping / adjacent intervals
+  let totalBreakMs = 0;
+  if (rawIntervals.length > 0) {
+    rawIntervals.sort((a, b) => a.start - b.start);
+    const merged = [rawIntervals[0]];
+    for (let i = 1; i < rawIntervals.length; i++) {
+      const cur = rawIntervals[i];
+      const prev = merged[merged.length - 1];
+      if (cur.start <= prev.end) {
+        prev.end = Math.max(prev.end, cur.end);
+      } else {
+        merged.push(cur);
+      }
+    }
+    for (const interval of merged) {
+      totalBreakMs += (interval.end - interval.start);
+    }
+  }
+
+  const actualWorkMs = Math.max(0, totalDurationMs - totalBreakMs);
+  const totalDurationMinutes = Math.floor(totalDurationMs / 60000);
+  const totalBreakMinutes = Math.floor(totalBreakMs / 60000);
+  const actualWorkMinutes = Math.floor(actualWorkMs / 60000);
+
+  return {
+    totalDurationMinutes,
+    totalBreakMinutes,
+    actualWorkMinutes,
+    totalDurationMs,
+    totalBreakMs,
+    actualWorkMs,
+  };
+};
+
+/**
  * Finalizes checkout for an attendance document.
  * - Sets checkOutTime.
  * - Auto-closes any active break by setting endedAt to checkOutTime.
- * - Computes totalBreakMinutes from all completed breaks.
- * - Computes totalDurationMinutes (checkOutTime - checkInTime).
- * - Computes actualWorkMinutes (totalDurationMinutes - totalBreakMinutes).
+ * - Computes metrics via calcAttendanceMetrics using interval union.
  * - Updates attendance properties directly.
  * 
  * @param {Object} attendance - Mongoose Attendance document
@@ -97,34 +228,31 @@ const finalizeAttendanceCheckout = (attendance, checkOutTime = new Date()) => {
   const finalCheckOut = checkOutTime instanceof Date ? checkOutTime : new Date(checkOutTime);
   attendance.checkOutTime = finalCheckOut;
 
-  let totalBreakMinutes = 0;
+  // Auto-close any unended breaks
   if (Array.isArray(attendance.breaks)) {
     for (const b of attendance.breaks) {
       if (!b.endedAt && b.startedAt) {
         b.endedAt = finalCheckOut;
       }
-      if (b.startedAt && b.endedAt) {
-        const diffMs = new Date(b.endedAt).getTime() - new Date(b.startedAt).getTime();
-        const mins = Math.max(0, Math.floor(diffMs / (1000 * 60)));
-        totalBreakMinutes += mins;
-      }
     }
   }
 
-  const checkInMs = attendance.checkInTime ? new Date(attendance.checkInTime).getTime() : finalCheckOut.getTime();
-  const totalDurationMs = finalCheckOut.getTime() - checkInMs;
-  const totalDurationMinutes = Math.max(0, Math.floor(totalDurationMs / (1000 * 60)));
-  const actualWorkMinutes = Math.max(0, totalDurationMinutes - totalBreakMinutes);
+  const metrics = calcAttendanceMetrics({
+    checkInTime: attendance.checkInTime || finalCheckOut,
+    checkOutTime: finalCheckOut,
+    breaks: attendance.breaks,
+    referenceTime: finalCheckOut,
+  });
 
-  attendance.completedBreakMinutes = totalBreakMinutes;
-  attendance.totalBreakMinutes = totalBreakMinutes;
-  attendance.totalDurationMinutes = totalDurationMinutes;
-  attendance.actualWorkMinutes = actualWorkMinutes;
+  attendance.completedBreakMinutes = metrics.totalBreakMinutes;
+  attendance.totalBreakMinutes = metrics.totalBreakMinutes;
+  attendance.totalDurationMinutes = metrics.totalDurationMinutes;
+  attendance.actualWorkMinutes = metrics.actualWorkMinutes;
 
   return {
-    totalDurationMinutes,
-    totalBreakMinutes,
-    actualWorkMinutes,
+    totalDurationMinutes: metrics.totalDurationMinutes,
+    totalBreakMinutes: metrics.totalBreakMinutes,
+    actualWorkMinutes: metrics.actualWorkMinutes,
   };
 };
 
@@ -137,5 +265,6 @@ module.exports = {
   getCurrentYear,
   calcNetWorkMinutes,
   calcAttendanceStatus,
+  calcAttendanceMetrics,
   finalizeAttendanceCheckout,
 };

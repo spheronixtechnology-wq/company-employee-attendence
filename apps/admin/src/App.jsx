@@ -12,6 +12,7 @@ import WifiSettingsPage from './pages/WifiSettingsPage';
 import AttendanceRecordsPage from './pages/AttendanceRecordsPage';
 import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import AdminOvertimePage from './pages/AdminOvertimePage';
+import SessionReactivationsPage from './pages/SessionReactivationsPage';
 import ProfilePage from './pages/ProfilePage';
 import { Loader2, QrCode, Wifi, Smartphone, Fingerprint, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -233,6 +234,7 @@ function AppRoutes() {
               <Route path="/manager-permissions" element={<ManagerPermissionsPage />} />
               <Route path="/leave-requests" element={<LeaveRequestsPage />} />
               <Route path="/attendance" element={<AttendanceRecordsPage />} />
+              <Route path="/session-reactivations" element={<SessionReactivationsPage />} />
               <Route path="/overtime" element={<AdminOvertimePage />} />
               <Route path="/attendance-method" element={<AttendanceMethodPage />} />
               <Route path="/wifi-settings" element={<WifiSettingsPage />} />

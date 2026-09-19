@@ -8,6 +8,17 @@ import {
 import api from '../lib/api';
 import DocumentPreviewModal from './DocumentPreviewModal';
 
+const formatAuditTime = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '—';
+  return dt.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).toLowerCase();
+};
+
 export default function EmployeeProfileModal({ isOpen = true, memberId, onClose }) {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +57,14 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  // 1-second live ticker hook to continuously update live seconds precision
+  const [liveTicker, setLiveTicker] = useState(Date.now());
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => setLiveTicker(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   // Initial and preset-based profile fetch
   const fetchProfile = useCallback(async () => {
@@ -518,45 +537,172 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {attendanceData.records.map((rec) => {
-                            const checkInStr = rec.checkInTime ? new Date(rec.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
-                            const checkOutStr = rec.checkOutTime ? new Date(rec.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+                            const checkInStr = rec.checkInTime ? formatAuditTime(rec.checkInTime) : '—';
+                            const checkOutStr = rec.checkOutTime ? formatAuditTime(rec.checkOutTime) : '—';
                             
                             // Net work duration = Total time from checkin to checkout minus break time
                             let workMins = Number(rec.totalWorkMinutes ?? rec.actualWorkMinutes ?? 0);
                             let breakMins = Number(rec.totalBreakMinutes ?? rec.completedBreakMinutes ?? 0);
 
-                            // Calculate dynamically if missing or 0 but checkInTime exists
-                            if (workMins <= 0 && rec.checkInTime) {
+                            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+                            const isToday = rec.date === todayStr;
+                            const isLiveActive = !rec.checkOutTime && isToday && !!rec.checkInTime;
+
+                            let workSecs = workMins * 60;
+
+                            // Calculate dynamically and live if currently active session today (before or after reactivation)
+                            if (isLiveActive) {
+                              const checkIn = new Date(rec.checkInTime).getTime();
+                              const shiftEnd = new Date(`${rec.date}T18:00:00.000+05:30`).getTime();
+                              const endMs = Math.min(Date.now(), shiftEnd);
+                              if (endMs > checkIn) {
+                                const totalElapsedSecs = Math.max(0, Math.floor((endMs - checkIn) / 1000));
+                                const breakSecs = breakMins * 60;
+                                workSecs = Math.max(0, totalElapsedSecs - breakSecs);
+                                workMins = Math.floor(workSecs / 60);
+                              }
+                            } else if (workMins <= 0 && rec.checkInTime) {
                               const checkIn = new Date(rec.checkInTime).getTime();
                               let checkOut = rec.checkOutTime ? new Date(rec.checkOutTime).getTime() : null;
-                              const isToday = rec.date === new Date().toISOString().split('T')[0];
-                              if (!checkOut && isToday) {
-                                checkOut = Date.now();
-                              }
                               if (checkOut && checkOut > checkIn) {
-                                const totalMins = Math.floor((checkOut - checkIn) / 60000);
-                                workMins = Math.max(0, totalMins - breakMins);
+                                const totalSecs = Math.max(0, Math.floor((checkOut - checkIn) / 1000));
+                                const breakSecs = breakMins * 60;
+                                workSecs = Math.max(0, totalSecs - breakSecs);
+                                workMins = Math.floor(workSecs / 60);
                               }
                             }
 
-                            const workH = Math.floor(workMins / 60);
-                            const workM = workMins % 60;
+                            const workH = Math.floor(workSecs / 3600);
+                            const workM = Math.floor((workSecs % 3600) / 60);
+                            const workS = workSecs % 60;
                             const breakH = Math.floor(breakMins / 60);
                             const breakM = breakMins % 60;
 
                             return (
-                              <tr key={rec._id} className="hover:bg-slate-50/60 transition-colors">
-                                <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                              <tr key={rec._id} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100 last:border-0">
+                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap align-middle">
                                   {rec.date}
                                 </td>
-                                <td className="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
-                                  {checkInStr}
+                                <td className="py-3.5 px-4 font-mono text-slate-700 whitespace-nowrap align-middle">
+                                  <div>{checkInStr}</div>
+                                  {rec.checkInLocation && rec.checkInLocation.lat && rec.checkInLocation.lng && (
+                                    <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                                      📍
+                                      <a 
+                                        href={`https://www.google.com/maps/search/?api=1&query=${rec.checkInLocation.lat},${rec.checkInLocation.lng}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-violet-600 hover:underline font-medium"
+                                        title="View on Map"
+                                      >
+                                        {rec.checkInLocation.lat.toFixed(6)}, {rec.checkInLocation.lng.toFixed(6)}
+                                      </a>
+                                    </div>
+                                  )}
                                 </td>
-                                <td className="py-3 px-4 font-mono text-slate-700 whitespace-nowrap">
-                                  {checkOutStr}
+                                <td className="py-3.5 px-4 font-mono text-slate-700 whitespace-nowrap align-middle">
+                                  <div className="flex items-center gap-2">
+                                    {isLiveActive ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-sans shadow-sm">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        Active Now
+                                      </span>
+                                    ) : (
+                                      <span className="font-semibold text-slate-800">{checkOutStr}</span>
+                                    )}
+                                  </div>
+
+                                  {/* Auto-closed & Re-approved audit details */}
+                                  {(rec.autoCheckoutAt || rec.autoCheckedOut || rec.reactivationStatus || rec.reactivatedAt) && (
+                                    <div className="mt-1.5 flex flex-col gap-0.5 font-sans">
+                                      {/* 1. If Reapproved */}
+                                      {(rec.reactivationStatus === 'approved' || rec.reactivatedAt) && (
+                                        <>
+                                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50/90 border border-emerald-200 text-[11px] font-medium text-emerald-800 w-fit shadow-sm">
+                                            <span className="text-amber-500 font-bold">⚡</span>
+                                            {rec.autoCheckoutAt && (
+                                              <>
+                                                <span className="text-slate-500 font-mono">
+                                                  {formatAuditTime(rec.autoCheckoutAt)}
+                                                </span>
+                                                <span className="text-slate-300">→</span>
+                                              </>
+                                            )}
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                                            <span className="font-semibold text-emerald-900">Reapproved</span>
+                                            <span className="font-mono text-emerald-800 text-[10px]">
+                                              {formatAuditTime(rec.reactivatedAt || rec.reactivationDecisionAt)}
+                                            </span>
+                                            {rec.reactivationDecisionBy?.name && (
+                                              <span className="text-slate-500 text-[10px]">by {rec.reactivationDecisionBy.name}</span>
+                                            )}
+                                          </div>
+                                          {rec.reactivationDecisionNotes && (
+                                            <div 
+                                              className="text-[10px] text-slate-500 px-1 truncate max-w-[280px]" 
+                                              title={`Reason: "${rec.reactivationDecisionNotes}"`}
+                                            >
+                                              <span className="text-slate-400">Note: </span>
+                                              <span className="italic text-slate-600">&ldquo;{rec.reactivationDecisionNotes}&rdquo;</span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+
+                                      {/* 2. If Auto-closed and Pending Reapproval */}
+                                      {rec.autoCheckedOut && rec.reactivationStatus === 'pending' && (
+                                        <>
+                                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-medium text-amber-800 w-fit shadow-sm">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+                                            <span>Auto-closed: <strong className="font-mono">{formatAuditTime(rec.autoCheckoutAt || rec.checkOutTime)}</strong></span>
+                                            <span className="text-slate-300">·</span>
+                                            <span className="text-amber-700 font-semibold text-[10px]">⏳ Pending Review</span>
+                                          </div>
+                                          {rec.outOfBoundsReason && (
+                                            <div className="text-[10px] text-slate-500 px-1 truncate max-w-[280px]" title={rec.outOfBoundsReason}>
+                                              <span className="text-slate-400">Note: </span>
+                                              <span className="italic text-slate-600">&ldquo;{rec.outOfBoundsReason}&rdquo;</span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+
+                                      {/* 3. If Auto-closed and Rejected */}
+                                      {rec.autoCheckedOut && rec.reactivationStatus === 'rejected' && (
+                                        <>
+                                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-[11px] font-medium text-rose-800 w-fit shadow-sm">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0" />
+                                            <span>Auto-closed: <strong className="font-mono">{formatAuditTime(rec.autoCheckoutAt || rec.checkOutTime)}</strong></span>
+                                            <span className="text-slate-300">·</span>
+                                            <span className="text-rose-700 font-semibold text-[10px]">✕ Closed for today</span>
+                                          </div>
+                                          {rec.reactivationDecisionNotes && (
+                                            <div className="text-[10px] text-slate-500 px-1 truncate max-w-[280px]" title={rec.reactivationDecisionNotes}>
+                                              <span className="text-slate-400">Reason: </span>
+                                              <span className="italic text-slate-600">&ldquo;{rec.reactivationDecisionNotes}&rdquo;</span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+
+                                      {/* 4. If Auto-closed with no reactivation requested */}
+                                      {rec.autoCheckedOut && !rec.reactivationStatus && (
+                                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-medium w-fit">
+                                          <span className="text-amber-500 font-bold">⚡</span>
+                                          <span>Auto-closed: <strong className="font-mono text-slate-800">{formatAuditTime(rec.autoCheckoutAt || rec.checkOutTime)}</strong></span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </td>
-                                <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
-                                  {workMins > 0 ? (
+                                <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap align-middle">
+                                  {isLiveActive ? (
+                                    <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      {workH}h {String(workM).padStart(2, '0')}m {String(workS).padStart(2, '0')}s
+                                      <span className="text-[10px] text-emerald-600 font-medium font-sans">(Live)</span>
+                                    </span>
+                                  ) : workMins > 0 ? (
                                     <span className="text-slate-900 font-bold">
                                       {workH}h {String(workM).padStart(2, '0')}m
                                     </span>
@@ -564,14 +710,14 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                                     <span className="text-slate-400 font-normal">0h 00m</span>
                                   )}
                                 </td>
-                                <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
+                                <td className="py-3.5 px-4 font-mono text-slate-500 whitespace-nowrap align-middle">
                                   {breakMins > 0 ? (
                                     <span>{breakH > 0 ? `${breakH}h ` : ''}{breakM}m</span>
                                   ) : (
                                     <span>0m</span>
                                   )}
                                 </td>
-                                <td className="py-3 px-4 text-right whitespace-nowrap">
+                                <td className="py-3.5 px-4 text-right whitespace-nowrap align-middle">
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                     rec.status === 'present'
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1075,12 +1221,17 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
         </div>
 
         {/* ── Modal Footer ── */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
-          <span>Member ID: <code className="font-mono">{memberId}</code></span>
+        <div className="p-4 border-t border-slate-200 bg-slate-50/80 flex items-center justify-between text-xs text-slate-500 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 font-medium">Member ID:</span>
+            <span className="font-mono bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold select-all shadow-xs">
+              {memberId}
+            </span>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="btn bg-white hover:bg-slate-100 text-slate-700 font-bold px-4 py-2 rounded-xl border border-slate-200 shadow-xs"
+            className="btn bg-white hover:bg-slate-100 text-slate-700 font-bold px-5 py-2 rounded-xl border border-slate-200 shadow-xs transition-all"
           >
             Close
           </button>

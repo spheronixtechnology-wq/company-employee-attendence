@@ -25,6 +25,8 @@ const notificationSchema = new mongoose.Schema(
         'device_request_submitted',
         'device_unregistered_attempt',
         'location_request_submitted',
+        'session_reactivated',
+        'session_reactivation_rejected',
         'general',
       ],
       default: 'general',

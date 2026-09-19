@@ -12,8 +12,8 @@ const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
 const User = require('../models/User');
 const OfficeLocation = require('../models/OfficeLocation');
 
-const { success, badRequest } = require('../utils/response');
-const { getTodayDateString, getCurrentYear, calcNetWorkMinutes, calcAttendanceStatus, finalizeAttendanceCheckout } = require('../utils/dateUtils');
+const { success, badRequest, forbidden } = require('../utils/response');
+const { getTodayDateString, getCurrentYear, calcNetWorkMinutes, calcAttendanceStatus, calcAttendanceMetrics, finalizeAttendanceCheckout } = require('../utils/dateUtils');
 const { isWithinGeofence } = require('../utils/haversine');
 const dailyLogService = require('../services/dailyLog.service');
 const leaveService = require('../services/leave.service');
@@ -133,22 +133,31 @@ const getDashboard = async (req, res) => {
     
     const attendanceRecord = await Attendance.findOne({ userId, date: today });
     
-    // Compute work minutes and duration metrics
+    // Compute work minutes and duration metrics using unified interval union
     let totalWorkMinutes = 0;
     let totalDurationMinutes = 0;
     let totalBreakMinutes = 0;
+    let activeBreak = null;
 
     if (attendanceRecord && attendanceRecord.checkInTime) {
-      if (attendanceRecord.checkOutTime) {
-        totalBreakMinutes = attendanceRecord.totalBreakMinutes ?? (attendanceRecord.completedBreakMinutes || 0);
-        totalDurationMinutes = attendanceRecord.totalDurationMinutes ?? Math.max(0, Math.floor((new Date(attendanceRecord.checkOutTime) - new Date(attendanceRecord.checkInTime)) / 60000));
-        totalWorkMinutes = attendanceRecord.actualWorkMinutes ?? Math.max(0, totalDurationMinutes - totalBreakMinutes);
-      } else {
-        // Still checked in: live duration and completed breaks
-        totalBreakMinutes = attendanceRecord.completedBreakMinutes || 0;
-        totalDurationMinutes = Math.max(0, Math.floor((new Date() - new Date(attendanceRecord.checkInTime)) / 60000));
-        totalWorkMinutes = Math.max(0, totalDurationMinutes - totalBreakMinutes);
+      if (attendanceRecord.breaks && attendanceRecord.breaks.length > 0 && !attendanceRecord.checkOutTime) {
+        const lastBreak = attendanceRecord.breaks[attendanceRecord.breaks.length - 1];
+        if (!lastBreak.endedAt) {
+          activeBreak = lastBreak;
+        }
       }
+
+      const metrics = calcAttendanceMetrics({
+        checkInTime: attendanceRecord.checkInTime,
+        checkOutTime: attendanceRecord.checkOutTime || null,
+        breaks: attendanceRecord.breaks || [],
+        activeBreak,
+        referenceTime: new Date(),
+      });
+
+      totalDurationMinutes = metrics.totalDurationMinutes;
+      totalBreakMinutes = metrics.totalBreakMinutes;
+      totalWorkMinutes = metrics.actualWorkMinutes;
     }
     
     const formattedAttendance = attendanceRecord ? {
@@ -156,6 +165,7 @@ const getDashboard = async (req, res) => {
       totalWorkMinutes,
       totalDurationMinutes,
       totalBreakMinutes,
+      completedBreakMinutes: totalBreakMinutes,
       actualWorkMinutes: totalWorkMinutes,
       checkInMethod: attendanceRecord.checkInMethod || 'qr_code',
     } : null;
@@ -172,34 +182,28 @@ const getDashboard = async (req, res) => {
       leaveBalances = await LeaveBalance.find({ userId, year: getCurrentYear() }).populate('leaveTypeId');
     }
 
-    const activeMethodSetting = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
+    const activeMethodSetting = await AttendanceMethodSetting.getActiveSetting();
     const activeMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
+    const allowedMethods = (activeMethodSetting && activeMethodSetting.allowedMethods?.length > 0)
+      ? activeMethodSetting.allowedMethods
+      : ['biometric', 'wifi_ip', 'qr_code'];
+    const heartbeatMonitoringEnabled = activeMethodSetting?.heartbeatMonitoringEnabled === true;
 
     const { deviceStatus, pendingRequest } = await computeDeviceStatus(userId);
-
-    // Calculate active break and completed break minutes
-    let activeBreak = null;
-    let completedBreakMinutes = 0;
-    if (attendanceRecord) {
-      completedBreakMinutes = attendanceRecord.totalBreakMinutes ?? (attendanceRecord.completedBreakMinutes || 0);
-      if (attendanceRecord.breaks && attendanceRecord.breaks.length > 0 && !attendanceRecord.checkOutTime) {
-        const lastBreak = attendanceRecord.breaks[attendanceRecord.breaks.length - 1];
-        if (!lastBreak.endedAt) {
-          activeBreak = lastBreak;
-        }
-      }
-    }
 
     return success(res, 'Dashboard data fetched', {
       attendance: {
         attendance: formattedAttendance,
         activeBreak,
-        completedBreakMinutes,
+        completedBreakMinutes: totalBreakMinutes,
         breaks: attendanceRecord?.breaks || []
       },
       teamName: req.user.teamId?.name || null,
       dailyLogSubmitted,
       activeMethod,
+      managerDefaultMethod: activeMethod,
+      allowedMethods,
+      heartbeatMonitoringEnabled,
       deviceStatus,
       pendingLeaves,
       unreadNotifications,
@@ -223,7 +227,26 @@ const checkIn = async (req, res) => {
 
     const existingAttendance = await Attendance.findOne({ userId, date: today });
     if (existingAttendance && existingAttendance.checkInTime) {
+      if (existingAttendance.reactivationStatus === 'rejected') {
+        return badRequest(res, 'SESSION_REACTIVATION_REJECTED: Your attendance session for today was closed by management and cannot be reopened.');
+      }
+      if (existingAttendance.reactivationStatus === 'pending') {
+        return badRequest(res, 'Your session reactivation request is currently pending management review.');
+      }
       return badRequest(res, 'Attendance already marked for today.');
+    }
+
+    const activeMethodSetting = await AttendanceMethodSetting.getActiveSetting();
+    const managerDefaultMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
+    const allowedMethods = (activeMethodSetting && activeMethodSetting.allowedMethods?.length > 0)
+      ? activeMethodSetting.allowedMethods
+      : ['biometric', 'wifi_ip', 'qr_code', 'device_fingerprint'];
+
+    // Support employee manual switch & automatic fallback override from client request
+    const activeMethod = req.body.checkInMethod || req.body.method || managerDefaultMethod;
+
+    if (!allowedMethods.includes(activeMethod)) {
+      return forbidden(res, `METHOD_NOT_ENABLED: The requested attendance method '${activeMethod}' is not authorized.`);
     }
 
     // Strict Geofencing Validation
@@ -345,9 +368,6 @@ const checkIn = async (req, res) => {
       await registeredDevice.save();
     }
 
-    const activeMethodSetting = await AttendanceMethodSetting.findOne().sort({ changedAt: -1 });
-    const activeMethod = activeMethodSetting ? activeMethodSetting.activeMethod : 'qr_code';
-    
     // ============================================================================
     // METHOD-SPECIFIC AUTHENTICATION GATES
     // Strict Isolation: WiFi / IP network verification occurs ONLY in 'wifi_ip'.
@@ -438,6 +458,28 @@ const checkIn = async (req, res) => {
     }
 
     let attendance = existingAttendance;
+
+    // Helper to build attempts array
+    const attemptsToRecord = [];
+    if (Array.isArray(req.body.methodAttempts)) {
+      for (const att of req.body.methodAttempts) {
+        if (att && att.method && allowedMethods.includes(att.method)) {
+          attemptsToRecord.push({
+            method: att.method,
+            status: att.status || 'failed',
+            reason: att.reason || null,
+            timestamp: att.timestamp ? new Date(att.timestamp) : new Date(),
+          });
+        }
+      }
+    }
+    attemptsToRecord.push({
+      method: activeMethod,
+      status: 'success',
+      reason: null,
+      timestamp: new Date(),
+    });
+
     if (attendance) {
       attendance.checkInTime = new Date();
       attendance.status = 'present';
@@ -451,6 +493,10 @@ const checkIn = async (req, res) => {
           capturedAt: new Date(),
         };
       }
+      if (!Array.isArray(attendance.attendanceMethodAttempts)) {
+        attendance.attendanceMethodAttempts = [];
+      }
+      attendance.attendanceMethodAttempts.push(...attemptsToRecord);
       await attendance.save();
     } else {
       attendance = new Attendance({
@@ -465,7 +511,8 @@ const checkIn = async (req, res) => {
           lng: Number(lng),
           accuracy: accuracy !== undefined ? Number(accuracy) : undefined,
           capturedAt: new Date(),
-        } : undefined
+        } : undefined,
+        attendanceMethodAttempts: attemptsToRecord,
       });
       await attendance.save();
     }
@@ -565,7 +612,7 @@ const checkOut = async (req, res) => {
     let dailyLog = null;
     if (req.user.role === 'employee') {
       dailyLog = await DailyLog.findOne({ userId, logDate: today });
-      if (!dailyLog) {
+      if (!dailyLog && !req.body.autoCheckOut) {
         return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
       }
     } else {
@@ -575,61 +622,63 @@ const checkOut = async (req, res) => {
     const clientIp = getClientIp(req);
     attendance.checkOutIp = clientIp;
 
-    // Strict paired Office Network & Geofence Verification if checked in via wifi_ip
-    if (attendance.checkInMethod === 'wifi_ip') {
-      const activeOffices = await OfficeLocation.find({ status: 'active' });
-      const matchingOffice = activeOffices.find((office) => isIpInAllowedList(clientIp, office.allowedIps));
+    if (!req.body.autoCheckOut) {
+      // Strict paired Office Network & Geofence Verification if checked in via wifi_ip
+      if (attendance.checkInMethod === 'wifi_ip') {
+        const activeOffices = await OfficeLocation.find({ status: 'active' });
+        const matchingOffice = activeOffices.find((office) => isIpInAllowedList(clientIp, office.allowedIps));
 
-      if (!matchingOffice) {
-        return badRequest(
-          res,
-          'Unauthorized Network — You must be connected to the authorized office network to check out.'
-        );
-      }
-
-      if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
-        return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
-      }
-
-      const geoCheck = isWithinGeofence(lat, lng, matchingOffice.latitude, matchingOffice.longitude, matchingOffice.radiusMeters, accuracy);
-      if (!geoCheck.inside) {
-        return badRequest(
-          res,
-          `Outside Office Location — You are connected to ${matchingOffice.officeName}'s network, but you are outside its physical perimeter (${geoCheck.distanceMeters}m away).`
-        );
-      }
-    } else {
-      // Standard Geofencing Validation for other check-in methods (QR, biometric)
-      if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
-        return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
-      }
-
-      const activeOffices = await OfficeLocation.find({ status: 'active' });
-      let passedGeofence = false;
-      let minDistance = Infinity;
-
-      if (activeOffices.length > 0) {
-        for (const office of activeOffices) {
-          const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters, accuracy);
-          if (geoCheck.inside) {
-            passedGeofence = true;
-            break;
-          }
-          if (geoCheck.distanceMeters < minDistance) {
-            minDistance = geoCheck.distanceMeters;
-          }
+        if (!matchingOffice) {
+          return badRequest(
+            res,
+            'Unauthorized Network — You must be connected to the authorized office network to check out.'
+          );
         }
 
-        if (!passedGeofence) {
-          return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
+        if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+          return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
+        }
+
+        const geoCheck = isWithinGeofence(lat, lng, matchingOffice.latitude, matchingOffice.longitude, matchingOffice.radiusMeters, accuracy);
+        if (!geoCheck.inside) {
+          return badRequest(
+            res,
+            `Outside Office Location — You are connected to ${matchingOffice.officeName}'s network, but you are outside its physical perimeter (${geoCheck.distanceMeters}m away).`
+          );
         }
       } else {
-        // Fallback to legacy GeofenceSetting
-        const geofence = await GeofenceSetting.findOne({ isActive: true });
-        if (geofence) {
-          const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters, accuracy);
-          if (!geoCheck.inside) {
-            return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
+        // Standard Geofencing Validation for other check-in methods (QR, biometric)
+        if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) {
+          return badRequest(res, 'Location Access Required — please allow location access to verify your work location.');
+        }
+
+        const activeOffices = await OfficeLocation.find({ status: 'active' });
+        let passedGeofence = false;
+        let minDistance = Infinity;
+
+        if (activeOffices.length > 0) {
+          for (const office of activeOffices) {
+            const geoCheck = isWithinGeofence(lat, lng, office.latitude, office.longitude, office.radiusMeters, accuracy);
+            if (geoCheck.inside) {
+              passedGeofence = true;
+              break;
+            }
+            if (geoCheck.distanceMeters < minDistance) {
+              minDistance = geoCheck.distanceMeters;
+            }
+          }
+
+          if (!passedGeofence) {
+            return badRequest(res, `Outside Office Location — nearest office is ${minDistance}m away.`);
+          }
+        } else {
+          // Fallback to legacy GeofenceSetting
+          const geofence = await GeofenceSetting.findOne({ isActive: true });
+          if (geofence) {
+            const geoCheck = isWithinGeofence(lat, lng, geofence.latitude, geofence.longitude, geofence.radiusMeters, accuracy);
+            if (!geoCheck.inside) {
+              return badRequest(res, 'Outside Office Location — you must be within the authorized office to check out.');
+            }
           }
         }
       }
@@ -659,6 +708,13 @@ const checkOut = async (req, res) => {
     const metrics = finalizeAttendanceCheckout(attendance, checkOutTime);
     attendance.status = calcAttendanceStatus(metrics.actualWorkMinutes);
     attendance.checkOutTime = checkOutTime;
+
+    if (req.body.autoCheckOut) {
+      attendance.autoCheckedOut = true;
+      attendance.autoCheckoutAt = checkOutTime;
+      attendance.autoCheckoutReason = req.body.autoCheckoutReason || 'PRESENCE_VALIDATION_FAILED';
+      attendance.status = 'incomplete';
+    }
     
     if (lat !== undefined && lng !== undefined) {
       attendance.checkOutLocation = {
@@ -1322,4 +1378,153 @@ module.exports = {
   getNetworkStatus,
   requestManualAttendance,
   getMyManualAttendanceRequests,
+};
+
+const recordPresencePing = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { currentWarningCount, lat, lng } = req.body;
+    const today = getTodayDateString();
+
+    const attendance = await Attendance.findOneAndUpdate(
+      { userId, date: today, checkInTime: { $ne: null }, checkOutTime: null },
+      { 
+        $set: { 
+          lastHeartbeatAt: new Date(),
+          heartbeatStatus: 'HEALTHY',
+          currentWarningCount: currentWarningCount || 0
+        }
+      },
+      { new: true }
+    );
+
+    if (!attendance) {
+      return badRequest(res, 'No active attendance session found to ping.');
+    }
+
+    let isOutOfBounds = false;
+    let distanceMeters = null;
+    let radiusMeters = null;
+    
+    // Check geofence if lat/lng provided
+    if (lat && lng) {
+      const office = await OfficeLocation.findOne({ status: 'active' });
+      if (office && office.latitude && office.longitude) {
+        const result = isWithinGeofence(
+          lat,
+          lng,
+          office.latitude,
+          office.longitude,
+          office.radiusMeters ?? 100
+        );
+        isOutOfBounds = !result.inside;
+        distanceMeters = typeof result?.distanceMeters === 'number' ? Math.round(result.distanceMeters) : null;
+        radiusMeters = typeof result?.radiusMeters === 'number' ? Math.round(result.radiusMeters) : null;
+      }
+    }
+
+    return success(res, 'Ping recorded successfully', {
+      isOutOfBounds,
+      distanceMeters,
+      radiusMeters,
+    });
+  } catch (error) {
+    console.error('recordPresencePing error:', error);
+    return badRequest(res, 'Failed to record ping');
+  }
+};
+
+const submitOutOfBoundsReason = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return badRequest(res, 'A detailed explanation is required.');
+    }
+    const today = getTodayDateString();
+
+    const attendance = await Attendance.findOne({ userId, date: today });
+    if (!attendance) {
+      return badRequest(res, 'No attendance record found for today.');
+    }
+
+    const now = new Date();
+    const shiftEnd = new Date(`${today}T18:00:00.000+05:30`);
+    if (now >= shiftEnd) {
+      return badRequest(res, 'Reactivation requests are closed after 6:00 PM IST. The workday has concluded.');
+    }
+
+    if (attendance.status === 'present' && !attendance.checkOutTime) {
+      return badRequest(res, 'Your session is currently active and checked in.');
+    }
+
+    if (attendance.reactivationStatus === 'pending') {
+      return badRequest(res, 'Your explanation is already submitted and pending manager review.');
+    }
+
+    const requestedAt = new Date();
+    attendance.outOfBoundsReason = reason.trim();
+    attendance.reactivationStatus = 'pending';
+    attendance.reactivationRequestedAt = requestedAt;
+    await attendance.save();
+
+    // Emit event to managers and admins
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    if (teamId) {
+      emitToTeam(teamId, 'reactivation:requested', {
+        attendanceId: attendance._id,
+        userId: req.user._id,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        reason: attendance.outOfBoundsReason,
+        requestedAt,
+      });
+    }
+    emitToManagers('reactivation:requested', {
+      attendanceId: attendance._id,
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      teamId,
+      reason: attendance.outOfBoundsReason,
+      requestedAt,
+    });
+
+    return success(res, 'Reason submitted successfully. Your reactivation request is pending manager review.', {
+      reactivationStatus: 'pending',
+      reactivationRequestedAt: requestedAt,
+      outOfBoundsReason: attendance.outOfBoundsReason,
+    });
+  } catch (error) {
+    console.error('submitOutOfBoundsReason error:', error);
+    return badRequest(res, 'Failed to submit reason');
+  }
+};
+
+module.exports = {
+  getStatus,
+  getDashboard,
+  checkIn,
+  initiateCheckout,
+  checkOut,
+  sendDailyReport,
+  getCurrentQrCode,
+  requestDeviceApproval,
+  getDeviceStatus,
+  getMyDeviceRequests,
+  startBreak,
+  endBreak,
+  getDailyLog,
+  submitDailyLog,
+  getLeaveTypes,
+  getLeaveBalance,
+  getMyLeaveRequests,
+  applyForLeave,
+  getMyAttendanceHistory,
+  updateProfile,
+  getNetworkStatus,
+  requestManualAttendance,
+  getMyManualAttendanceRequests,
+  recordPresencePing,
+  submitOutOfBoundsReason,
 };

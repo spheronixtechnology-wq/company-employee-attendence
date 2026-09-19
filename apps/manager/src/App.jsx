@@ -8,6 +8,7 @@ import AttendanceMethodPage from './pages/AttendanceMethodPage';
 import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
 import TeamOvertimePage from './pages/TeamOvertimePage';
+import SessionReactivationsPage from './pages/SessionReactivationsPage';
 import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from './lib/api';
@@ -3117,6 +3118,7 @@ function AppRoutes() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/team/members" element={<TeamMembersPage />} />
               <Route path="/team/attendance" element={<TeamAttendancePage />} />
+              <Route path="/session-reactivations" element={<SessionReactivationsPage />} />
               <Route path="/team/overtime" element={<TeamOvertimePage />} />
               <Route path="/team/daily-logs" element={<TeamDailyLogsPage />} />
               <Route path="/team/leave-requests" element={<TeamLeaveRequestsPage />} />

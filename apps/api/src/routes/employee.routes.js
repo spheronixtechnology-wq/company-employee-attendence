@@ -23,6 +23,8 @@ router.post('/attendance/initiate-checkout', isPunchUser, employeeController.ini
 router.post('/attendance/check-out', isPunchUser, employeeController.checkOut);
 router.post('/attendance/send-report', isEmployee, employeeController.sendDailyReport);
 router.get('/network-status', isEmployee, employeeController.getNetworkStatus);
+router.post('/presence/ping', isEmployee, employeeController.recordPresencePing);
+router.post('/presence/reason', isEmployee, employeeController.submitOutOfBoundsReason);
 
 // Profile
 router.put('/profile', isAnyUser, employeeController.updateProfile);

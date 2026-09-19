@@ -8,7 +8,7 @@ import {
   CheckCircle, XCircle, Clock, Wifi, Smartphone, QrCode,
   AlertTriangle, AlertCircle, Loader2, MapPin, Shield,
   ChevronLeft, ChevronRight, Camera, Info, Monitor, X, Lock, Fingerprint,
-  Calendar, RefreshCw, BarChart3
+  Calendar, RefreshCw, BarChart3, Check, Activity
 } from 'lucide-react';
 import {
   isBiometricSupported,
@@ -29,7 +29,7 @@ import PageHeader from '../components/timechamp/PageHeader';
 import KpiTile from '../components/timechamp/KpiTile';
 import Panel from '../components/timechamp/Panel';
 import DonutChart from '../components/timechamp/DonutChart';
-
+import alertTune from '../images/alert tune/classic_piano_sms.mp3';
 
 // ── Client-Side Structural QR Validators ─────────────────────────────────────
 const isValidOfficeQr = (text) => {
@@ -366,29 +366,137 @@ const formatTimerSeconds = (sec = 0) => {
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 };
 
+// ── Live Calculation Helper ──────────────────────────────────────────────────
+export const calculateLiveWorkMetrics = (checkInTime, checkOutTime, breaks = [], activeBreak = null) => {
+  if (!checkInTime) {
+    return {
+      totalElapsedMs: 0,
+      breakMs: 0,
+      workMs: 0,
+      totalDurationMinutes: 0,
+      totalBreakMinutes: 0,
+      actualWorkMinutes: 0,
+    };
+  }
+  
+  const checkInDate = new Date(checkInTime);
+  if (isNaN(checkInDate.getTime())) {
+    return {
+      totalElapsedMs: 0,
+      breakMs: 0,
+      workMs: 0,
+      totalDurationMinutes: 0,
+      totalBreakMinutes: 0,
+      actualWorkMinutes: 0,
+    };
+  }
+
+  const checkInDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(checkInDate);
+  
+  const shiftEndLimit = new Date(`${checkInDateStr}T18:00:00.000+05:30`).getTime();
+  const now = Date.now();
+  
+  let endTime = checkOutTime ? new Date(checkOutTime).getTime() : now;
+  if (endTime > shiftEndLimit) {
+    endTime = shiftEndLimit;
+  }
+  const checkInMs = checkInDate.getTime();
+  if (endTime < checkInMs) {
+    endTime = checkInMs;
+  }
+  
+  const totalElapsedMs = Math.max(0, endTime - checkInMs);
+  
+  // Collect all non-working break intervals within [checkInMs, endTime]
+  const rawIntervals = [];
+  
+  if (Array.isArray(breaks)) {
+    for (const b of breaks) {
+      if (b && b.startedAt) {
+        const bStart = new Date(b.startedAt).getTime();
+        const bEnd = b.endedAt ? new Date(b.endedAt).getTime() : endTime;
+        const cStart = Math.max(checkInMs, bStart);
+        const cEnd = Math.min(endTime, bEnd);
+        if (cEnd > cStart) {
+          rawIntervals.push({ start: cStart, end: cEnd });
+        }
+      }
+    }
+  }
+  
+  if (activeBreak && activeBreak.startedAt) {
+    const bStart = new Date(activeBreak.startedAt).getTime();
+    const cStart = Math.max(checkInMs, bStart);
+    const cEnd = Math.min(endTime, now);
+    if (cEnd > cStart) {
+      rawIntervals.push({ start: cStart, end: cEnd });
+    }
+  }
+  
+  // Automatic Lunch Break Deduction (1:00 PM to 2:00 PM IST)
+  const lunchStart = new Date(`${checkInDateStr}T13:00:00.000+05:30`).getTime();
+  const lunchEnd = new Date(`${checkInDateStr}T14:00:00.000+05:30`).getTime();
+  const lStart = Math.max(checkInMs, lunchStart);
+  const lEnd = Math.min(endTime, lunchEnd);
+  if (lEnd > lStart) {
+    rawIntervals.push({ start: lStart, end: lEnd });
+  }
+
+  // Interval Union: Merge overlapping / adjacent intervals
+  let breakMs = 0;
+  if (rawIntervals.length > 0) {
+    rawIntervals.sort((a, b) => a.start - b.start);
+    const merged = [rawIntervals[0]];
+    for (let i = 1; i < rawIntervals.length; i++) {
+      const cur = rawIntervals[i];
+      const prev = merged[merged.length - 1];
+      if (cur.start <= prev.end) {
+        prev.end = Math.max(prev.end, cur.end);
+      } else {
+        merged.push(cur);
+      }
+    }
+    for (const interval of merged) {
+      breakMs += (interval.end - interval.start);
+    }
+  }
+  
+  const workMs = Math.max(0, totalElapsedMs - breakMs);
+  const totalDurationMinutes = Math.floor(totalElapsedMs / 60000);
+  const totalBreakMinutes = Math.floor(breakMs / 60000);
+  const actualWorkMinutes = Math.floor(workMs / 60000);
+
+  return {
+    totalElapsedMs,
+    breakMs,
+    workMs,
+    totalDurationMinutes,
+    totalBreakMinutes,
+    actualWorkMinutes,
+  };
+};
+
+const calculateLiveWorkMs = (checkInTime, checkOutTime, breaks, activeBreak) => {
+  return calculateLiveWorkMetrics(checkInTime, checkOutTime, breaks, activeBreak).workMs;
+};
+
 // ── Main Work Timer Component (Continuous net focus time minus breaks) ─────────
-const MainWorkTimer = ({ checkInTime, completedBreakMinutes = 0, activeBreak = null }) => {
+const MainWorkTimer = ({ checkInTime, checkOutTime, breaks = [], activeBreak = null }) => {
   const [netSeconds, setNetSeconds] = useState(0);
 
   useEffect(() => {
     if (!checkInTime) return;
-    const calc = () => {
-      const now = Date.now();
-      const checkInMs = new Date(checkInTime).getTime();
-      const totalElapsedMs = Math.max(0, now - checkInMs);
-      const completedBreakMs = (Number(completedBreakMinutes) || 0) * 60 * 1000;
-      let activeBreakMs = 0;
-      if (activeBreak?.startedAt) {
-        activeBreakMs = Math.max(0, now - new Date(activeBreak.startedAt).getTime());
-      }
-      const netMs = Math.max(0, totalElapsedMs - completedBreakMs - activeBreakMs);
-      return Math.floor(netMs / 1000);
-    };
+    const calc = () => Math.floor(calculateLiveWorkMs(checkInTime, checkOutTime, breaks, activeBreak) / 1000);
 
     setNetSeconds(calc());
     const interval = setInterval(() => setNetSeconds(calc()), 1000);
     return () => clearInterval(interval);
-  }, [checkInTime, completedBreakMinutes, activeBreak]);
+  }, [checkInTime, checkOutTime, breaks, activeBreak]);
 
   return (
     <div className="font-mono text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-wider">
@@ -398,28 +506,17 @@ const MainWorkTimer = ({ checkInTime, completedBreakMinutes = 0, activeBreak = n
 };
 
 // ── Compact Live Work Timer for KPI Tile ─────────────────────────────────────
-const MainWorkTimerKpi = ({ checkInTime, completedBreakMinutes = 0, activeBreak = null }) => {
+const MainWorkTimerKpi = ({ checkInTime, checkOutTime, breaks = [], activeBreak = null }) => {
   const [netSeconds, setNetSeconds] = useState(0);
 
   useEffect(() => {
     if (!checkInTime) return;
-    const calc = () => {
-      const now = Date.now();
-      const checkInMs = new Date(checkInTime).getTime();
-      const totalElapsedMs = Math.max(0, now - checkInMs);
-      const completedBreakMs = (Number(completedBreakMinutes) || 0) * 60 * 1000;
-      let activeBreakMs = 0;
-      if (activeBreak?.startedAt) {
-        activeBreakMs = Math.max(0, now - new Date(activeBreak.startedAt).getTime());
-      }
-      const netMs = Math.max(0, totalElapsedMs - completedBreakMs - activeBreakMs);
-      return Math.floor(netMs / 1000);
-    };
+    const calc = () => Math.floor(calculateLiveWorkMs(checkInTime, checkOutTime, breaks, activeBreak) / 1000);
 
     setNetSeconds(calc());
     const interval = setInterval(() => setNetSeconds(calc()), 1000);
     return () => clearInterval(interval);
-  }, [checkInTime, completedBreakMinutes, activeBreak]);
+  }, [checkInTime, checkOutTime, breaks, activeBreak]);
 
   if (!checkInTime) return <span>--:--:--</span>;
   const hours = Math.floor(netSeconds / 3600);
@@ -590,15 +687,17 @@ const useGeolocation = () => {
   const [geoStatus, setGeoStatus] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const getLocation = useCallback(() => new Promise((resolve, reject) => {
+  const getLocation = useCallback((silent = false) => new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Geolocation not supported.'));
       return;
     }
     
-    setLoading(true);
-    setGeoError(null);
-    setGeoStatus('Getting precise location...');
+    if (!silent) {
+      setLoading(true);
+      setGeoError(null);
+      setGeoStatus('Getting precise location...');
+    }
 
     const readings = [];
     let finished = false;
@@ -612,11 +711,13 @@ const useGeolocation = () => {
       if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
       if (timeoutId !== undefined) clearTimeout(timeoutId);
 
-      setLoading(false);
-      setGeoStatus(null);
+      if (!silent) {
+        setLoading(false);
+        setGeoStatus(null);
+      }
 
       if (locationError) {
-        setGeoError(locationError.message || 'Unable to get location');
+        if (!silent) setGeoError(locationError.message || 'Unable to get location');
         reject(locationError);
         return;
       }
@@ -774,6 +875,11 @@ const formatAttendanceError = (rawMessage) => {
   return rawMessage;
 };
 
+// ── Web Audio Synthesized Buzzer ───────────────────────────────────────────────
+const playLoudBuzzer = () => {
+  // We will now use the custom audio file instead of the synthesizer
+};
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function EmployeeDashboard() {
   const { user } = useAuth();
@@ -785,6 +891,26 @@ export default function EmployeeDashboard() {
   const [message, setMessage] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
   const [officeQrDataUrl, setOfficeQrDataUrl] = useState('');
+
+  // Continuous Presence Monitoring States
+  const [warningCountState, setWarningCountState] = useState(0);
+  const warningCountRef = useRef(0);
+  const warningCount = warningCountState;
+  const setWarningCount = (val) => { warningCountRef.current = val; setWarningCountState(val); };
+
+  const [consecutiveOutTicksState, setConsecutiveOutTicksState] = useState(0);
+  const consecutiveOutTicksRef = useRef(0);
+  const consecutiveOutTicks = consecutiveOutTicksState;
+  const setConsecutiveOutTicks = (val) => { consecutiveOutTicksRef.current = val; setConsecutiveOutTicksState(val); };
+
+  const [gracePeriodSeconds, setGracePeriodSeconds] = useState(0);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [outOfBoundsReason, setOutOfBoundsReason] = useState('');
+  const [reasonSubmitting, setReasonSubmitting] = useState(false);
+  const [currentDistance, setCurrentDistance] = useState(null);
+  const [officeRadius, setOfficeRadius] = useState(null);
+  
+  const buzzerAudio = useRef(new Audio(alertTune));
 
   const { socket } = useSocket();
   const [showDailyLogModal, setShowDailyLogModal] = useState(false);
@@ -798,6 +924,19 @@ export default function EmployeeDashboard() {
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [networkStatus, setNetworkStatus] = useState(null);
   const [networkLoading, setNetworkLoading] = useState(false);
+
+  // Flexible Attendance Method & Fallback States
+  const [selectedMethod, setSelectedMethod] = useState(null);
+  const [fallbackHistory, setFallbackHistory] = useState([]);
+  const [methodAttempts, setMethodAttempts] = useState([]);
+  const [fallbackBanner, setFallbackBanner] = useState(null);
+
+  const managerDefaultMethod = dashboard?.managerDefaultMethod || dashboard?.activeMethod || 'qr_code';
+  const allowedMethods = useMemo(() => {
+    const list = dashboard?.allowedMethods || ['biometric', 'wifi_ip', 'qr_code'];
+    return Array.isArray(list) && list.length > 0 ? list : ['biometric', 'wifi_ip', 'qr_code'];
+  }, [dashboard?.allowedMethods]);
+  const activeMethod = selectedMethod || managerDefaultMethod;
 
   // TimeChamp view & date states
   const [activeTab, setActiveTab] = useState('overview');
@@ -813,9 +952,87 @@ export default function EmployeeDashboard() {
       .catch(() => {});
   }, []);
 
+  const showMessage = useCallback((type, text, meta = null) => {
+    setMessage({ type, text, meta });
+    setTimeout(() => setMessage(null), 8000);
+  }, []);
+
+  const fetchDashboard = useCallback(async () => {
+    try {
+      const res = await api.get('/employee/dashboard');
+      setDashboard(res.data.data);
+    } catch {
+      showMessage('error', 'Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
+    }
+  }, [showMessage]);
+
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  // Real-time listener for Session Reactivation decisions & Heartbeat Setting updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleReactivated = () => {
+      setShowWarningModal(false);
+      fetchDashboard();
+      showMessage('presence_success', '🎉 Your attendance session has been approved and reactivated by management! Resuming live tracking.', { isPresence: true });
+    };
+    const handleReactivationRejected = (data) => {
+      setShowWarningModal(false);
+      fetchDashboard();
+      showMessage('error', data?.reason ? `Session reactivation rejected: ${data.reason}` : 'Session reactivation rejected by management. Attendance is closed for today.');
+    };
+    const handleSettingUpdated = (data) => {
+      // Immediately apply the change from the socket payload (zero-latency optimistic update)
+      if (data && typeof data.heartbeatMonitoringEnabled === 'boolean') {
+        setDashboard(prev => prev ? {
+          ...prev,
+          heartbeatMonitoringEnabled: data.heartbeatMonitoringEnabled,
+          activeMethod: data.activeMethod || prev.activeMethod,
+          managerDefaultMethod: data.activeMethod || prev.managerDefaultMethod,
+        } : prev);
+
+        // Show a friendly notification banner
+        const status = data.heartbeatMonitoringEnabled ? 'ON' : 'OFF';
+        const emoji = data.heartbeatMonitoringEnabled ? '🟢' : '🔴';
+        showMessage(
+          data.heartbeatMonitoringEnabled ? 'info' : 'warning',
+          `${emoji} Workstation heartbeat monitoring has been turned ${status} by management.`
+        );
+      }
+
+      // Background sync to ensure full dashboard state is consistent
+      fetchDashboard();
+    };
+    const handleHeartbeatWarning = (data) => {
+      showMessage('warning', `⚠️ Workstation heartbeat signal lost for ${data.minutesMissing || 4} minutes. Keep this tab open to avoid automatic closure (${data.timeoutMinutes || 8}m timeout).`);
+    };
+
+    socket.on('attendance:reactivated', handleReactivated);
+    socket.on('attendance:reactivation_rejected', handleReactivationRejected);
+    socket.on('attendance-setting:updated', handleSettingUpdated);
+    socket.on('attendance:heartbeat_warning', handleHeartbeatWarning);
+
+    return () => {
+      socket.off('attendance:reactivated', handleReactivated);
+      socket.off('attendance:reactivation_rejected', handleReactivationRejected);
+      socket.off('attendance-setting:updated', handleSettingUpdated);
+      socket.off('attendance:heartbeat_warning', handleHeartbeatWarning);
+    };
+  }, [socket, fetchDashboard, showMessage]);
+
+  // Polling fallback while reactivation is pending review
+  useEffect(() => {
+    const isPending = dashboard?.attendance?.attendance?.reactivationStatus === 'pending';
+    if (!isPending) return;
+    const pollInterval = setInterval(() => {
+      fetchDashboard();
+    }, 15000);
+    return () => clearInterval(pollInterval);
+  }, [dashboard?.attendance?.attendance?.reactivationStatus, fetchDashboard]);
 
   const handlePrevDate = () => {
     const d = new Date(currentDate);
@@ -834,7 +1051,6 @@ export default function EmployeeDashboard() {
   }, []);
 
   const fetchNetworkStatus = useCallback(async () => {
-    if (dashboard?.activeMethod !== 'wifi_ip') return;
     setNetworkLoading(true);
     try {
       const res = await api.get('/employee/network-status');
@@ -844,7 +1060,7 @@ export default function EmployeeDashboard() {
     } finally {
       setNetworkLoading(false);
     }
-  }, [dashboard?.activeMethod]);
+  }, []);
 
   const fetchBiometricStatus = useCallback(async () => {
     try {
@@ -855,22 +1071,18 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
-  // ── Defined BEFORE the effects below (they depend on these) ────────────────
-  const showMessage = useCallback((type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 8000);
-  }, []);
-
-  const fetchDashboard = useCallback(async () => {
-    try {
-      const res = await api.get('/employee/dashboard');
-      setDashboard(res.data.data);
-    } catch {
-      showMessage('error', 'Failed to load dashboard data.');
-    } finally {
-      setLoading(false);
+  // Synchronize network and biometric statuses with active method
+  useEffect(() => {
+    if (activeMethod === 'wifi_ip') {
+      fetchNetworkStatus();
     }
-  }, [showMessage]);
+  }, [activeMethod, fetchNetworkStatus]);
+
+  useEffect(() => {
+    if (activeMethod === 'biometric') {
+      fetchBiometricStatus();
+    }
+  }, [activeMethod, fetchBiometricStatus]);
 
   // Listen for mobile auto-scanner trigger via socket
   useEffect(() => {
@@ -908,10 +1120,64 @@ export default function EmployeeDashboard() {
     };
   }, [socket, fetchDashboard]);
 
+  // ── Comprehensive real-time sync: all manager/admin actions that affect this employee ──
+  useEffect(() => {
+    if (!socket) return;
+
+    // Fired by manager manual-attendance approval, checkin/checkout broadcasts
+    const onAttendanceUpdate = () => {
+      fetchDashboard();
+    };
+
+    // Fired when manager approves/rejects manual attendance request
+    const onNotificationNew = (data) => {
+      fetchDashboard();
+      if (data?.title) {
+        const isApproved = data.title.toLowerCase().includes('approved');
+        showMessage(
+          isApproved ? 'success' : 'warning',
+          `📋 ${data.title}${data.message ? ` — ${data.message}` : ''}`
+        );
+      }
+    };
+
+    // Fired when admin/manager approves or rejects a leave request
+    const onLeaveResolved = (data) => {
+      fetchDashboard();
+      const action = data?.status === 'approved' ? 'approved ✅' : 'rejected ❌';
+      showMessage(
+        data?.status === 'approved' ? 'success' : 'warning',
+        `🗓️ Your leave request has been ${action}${data?.decisionNote ? ` — ${data.decisionNote}` : ''}.`
+      );
+    };
+
+    // Fired when manager approves or rejects an office-location override request
+    const onLocationResolved = (data) => {
+      fetchDashboard();
+      const isApproved = data?.action === 'approve';
+      showMessage(
+        isApproved ? 'success' : 'warning',
+        `📍 Your location request has been ${isApproved ? 'approved ✅' : 'rejected ❌'}.`
+      );
+    };
+
+    socket.on('attendance:update',         onAttendanceUpdate);
+    socket.on('notification:new',          onNotificationNew);
+    socket.on('leave:request_resolved',    onLeaveResolved);
+    socket.on('location:request_resolved', onLocationResolved);
+
+    return () => {
+      socket.off('attendance:update',         onAttendanceUpdate);
+      socket.off('notification:new',          onNotificationNew);
+      socket.off('leave:request_resolved',    onLeaveResolved);
+      socket.off('location:request_resolved', onLocationResolved);
+    };
+  }, [socket, fetchDashboard, showMessage]);
+
 
   // Fetch QR Code for Desktop Display
   useEffect(() => {
-    if (!isMobileDevice() && dashboard?.activeMethod === 'qr_code') {
+    if (!isMobileDevice() && activeMethod === 'qr_code') {
       const fetchQr = async () => {
         try {
           const res = await api.get('/employee/qr/current');
@@ -929,7 +1195,7 @@ export default function EmployeeDashboard() {
       const interval = setInterval(fetchQr, 10000);
       return () => clearInterval(interval);
     }
-  }, [dashboard?.activeMethod]);
+  }, [activeMethod]);
 
   // Fetch on mount, every 30s, and on tab focus
   useEffect(() => {
@@ -982,12 +1248,20 @@ export default function EmployeeDashboard() {
     setShowScanner(true);
   };
 
-  const handleCheckIn = async (scannedQrValue = null, extraPayload = {}) => {
+  const handleManualSwitchMethod = (method) => {
+    setSelectedMethod(method);
+    setFallbackBanner(null);
+    if (method === 'wifi_ip') fetchNetworkStatus();
+    if (method === 'biometric') fetchBiometricStatus();
+  };
+
+  const handleCheckIn = async (scannedQrValue = null, extraPayload = {}, methodOverride = null) => {
     const finalQrValue = typeof scannedQrValue === 'string' ? scannedQrValue : null;
+    const currentMethod = methodOverride || activeMethod;
     setActionLoading('checkin');
     setShowScanner(false);
     try {
-      if (dashboard?.activeMethod === 'qr_code' && !finalQrValue) {
+      if (currentMethod === 'qr_code' && !finalQrValue) {
         throw new Error('Please scan the office QR code to check in.');
       }
       const loc = await getLocation();
@@ -998,18 +1272,69 @@ export default function EmployeeDashboard() {
         accuracy: loc.accuracy,
         timestamp: loc.timestamp || Date.now(),
         deviceFingerprint: fp,
+        checkInMethod: currentMethod,
+        methodAttempts,
         ...extraPayload,
       };
-      if (dashboard?.activeMethod === 'qr_code') payload.qrCodeValue = finalQrValue;
+      if (currentMethod === 'qr_code') payload.qrCodeValue = finalQrValue;
 
       await api.post('/employee/attendance/check-in', payload);
       showMessage('success', '✅ Attendance Marked Successfully! You are checked in.');
+      setFallbackBanner(null);
+      setMethodAttempts([]);
       fetchDashboard();
       fetchBiometricStatus();
       fetchNetworkStatus();
     } catch (err) {
+      const status = err.response?.status;
       const raw = err.response?.data?.message || err.message || 'Check-in failed.';
-      showMessage('error', formatAttendanceError(raw));
+      const formattedMsg = formatAttendanceError(raw);
+
+      // System errors (HTTP 500, DB unavailable, timeout) DO NOT trigger fallback!
+      const isSystemError = status >= 500 || (!err.response && err.request);
+      if (isSystemError) {
+        showMessage('error', formattedMsg);
+        return;
+      }
+
+      // Verification failures trigger strict one-way cascade: Biometric -> WiFi -> QR
+      if (currentMethod === 'wifi_ip') {
+        const updatedAttempts = [
+          ...methodAttempts,
+          { method: 'wifi_ip', status: 'failed', reason: raw, timestamp: new Date().toISOString() }
+        ];
+        setMethodAttempts(updatedAttempts);
+
+        // Strict cascade: wifi_ip -> qr_code
+        if (!fallbackHistory.includes('qr_code') && allowedMethods.includes('qr_code')) {
+          setFallbackHistory((prev) => [...prev, 'wifi_ip']);
+          setSelectedMethod('qr_code');
+          setFallbackBanner("⚠️ Office WiFi verification failed. We've automatically switched you to Office QR Code.");
+        } else {
+          showMessage('error', formattedMsg);
+        }
+      } else if (currentMethod === 'biometric') {
+        const updatedAttempts = [
+          ...methodAttempts,
+          { method: 'biometric', status: 'failed', reason: raw, timestamp: new Date().toISOString() }
+        ];
+        setMethodAttempts(updatedAttempts);
+
+        if (!fallbackHistory.includes('wifi_ip') && allowedMethods.includes('wifi_ip')) {
+          setFallbackHistory((prev) => [...prev, 'biometric']);
+          setSelectedMethod('wifi_ip');
+          setFallbackBanner("⚠️ Biometric check-in failed. We've automatically switched you to Office WiFi. (You can also choose Office QR).");
+        } else if (!fallbackHistory.includes('qr_code') && allowedMethods.includes('qr_code')) {
+          setFallbackHistory((prev) => [...prev, 'biometric', 'wifi_ip']);
+          setSelectedMethod('qr_code');
+          setFallbackBanner("⚠️ Biometric check-in failed. We've automatically switched you to Office QR Code.");
+        } else {
+          showMessage('error', formattedMsg);
+        }
+      } else {
+        // QR Code is the terminal fallback: STOP, never loop back
+        showMessage('error', formattedMsg);
+      }
     } finally {
       setActionLoading('');
     }
@@ -1022,8 +1347,6 @@ export default function EmployeeDashboard() {
       showMessage('success', '✅ Biometric authentication enabled successfully on this device!');
       fetchBiometricStatus();
     } catch (err) {
-      // If the authenticator is already registered on this device, treat it as success
-      // and refresh status so the "Verify Biometric & Check In" button appears.
       if (err.name === 'InvalidStateError' || (err.message || '').toLowerCase().includes('already registered')) {
         showMessage('success', '✅ Biometric is already registered on this device. You can now verify and check in.');
         fetchBiometricStatus();
@@ -1039,10 +1362,35 @@ export default function EmployeeDashboard() {
     setActionLoading('biometric-checkin');
     try {
       const { biometricToken } = await authenticateBiometric();
-      await handleCheckIn(null, { biometricToken });
+      await handleCheckIn(null, { biometricToken }, 'biometric');
     } catch (err) {
-      showMessage('error', formatWebAuthnError(err));
       setActionLoading('');
+      const status = err.response?.status;
+      const isSystemError = status >= 500 || (!err.response && err.request);
+      if (isSystemError) {
+        showMessage('error', formatWebAuthnError(err));
+        return;
+      }
+
+      const raw = formatWebAuthnError(err);
+      const updatedAttempts = [
+        ...methodAttempts,
+        { method: 'biometric', status: 'failed', reason: err.name || 'AUTH_CANCELLED', timestamp: new Date().toISOString() }
+      ];
+      setMethodAttempts(updatedAttempts);
+
+      // Biometric failure -> switch to WiFi
+      if (!fallbackHistory.includes('wifi_ip') && allowedMethods.includes('wifi_ip')) {
+        setFallbackHistory((prev) => [...prev, 'biometric']);
+        setSelectedMethod('wifi_ip');
+        setFallbackBanner("⚠️ Biometric verification failed or was cancelled. We've automatically switched you to Office WiFi. (You can also choose Office QR).");
+      } else if (!fallbackHistory.includes('qr_code') && allowedMethods.includes('qr_code')) {
+        setFallbackHistory((prev) => [...prev, 'biometric', 'wifi_ip']);
+        setSelectedMethod('qr_code');
+        setFallbackBanner("⚠️ Biometric verification failed. We've automatically switched you to Office QR Code.");
+      } else {
+        showMessage('error', raw);
+      }
     }
   };
 
@@ -1114,7 +1462,57 @@ export default function EmployeeDashboard() {
     await executeCheckout(token ? { token } : {});
   };
 
+  const handleAutoCheckout = useCallback(async () => {
+    try {
+      await api.post('/employee/attendance/check-out', { autoCheckOut: true, autoCheckoutReason: 'PRESENCE_VALIDATION_FAILED' });
+      setDashboard(prev => {
+        if (!prev) return prev;
+        return { 
+          ...prev, 
+          attendance: { 
+            ...prev.attendance, 
+            attendance: {
+              ...prev.attendance.attendance,
+              checkOutTime: new Date().toISOString(),
+              status: 'incomplete'
+            }
+          }
+        };
+      });
+      setShowWarningModal(true);
+      setGracePeriodSeconds(0);
+      fetchDashboard();
+    } catch(e) {
+      console.error('Auto checkout failed:', e);
+    }
+  }, [fetchDashboard]);
+
+  const handleSubmitOutOfBoundsReason = async () => {
+    if (!outOfBoundsReason || !outOfBoundsReason.trim()) {
+      showMessage('error', 'Please enter a valid reason.');
+      return;
+    }
+    setReasonSubmitting(true);
+    try {
+      await api.post('/employee/presence/reason', { reason: outOfBoundsReason });
+      setShowWarningModal(false);
+      setOutOfBoundsReason('');
+      showMessage('success', 'Reason submitted. Please upload your daily work log before 8:00 PM.');
+      setActiveTab('log');
+      fetchDashboard();
+    } catch (e) {
+      console.error(e);
+      showMessage('error', 'Failed to submit reason.');
+    } finally {
+      setReasonSubmitting(false);
+    }
+  };
+
   const handleBreakStart = async (breakType) => {
+    if (isLogSheetLocked) {
+      showMessage('error', '⚠️ Break controls are locked after 8:00 PM.');
+      return;
+    }
     setActionLoading('break-start');
     try {
       await api.post('/employee/break/start', { breakType });
@@ -1145,8 +1543,148 @@ export default function EmployeeDashboard() {
   const hasActiveBreak = !!(att?.activeBreak);
   const isLogSubmitted = Boolean(dashboard?.dailyLogSubmitted || todayDailyLog);
   const dailyLogMissing = isCheckedIn && !isCheckedOut && !isLogSubmitted;
-  const activeMethod = dashboard?.activeMethod;
   const deviceStatus = dashboard?.deviceStatus;
+  // Derived from dashboard so React tracks changes when manager toggles heartbeat
+  const heartbeatMonitoringEnabled = dashboard?.heartbeatMonitoringEnabled === true;
+
+  // Live tick so the Workday Breakdown stays in sync with the live hero timer
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (!isCheckedIn) return;
+    const t = setInterval(() => setNowTick(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, [isCheckedIn]);
+
+  // Continuous Presence Monitoring
+  useEffect(() => {
+    if (!isCheckedIn || isCheckedOut) return;
+
+    // If manager has disabled heartbeat monitoring, skip continuous intervals and dismiss warnings
+    if (!heartbeatMonitoringEnabled) {
+      if (warningCount > 0) {
+        setWarningCount(0);
+        setShowWarningModal(false);
+      }
+      if (gracePeriodSeconds > 0) setGracePeriodSeconds(0);
+      return;
+    }
+
+    // Do not track if on break or during lunch (1 PM - 2 PM)
+    const isLunchHour = new Date().getHours() === 13;
+    if (hasActiveBreak || isLunchHour) {
+      if (warningCount > 0) {
+        setWarningCount(0);
+        setShowWarningModal(false);
+      }
+      if (gracePeriodSeconds > 0) setGracePeriodSeconds(0);
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const loc = await getLocation(true); // silent = true
+        const res = await api.post('/employee/presence/ping', {
+          currentWarningCount: warningCountRef.current,
+          lat: loc.lat,
+          lng: loc.lng
+        });
+        
+        const payload = res.data?.data ?? res.data;
+        const isOutOfBounds = payload?.isOutOfBounds;
+        const distanceMeters = typeof payload?.distanceMeters === 'number' ? Math.round(payload.distanceMeters) : null;
+        const radiusMeters = typeof payload?.radiusMeters === 'number' ? Math.round(payload.radiusMeters) : null;
+
+        if (distanceMeters !== null) setCurrentDistance(distanceMeters);
+        if (radiusMeters !== null) setOfficeRadius(radiusMeters);
+
+        if (isOutOfBounds) {
+          const newTicks = consecutiveOutTicksRef.current + 1;
+          setConsecutiveOutTicks(newTicks);
+          
+          // Ticks happen every 30 seconds.
+          // Trigger warnings on ticks: 1 (30s), 3 (1m30s), 5 (2m30s), 7 (3m30s), 9 (4m30s)
+          const expectedWarningCount = Math.floor((newTicks + 1) / 2);
+          
+          if (expectedWarningCount > warningCountRef.current && expectedWarningCount <= 5) {
+            setWarningCount(expectedWarningCount);
+            setShowWarningModal(true);
+            
+            // Play custom audio file
+            buzzerAudio.current.play().catch(e => console.log('Audio play failed:', e));
+            
+            // If this is the 5th warning, start the grace period timer immediately
+            if (expectedWarningCount === 5) {
+              setGracePeriodSeconds(180); // 3 minutes
+            }
+          }
+        } else {
+          // Inside office: determine if returning from outside or normal verification
+          const wasOutside = warningCountRef.current > 0 || consecutiveOutTicksRef.current > 0;
+          const distTag = distanceMeters !== null ? ` (${distanceMeters}m / ${radiusMeters ?? 100}m allowed)` : '';
+
+          if (wasOutside) {
+            showMessage('presence_success', `You are back in the office premises. Warning alerts have stopped.`, {
+              isPresence: true,
+              isReturn: true,
+              distance: distanceMeters,
+              radius: radiusMeters ?? 100
+            });
+          } else {
+            showMessage('presence_success', `You are safely within the authorized office perimeter.`, {
+              isPresence: true,
+              isReturn: false,
+              distance: distanceMeters,
+              radius: radiusMeters ?? 100
+            });
+          }
+
+          setConsecutiveOutTicks(0);
+          setWarningCount(0);
+          setGracePeriodSeconds(0);
+          setShowWarningModal(false);
+        }
+      } catch (err) {
+        console.error('Ping failed:', err);
+      }
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [isCheckedIn, isCheckedOut, hasActiveBreak, getLocation, heartbeatMonitoringEnabled]);
+
+  useEffect(() => {
+    if (gracePeriodSeconds > 0) {
+      const timer = setInterval(() => {
+        setGracePeriodSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleAutoCheckout();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [gracePeriodSeconds, handleAutoCheckout]);
+
+  const isLogSheetLocked = useMemo(() => {
+    if (!todayAtt?.checkInTime) return false;
+    const checkInDate = new Date(todayAtt.checkInTime);
+    const checkInDateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(checkInDate);
+    const limit = new Date(`${checkInDateStr}T20:00:00.000+05:30`).getTime();
+    return nowTick > limit;
+  }, [todayAtt?.checkInTime, nowTick]);
+
+  const isPastShiftEnd = useMemo(() => {
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const limit = new Date(`${todayStr}T18:00:00.000+05:30`).getTime();
+    return nowTick > limit;
+  }, [nowTick]);
 
   const isMobile = isMobileDevice();
   // deviceBlocked = true ONLY when device is genuinely not registered or pending.
@@ -1175,28 +1713,30 @@ export default function EmployeeDashboard() {
     ? new Date(todayAtt.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
     : (isCheckedIn ? 'Active Now' : '--:--');
 
-  const completedBreakMins = att?.completedBreakMinutes || 0;
+  const completedBreakMins = useMemo(() => {
+    if (isCheckedIn && todayAtt?.checkInTime && !isCheckedOut) {
+      const metrics = calculateLiveWorkMetrics(
+        todayAtt.checkInTime,
+        todayAtt.checkOutTime,
+        todayAtt.breaks || att?.breaks || [],
+        att?.activeBreak
+      );
+      return metrics.totalBreakMinutes;
+    }
+    return att?.completedBreakMinutes ?? todayAtt?.completedBreakMinutes ?? todayAtt?.totalBreakMinutes ?? 0;
+  }, [isCheckedIn, isCheckedOut, todayAtt, att, nowTick]);
+
   const breakTimeStr = completedBreakMins > 0 ? formatDuration(completedBreakMins) : '00:00';
 
-  // Live tick so the Workday Breakdown stays in sync with the live hero timer
-  const [nowTick, setNowTick] = useState(Date.now());
-  useEffect(() => {
-    if (!isCheckedIn) return;
-    const t = setInterval(() => setNowTick(Date.now()), 5000);
-    return () => clearInterval(t);
-  }, [isCheckedIn]);
+
 
   // Live net productive minutes — same clock as the hero timer, minus breaks
   const liveWorkMins = useMemo(() => {
     if (isCheckedIn && todayAtt?.checkInTime) {
-      const elapsedMins = Math.floor((nowTick - new Date(todayAtt.checkInTime).getTime()) / 60000);
-      const activeBreakMins = hasActiveBreak && att?.activeBreak?.startedAt
-        ? Math.floor((nowTick - new Date(att.activeBreak.startedAt).getTime()) / 60000)
-        : 0;
-      return Math.max(0, elapsedMins - completedBreakMins - activeBreakMins);
+      return Math.floor(calculateLiveWorkMs(todayAtt.checkInTime, todayAtt.checkOutTime, todayAtt.breaks || att?.breaks || [], att?.activeBreak) / 60000);
     }
     return todayAtt?.actualWorkMinutes || todayAtt?.totalWorkMinutes || 0;
-  }, [isCheckedIn, todayAtt, nowTick, hasActiveBreak, att, completedBreakMins]);
+  }, [isCheckedIn, todayAtt, nowTick, hasActiveBreak, att]);
 
   const workBreakdownData = useMemo(() => {
     const workMins = liveWorkMins;
@@ -1295,15 +1835,161 @@ export default function EmployeeDashboard() {
       />
 
       {/* Message Banner */}
-      {message && (
-        <div className={`flex items-start gap-3 p-4 rounded-2xl text-sm border animate-in slide-in-from-top-2 duration-300 ${
-          message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-red-500/10 border-red-500/40 text-red-400'
-        }`}>
-          {message.type === 'success' ? <CheckCircle size={16} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />}
-          <span className="flex-1 font-medium">{message.text}</span>
-          <button onClick={() => setMessage(null)} className="text-slate-400 hover:text-white">
-            <X size={14} />
-          </button>
+      {message && (() => {
+        const isPresence = message.type === 'presence_success' || message.meta?.isPresence || (typeof message.text === 'string' && (message.text.includes('Presence verified') || message.text.includes('office premises')));
+        
+        if (isPresence) {
+          const distMatch = typeof message.text === 'string' ? message.text.match(/\((\d+)m\s*\/\s*(\d+)m allowed\)/) : null;
+          const displayDist = message.meta?.distance ?? (distMatch ? distMatch[1] : currentDistance);
+          const displayRadius = message.meta?.radius ?? (distMatch ? distMatch[2] : (officeRadius ?? 100));
+          const isReturn = Boolean(message.meta?.isReturn || (typeof message.text === 'string' && message.text.includes('back in the office')));
+
+          return (
+            <div className="relative overflow-hidden rounded-[26px] bg-[#f2faf7] border border-[#a7f3d0] p-4 sm:p-5 shadow-[0_12px_36px_-10px_rgba(16,185,129,0.18),0_0_30px_rgba(167,243,208,0.45)] transition-all duration-300 animate-in slide-in-from-top-3">
+              {/* Radar Contour Background in Top-Right */}
+              <div className="absolute top-0 right-10 sm:right-16 w-48 h-32 pointer-events-none opacity-40 overflow-hidden select-none">
+                <svg viewBox="0 0 160 120" className="w-full h-full" fill="none">
+                  <circle cx="125" cy="35" r="16" stroke="#10b981" strokeWidth="1" strokeDasharray="3 3" />
+                  <circle cx="125" cy="35" r="30" stroke="#10b981" strokeWidth="1" />
+                  <circle cx="125" cy="35" r="46" stroke="#10b981" strokeWidth="0.8" strokeDasharray="2 3" />
+                  <circle cx="125" cy="35" r="64" stroke="#10b981" strokeWidth="0.8" />
+                  <path d="M 60,10 Q 110,45 160,20" stroke="#14b8a6" strokeWidth="0.8" />
+                  <path d="M 75,40 Q 120,75 160,50" stroke="#14b8a6" strokeWidth="0.8" />
+                  <path d="M 90,70 Q 130,100 160,80" stroke="#14b8a6" strokeWidth="0.8" />
+                </svg>
+                <div className="absolute top-[21px] right-[21px] text-[#059669] drop-shadow-xs">
+                  <MapPin size={22} className="fill-[#10b981] text-white" strokeWidth={1.5} />
+                </div>
+              </div>
+
+              <div className="relative z-10 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                {/* Left: Concentric Green Checkmark Circle + Information */}
+                <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+                  {/* Concentric Circle Icon */}
+                  <div className="relative flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0">
+                    <div className="flex items-center justify-center w-12 h-12 sm:w-15 sm:h-15 rounded-full bg-emerald-500/20">
+                      <div className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-[#00a86b] to-[#059669] shadow-[0_4px_12px_rgba(0,168,107,0.35)] text-white">
+                        <Check size={22} strokeWidth={3.5} className="stroke-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Text & Status Details */}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-none">
+                        {isReturn ? 'Back in Office Premises' : 'Presence Verified'}
+                      </h3>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-[#dcfce7] text-[#15803d] text-[11px] sm:text-xs font-bold border border-[#bbf7d0] shadow-2xs">
+                        <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
+                        In Perimeter
+                      </span>
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1.5 leading-snug">
+                      {isReturn 
+                        ? 'You are safely back within the office boundary. Warning alerts have stopped.'
+                        : 'You are safely within the authorized office boundary.'}
+                    </p>
+
+                    {/* Security Progress Indicator */}
+                    <div className="w-28 sm:w-36 h-1.5 bg-slate-200/90 rounded-full overflow-hidden mt-3">
+                      <div className="w-1/3 h-full bg-[#00a86b] rounded-full" />
+                    </div>
+                    <div className="text-[9px] font-bold text-slate-400 tracking-[0.2em] uppercase mt-1">
+                      SECURE &bull; VERIFIED &bull; ON PREMISES
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Allowed Distance Chip & Close Button */}
+                <div className="flex items-center gap-2.5 ml-auto sm:ml-0 flex-shrink-0">
+                  <div className="bg-white rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center gap-2.5 sm:gap-3">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#dcfce7] flex items-center justify-center flex-shrink-0">
+                      <MapPin size={15} className="fill-[#059669] text-[#059669]" />
+                    </div>
+                    <div className="flex items-baseline">
+                      <span className="text-sm sm:text-base font-black text-slate-800 tracking-tight font-mono">
+                        {displayDist !== null && displayDist !== undefined ? `${displayDist}m` : '24m'}
+                      </span>
+                      <span className="text-slate-400 text-[11px] sm:text-xs font-medium ml-1.5 whitespace-nowrap">
+                        / {displayRadius ?? 50}m allowed
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setMessage(null)}
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-slate-50 border border-slate-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X size={15} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+
+        }
+
+        // Standard Premium Banner for other notifications (errors, info, regular success)
+        const isSuccess = message.type === 'success';
+        const isInfo = message.type === 'info';
+
+        return (
+          <div className={`flex items-start gap-3 p-3.5 sm:p-4 rounded-2xl text-sm border backdrop-blur-md shadow-md animate-in slide-in-from-top-2 duration-300 ${
+            isSuccess
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 shadow-emerald-500/5'
+              : isInfo
+              ? 'bg-blue-500/10 border-blue-500/30 text-blue-900 shadow-blue-500/5'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-900 shadow-rose-500/5'
+          }`}>
+            <div className={`p-1.5 rounded-xl flex-shrink-0 ${
+              isSuccess
+                ? 'bg-emerald-500/20 text-emerald-600'
+                : isInfo
+                ? 'bg-blue-500/20 text-blue-600'
+                : 'bg-rose-500/20 text-rose-600'
+            }`}>
+              {isSuccess ? <CheckCircle size={16} /> : isInfo ? <Info size={16} /> : <AlertTriangle size={16} />}
+            </div>
+            <span className="flex-1 font-medium mt-0.5 leading-relaxed">{message.text}</span>
+            <button
+              onClick={() => setMessage(null)}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* ── Heartbeat Monitoring Status Banner (auto-renders on toggle) ── */}
+      {isCheckedIn && !isCheckedOut && (
+        <div
+          key={heartbeatMonitoringEnabled ? 'hb-on' : 'hb-off'}
+          className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border text-xs font-semibold transition-all duration-500 animate-in fade-in slide-in-from-top-1 ${
+            heartbeatMonitoringEnabled
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-slate-100 border-slate-200 text-slate-500'
+          }`}
+        >
+          <Activity
+            size={14}
+            className={heartbeatMonitoringEnabled ? 'text-emerald-600 animate-pulse' : 'text-slate-400'}
+          />
+          <span>
+            {heartbeatMonitoringEnabled
+              ? 'Workstation heartbeat monitoring is active — keep this tab open'
+              : 'Heartbeat monitoring is OFF — phone lock will not close your session'}
+          </span>
+          <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+            heartbeatMonitoringEnabled
+              ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+              : 'bg-slate-200 text-slate-500 border-slate-300'
+          }`}>
+            {heartbeatMonitoringEnabled ? 'ON' : 'OFF'}
+          </span>
         </div>
       )}
 
@@ -1318,6 +2004,97 @@ export default function EmployeeDashboard() {
         <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-400">
           <MapPin size={14} className="mt-0.5 flex-shrink-0" />
           {geoError}
+        </div>
+      )}
+
+      {/* ── Auto-Checkout & Session Reactivation Banner ── */}
+      {todayAtt?.autoCheckedOut && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          {todayAtt.reactivationStatus === 'pending' ? (
+            <div className="rounded-3xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50/40 p-4 sm:p-5 shadow-md flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300/60 text-amber-600 flex items-center justify-center flex-shrink-0">
+                  <Clock className="animate-spin" size={24} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-slate-800">Session Reactivation Under Review</h4>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">
+                      Pending Management Approval
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 truncate">
+                    Reason: <span className="font-medium text-slate-800 italic">"{todayAtt.outOfBoundsReason}"</span> · Your session will automatically resume upon approval.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => fetchDashboard()}
+                className="px-3.5 py-2 rounded-xl bg-white border border-amber-200 text-amber-700 text-xs font-bold hover:bg-amber-50 flex items-center gap-1.5 shadow-xs flex-shrink-0 transition-colors"
+              >
+                <RefreshCw size={13} /> Refresh Status
+              </button>
+            </div>
+          ) : todayAtt.reactivationStatus === 'rejected' ? (
+            <div className="rounded-3xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50/60 to-rose-50/30 p-4 sm:p-5 shadow-md flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-300/60 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-slate-800">Attendance Session Closed for Today</h4>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
+                    Reactivation Rejected
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1">
+                  Management note: <span className="font-semibold text-rose-700">{todayAtt.reactivationDecisionNotes || 'Request was rejected. Session is permanently closed for today.'}</span>
+                </p>
+              </div>
+            </div>
+          ) : isPastShiftEnd ? (
+            <div className="rounded-3xl border border-slate-300 bg-gradient-to-r from-slate-50 via-slate-100/70 to-slate-50/40 p-4 sm:p-5 shadow-md flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-slate-200 text-slate-600 flex items-center justify-center flex-shrink-0">
+                <Clock size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-slate-800">Shift Ended at 6:00 PM IST</h4>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs">
+                    Workday Concluded
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1">
+                  All accounts are automatically checked out at 6:00 PM IST. Attendance sessions for today are closed.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50/50 to-rose-50/20 p-4 sm:p-5 shadow-md flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-300/60 text-rose-600 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle size={24} className="animate-pulse" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-slate-800">Session Suspended — Presence Validation Failed</h4>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
+                      Explanation Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    You were automatically checked out for being outside authorized office bounds. Submit an explanation to request session reactivation.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowWarningModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm flex items-center gap-2 flex-shrink-0 transition-colors"
+              >
+                Submit Explanation
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1336,7 +2113,8 @@ export default function EmployeeDashboard() {
           value={
             <MainWorkTimerKpi
               checkInTime={todayAtt?.checkInTime}
-              completedBreakMinutes={completedBreakMins}
+              checkOutTime={todayAtt?.checkOutTime}
+              breaks={todayAtt?.breaks || []}
               activeBreak={att?.activeBreak}
             />
           }
@@ -1451,7 +2229,8 @@ export default function EmployeeDashboard() {
                       </div>
                       <MainWorkTimer
                         checkInTime={todayAtt?.checkInTime}
-                        completedBreakMinutes={completedBreakMins}
+                        checkOutTime={todayAtt?.checkOutTime}
+                        breaks={todayAtt?.breaks || []}
                         activeBreak={att?.activeBreak}
                       />
                       <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 mt-2">
@@ -1486,6 +2265,92 @@ export default function EmployeeDashboard() {
                 {/* Method-Specific UI when not checked in */}
                 {!isCheckedIn && !isCheckedOut && !deviceBlocked && (
                   <div className="space-y-4">
+                    {/* Interactive Method Switcher Tab Bar */}
+                    {allowedMethods.length > 1 && (
+                      <div className="p-1.5 rounded-2xl bg-slate-100/90 border border-slate-200/80 flex items-center gap-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
+                        {allowedMethods.includes('biometric') && (
+                          <button
+                            type="button"
+                            id="switch-biometric-btn"
+                            onClick={() => handleManualSwitchMethod('biometric')}
+                            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                              activeMethod === 'biometric'
+                                ? 'bg-white text-violet-700 shadow-sm shadow-violet-500/10 border border-violet-100/80 font-bold'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                            }`}
+                          >
+                            <Fingerprint size={15} className={activeMethod === 'biometric' ? 'text-violet-600' : 'text-slate-400'} />
+                            <span>Biometric</span>
+                            {managerDefaultMethod === 'biometric' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200/60">
+                                Default
+                              </span>
+                            )}
+                          </button>
+                        )}
+                        {allowedMethods.includes('wifi_ip') && (
+                          <button
+                            type="button"
+                            id="switch-wifi-btn"
+                            onClick={() => handleManualSwitchMethod('wifi_ip')}
+                            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                              activeMethod === 'wifi_ip'
+                                ? 'bg-white text-emerald-700 shadow-sm shadow-emerald-500/10 border border-emerald-100/80 font-bold'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                            }`}
+                          >
+                            <Wifi size={15} className={activeMethod === 'wifi_ip' ? 'text-emerald-600' : 'text-slate-400'} />
+                            <span>Office WiFi</span>
+                            {managerDefaultMethod === 'wifi_ip' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200/60">
+                                Default
+                              </span>
+                            )}
+                          </button>
+                        )}
+                        {allowedMethods.includes('qr_code') && (
+                          <button
+                            type="button"
+                            id="switch-qr-btn"
+                            onClick={() => handleManualSwitchMethod('qr_code')}
+                            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                              activeMethod === 'qr_code'
+                                ? 'bg-white text-sky-700 shadow-sm shadow-sky-500/10 border border-sky-100/80 font-bold'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                            }`}
+                          >
+                            <QrCode size={15} className={activeMethod === 'qr_code' ? 'text-sky-600' : 'text-slate-400'} />
+                            <span>Office QR</span>
+                            {managerDefaultMethod === 'qr_code' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200/60">
+                                Default
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Fallback Notice Banner */}
+                    {fallbackBanner && (
+                      <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-xs text-amber-800 shadow-sm flex items-start gap-2.5 animate-fadeIn">
+                        <AlertTriangle size={17} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 space-y-1">
+                          <p className="font-semibold text-amber-900 leading-snug">{fallbackBanner}</p>
+                          <p className="text-[11px] text-amber-700">
+                            You can also tap any method tab above to switch manually.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFallbackBanner(null)}
+                          className="text-amber-500 hover:text-amber-800 p-0.5"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+
                     {/* QR Code Method */}
                     {activeMethod === 'qr_code' && (
                       <>
@@ -1694,20 +2559,28 @@ export default function EmployeeDashboard() {
                     </p>
 
                     {!isLogSubmitted ? (
-                      <button
-                        id="open-daily-log-btn"
-                        onClick={() => navigate('/daily-log')}
-                        className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
-                      >
-                        <FileText size={15} /> Fill & Submit Daily Log Sheet
-                      </button>
+                      isLogSheetLocked ? (
+                        <div className="w-full py-2.5 px-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-semibold flex items-start gap-2 shadow-sm text-left">
+                          <Lock size={15} className="mt-0.5 flex-shrink-0" />
+                          <span>Deadline missed (8:00 PM). Please approach your manager to upload your log sheet and check you out.</span>
+                        </div>
+                      ) : (
+                        <button
+                          id="open-daily-log-btn"
+                          onClick={() => navigate('/daily-log')}
+                          className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <FileText size={15} /> Fill & Submit Daily Log Sheet
+                        </button>
+                      )
                     ) : (
                       <button
                         id="view-daily-log-btn"
                         onClick={() => navigate('/daily-log')}
                         className="btn-ghost w-full py-1.5 text-xs text-slate-700 hover:text-slate-900 flex items-center justify-center gap-1.5 border border-slate-200"
+                        disabled={isLogSheetLocked}
                       >
-                        <FileText size={13} /> Update Submitted Daily Log
+                        <FileText size={13} /> {isLogSheetLocked ? 'Log Sheet Locked' : 'Update Submitted Daily Log'}
                       </button>
                     )}
                   </div>
@@ -1766,7 +2639,7 @@ export default function EmployeeDashboard() {
                   {/* Break Controls */}
                   <div className="mt-2">
                     {!hasActiveBreak ? (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2">
                         <button
                           id="start-personal-break-btn"
                           onClick={() => handleBreakStart('personal')}
@@ -1775,15 +2648,6 @@ export default function EmployeeDashboard() {
                         >
                           {actionLoading === 'break-start' ? <Loader2 size={14} className="animate-spin" /> : <Coffee size={14} className="text-amber-600" />}
                           Take Short Break
-                        </button>
-                        <button
-                          id="start-meal-break-btn"
-                          onClick={() => handleBreakStart('meal')}
-                          disabled={!!actionLoading}
-                          className="btn-ghost text-xs py-2.5 flex items-center justify-center gap-1.5 border border-slate-200 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition-all"
-                        >
-                          {actionLoading === 'break-start' ? <Loader2 size={14} className="animate-spin" /> : <Coffee size={14} className="text-amber-700" />}
-                          Lunch / Meal Break
                         </button>
                       </div>
                     ) : (
@@ -1892,32 +2756,70 @@ export default function EmployeeDashboard() {
 
                         return (
                           <tr key={rec._id || rec.date} className="hover:bg-violet-50/40 transition-colors">
-                            <td className="py-3.5 pl-2 font-medium text-slate-800 font-mono">
+                            <td className="py-3.5 pl-2 font-medium text-slate-800 font-mono align-middle">
                               {rec.date}
                             </td>
-                            <td className="py-3.5">
+                            <td className="py-3.5 align-middle">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${st.color}`}>
                                 {st.label}
                               </span>
                             </td>
-                            <td className="py-3.5 text-slate-600 font-mono">
-                              {rec.checkInTime ? new Date(rec.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            <td className="py-3.5 text-slate-600 font-mono align-middle">
+                              {rec.checkInTime ? new Date(rec.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase() : '—'}
                             </td>
-                            <td className="py-3.5 text-slate-600 font-mono">
-                              {rec.checkOutTime ? new Date(rec.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            <td className="py-3.5 text-slate-600 font-mono align-middle">
+                              <div className="flex items-center gap-1.5">
+                                {isToday && isCheckedIn && !isCheckedOut ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-sans shadow-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    Active Now
+                                  </span>
+                                ) : (
+                                  <span>{rec.checkOutTime ? new Date(rec.checkOutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase() : '—'}</span>
+                                )}
+                              </div>
+                              {rec.reactivationStatus === 'approved' && (
+                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-50/90 border border-emerald-200 text-[10.5px] font-medium text-emerald-800 mt-1 shadow-2xs font-sans">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                                  <span>Reapproved</span>
+                                  {rec.reactivationDecisionNotes && (
+                                    <span className="text-slate-500 italic font-normal truncate max-w-[140px]" title={rec.reactivationDecisionNotes}>
+                                      ({rec.reactivationDecisionNotes})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {rec.autoCheckedOut && !rec.reactivationStatus && (
+                                <div className="text-[10.5px] text-amber-600 font-sans mt-0.5 flex items-center gap-1">
+                                  <span>⚡</span>
+                                  <span>Auto-closed</span>
+                                </div>
+                              )}
                             </td>
-                            <td className="py-3.5 pr-2 text-right font-mono font-bold text-slate-800">
-                              {isToday && isCheckedIn && !isCheckedOut ? (
-                                <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                  {workHoursStr}
-                                  <span className="text-[10px] text-emerald-600 font-medium font-sans">(Live)</span>
-                                </span>
-                              ) : (
+                            <td className="py-3.5 pr-2 text-right font-mono font-bold text-slate-800 align-middle">
+                              {isToday && isCheckedIn && !isCheckedOut ? (() => {
+                                const liveTotalSecs = Math.max(0, Math.floor(calculateLiveWorkMs(
+                                  todayAtt?.checkInTime || rec.checkInTime,
+                                  todayAtt?.checkOutTime,
+                                  todayAtt?.breaks || att?.breaks || rec.breaks || [],
+                                  att?.activeBreak
+                                ) / 1000));
+                                const liveH = Math.floor(liveTotalSecs / 3600);
+                                const liveM = Math.floor((liveTotalSecs % 3600) / 60);
+                                const liveS = liveTotalSecs % 60;
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    {liveH}h {String(liveM).padStart(2, '0')}m {String(liveS).padStart(2, '0')}s
+                                    <span className="text-[10px] text-emerald-600 font-medium font-sans">(Live)</span>
+                                  </span>
+                                );
+                              })() : (
                                 <span>{workHoursStr}</span>
                               )}
                             </td>
-                            <td className="py-3.5 pr-2">
+
+                            <td className="py-3.5 pr-2 align-middle">
                               <div className="flex items-center justify-end gap-1.5 text-slate-500">
                                 <span className="w-6 h-6 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center flex-shrink-0">
                                   <QrCode size={12} />
@@ -2070,6 +2972,137 @@ export default function EmployeeDashboard() {
         onClose={() => setShowPermissionsGate(false)}
         onPermissionsGranted={handlePermissionsGranted}
       />
+
+      {/* ── Continuous Presence Warning Modal ── */}
+      {showWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-6 shadow-2xl relative text-center">
+            <div className="mx-auto w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+              <AlertTriangle size={32} className="text-rose-600 animate-pulse" />
+            </div>
+            
+            {isCheckedOut ? (
+              <>
+                {todayAtt?.reactivationStatus === 'pending' ? (
+                  <div className="text-center py-2">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-3">
+                      <Clock size={24} className="animate-spin" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">Reactivation Under Review</h3>
+                    <p className="text-xs text-slate-600 mb-3">
+                      Your explanation has been sent to your manager. Once approved, your session will automatically resume.
+                    </p>
+                    {todayAtt.outOfBoundsReason && (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-left mb-4">
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Submitted Reason:</p>
+                        <p className="text-xs text-slate-700 mt-0.5 italic">"{todayAtt.outOfBoundsReason}"</p>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => fetchDashboard()}
+                        className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs"
+                      >
+                        Refresh Status
+                      </button>
+                      <button
+                        onClick={() => setShowWarningModal(false)}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                ) : todayAtt?.reactivationStatus === 'rejected' ? (
+                  <div className="text-center py-2">
+                    <h3 className="text-lg font-bold text-rose-700 mb-1">Session Closed for Today</h3>
+                    <p className="text-xs text-slate-600 mb-3">
+                      Management reviewed and rejected the reactivation request. You cannot re-enter the session today.
+                    </p>
+                    {todayAtt.reactivationDecisionNotes && (
+                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left mb-4">
+                        <p className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Management Note:</p>
+                        <p className="text-xs text-rose-800 mt-0.5">{todayAtt.reactivationDecisionNotes}</p>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setShowWarningModal(false)}
+                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="text-xl font-bold text-slate-800 mb-1">Session Suspended</h3>
+                    <p className="text-xs text-slate-600 mb-3">
+                      You were automatically checked out due to presence validation failure. Submit an explanation to request session reactivation.
+                    </p>
+                    <div className="mb-4 text-left">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Reason for leaving premises / silence:
+                      </label>
+                      <textarea 
+                        value={outOfBoundsReason}
+                        onChange={(e) => setOutOfBoundsReason(e.target.value)}
+                        className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                        rows={3}
+                        placeholder="E.g., Client meeting at client site, medical emergency..."
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSubmitOutOfBoundsReason}
+                        disabled={reasonSubmitting}
+                        className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        {reasonSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Submit for Manager Review'}
+                      </button>
+                      <button
+                        onClick={() => setShowWarningModal(false)}
+                        className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl"
+                      >
+                        Later
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold text-slate-800 mb-1">Outside Office Location</h3>
+                {currentDistance !== null && (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold mb-3">
+                    <span>📍 Current Distance: <strong>{currentDistance}m</strong></span>
+                    <span className="text-rose-300">|</span>
+                    <span>Allowed: <strong>{officeRadius ?? 100}m</strong></span>
+                  </div>
+                )}
+                <p className="text-sm text-slate-600 mb-4">
+                  {currentDistance !== null
+                    ? `You are ${currentDistance}m from the office location, which is outside the authorized ${officeRadius ?? 100}m geofence. Please return immediately.`
+                    : 'You appear to be outside the authorized office geofence. Please return immediately.'}
+                </p>
+                
+                <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 mb-4">
+                  {warningCount < 5 ? (
+                    <p className="text-rose-600 font-semibold">Warning {warningCount} of 5</p>
+                  ) : (
+                    <>
+                      <p className="text-rose-700 font-bold mb-1">Final Grace Period</p>
+                      <div className="text-3xl font-black text-rose-600 font-mono tracking-wider">
+                        {Math.floor(gracePeriodSeconds / 60).toString().padStart(2, '0')}:
+                        {(gracePeriodSeconds % 60).toString().padStart(2, '0')}
+                      </div>
+                      <p className="text-xs text-rose-500 mt-1">Return to office before timer expires!</p>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   ClipboardList, User, LogOut, Menu, X, ChevronRight, Loader2, ShieldAlert, Clock
 } from 'lucide-react';
 import api from '../lib/api';
+import companyLogo from '../images/company logo.png';
 
 const isMobileDevice = () => {
   if (typeof window === 'undefined') return false;
@@ -92,11 +93,11 @@ export default function Layout({ children }) {
         <div className="mx-auto flex h-[84px] max-w-[1600px] items-center gap-3 px-4 sm:px-6 lg:px-8">
           {/* Brand */}
           <Link to="/dashboard" className="group flex shrink-0 items-center gap-2.5">
-            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl shadow-md shadow-sky-500/20 shrink-0 transition-transform duration-300 group-hover:scale-[1.04]">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
+            <img
+              src={companyLogo}
+              alt="Spheronix"
+              className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
+            />
             <span className="hidden shrink-0 items-center rounded-full bg-sky-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-sky-700 ring-1 ring-sky-200/70 sm:inline-flex">
               Employee
             </span>
@@ -166,11 +167,11 @@ export default function Layout({ children }) {
           <div className="bg-white border-r border-slate-200 w-72 h-full flex flex-col p-4 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl shadow-md shadow-sky-500/20 shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
+                <img
+                  src={companyLogo}
+                  alt="Spheronix"
+                  className="h-10 w-auto object-contain"
+                />
                 <span className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider bg-sky-50 px-1.5 py-0.5 rounded-full border border-sky-200">
                   Employee
                 </span>

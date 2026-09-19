@@ -7,13 +7,14 @@ import companyLogo from '../images/company logo.png';
 import {
   LayoutDashboard, ClipboardList, Calendar, FileText,
   LogOut, Menu, X, Smartphone, MapPin, Users,
-  Settings, Wifi, Building2, Clock, UserCircle2
+  Settings, Wifi, Building2, Clock, UserCircle2, ShieldAlert
 } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, id: 'nav-dashboard' },
   { path: '/team/members', label: 'Team Members', icon: Users, id: 'nav-members' },
   { path: '/team/attendance', label: 'Team Attendance', icon: ClipboardList, id: 'nav-attendance' },
+  { path: '/session-reactivations', label: 'Session Reactivations', icon: ShieldAlert, id: 'nav-session-reactivations' },
   { path: '/team/overtime', label: 'Overtime', icon: Clock, id: 'nav-overtime' },
   { path: '/team/daily-logs', label: 'Daily Logs', icon: FileText, id: 'nav-logs' },
   { path: '/team/leave-requests', label: 'Leave Requests', icon: Calendar, id: 'nav-leaves' },
@@ -32,6 +33,7 @@ export default function ManagerLayout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [manualPendingCount, setManualPendingCount] = useState(0);
+  const [pendingReactivationsCount, setPendingReactivationsCount] = useState(0);
 
   // Fetch pending manual attendance request count
   const fetchManualPending = useCallback(() => {
@@ -46,6 +48,15 @@ export default function ManagerLayout({ children }) {
       .catch(() => {});
   }, []);
 
+  // Fetch pending session reactivation request count
+  const fetchPendingReactivations = useCallback(() => {
+    api.get('/manager/session-reactivations')
+      .then(res => {
+        setPendingReactivationsCount(res.data?.data?.kpis?.pendingCount || 0);
+      })
+      .catch(() => {});
+  }, []);
+
   // Poll unread notification count (new team requests etc.) every 30s + on tab focus
   const fetchUnread = useCallback(() => {
     api.get('/manager/notifications/unread-count')
@@ -56,20 +67,27 @@ export default function ManagerLayout({ children }) {
   useEffect(() => {
     fetchUnread();
     fetchManualPending();
+    fetchPendingReactivations();
     const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchUnread();
-      if (document.visibilityState === 'visible') fetchManualPending();
+      if (document.visibilityState === 'visible') {
+        fetchUnread();
+        fetchManualPending();
+        fetchPendingReactivations();
+      }
     }, 30000);
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchUnread();
-      if (document.visibilityState === 'visible') fetchManualPending();
+      if (document.visibilityState === 'visible') {
+        fetchUnread();
+        fetchManualPending();
+        fetchPendingReactivations();
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [fetchUnread, fetchManualPending, location.pathname]);
+  }, [fetchUnread, fetchManualPending, fetchPendingReactivations, location.pathname]);
 
   // Real-time WebSocket listener for instant badge counter bumps and clears
   useEffect(() => {
@@ -83,6 +101,8 @@ export default function ManagerLayout({ children }) {
     socket.on('leave:request_resolved', onNewEvent);
     // Instantly bump the Team Attendance badge when a manual request comes in
     socket.on('attendance:manual_request_created', onManualRequest);
+    socket.on('reactivation:requested', fetchPendingReactivations);
+    socket.on('attendance:update', fetchPendingReactivations);
     return () => {
       socket.off('notification:new', onNewEvent);
       socket.off('device:request_created', onNewEvent);
@@ -90,8 +110,10 @@ export default function ManagerLayout({ children }) {
       socket.off('leave:request_created', onNewEvent);
       socket.off('leave:request_resolved', onNewEvent);
       socket.off('attendance:manual_request_created', onManualRequest);
+      socket.off('reactivation:requested', fetchPendingReactivations);
+      socket.off('attendance:update', fetchPendingReactivations);
     };
-  }, [socket, fetchUnread, fetchManualPending]);
+  }, [socket, fetchUnread, fetchManualPending, fetchPendingReactivations]);
 
   const handleLogout = async () => {
     await logout();
@@ -120,7 +142,14 @@ export default function ManagerLayout({ children }) {
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-2 py-3.5 -my-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:flex">
             {navItems.map((item) => {
               const active = location.pathname === item.path;
-                const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') || (manualPendingCount > 0 && item.id === 'nav-attendance');
+              const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') ||
+                                (manualPendingCount > 0 && item.id === 'nav-attendance') ||
+                                (pendingReactivationsCount > 0 && item.id === 'nav-session-reactivations');
+              const badgeVal = item.id === 'nav-session-reactivations'
+                ? pendingReactivationsCount
+                : item.id === 'nav-attendance'
+                ? manualPendingCount
+                : unreadCount;
               return (
                 <Link
                   key={item.path}
@@ -135,8 +164,10 @@ export default function ManagerLayout({ children }) {
                   <item.icon size={14} />
                   <span>{item.label}</span>
                   {showBadge && (
-                    <span id="manager-unread-badge" className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-orange-400 px-1 text-[9px] font-bold text-white shadow-sm">
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                    <span id={item.id === 'nav-session-reactivations' ? 'reactivation-badge' : 'manager-unread-badge'} className={`ml-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-sm ${
+                      item.id === 'nav-session-reactivations' ? 'bg-amber-500 animate-pulse' : 'bg-gradient-to-r from-rose-500 to-orange-400'
+                    }`}>
+                      {badgeVal > 9 ? '9+' : badgeVal}
                     </span>
                   )}
                 </Link>
@@ -146,9 +177,16 @@ export default function ManagerLayout({ children }) {
 
           {/* Medium screen navigation fallback (md to xl) */}
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-2 py-3.5 -my-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex xl:hidden">
-            {navItems.slice(0, 6).map((item) => {
+            {navItems.slice(0, 7).map((item) => {
               const active = location.pathname === item.path;
-                const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') || (manualPendingCount > 0 && item.id === 'nav-attendance');
+              const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') ||
+                                (manualPendingCount > 0 && item.id === 'nav-attendance') ||
+                                (pendingReactivationsCount > 0 && item.id === 'nav-session-reactivations');
+              const badgeVal = item.id === 'nav-session-reactivations'
+                ? pendingReactivationsCount
+                : item.id === 'nav-attendance'
+                ? manualPendingCount
+                : unreadCount;
               return (
                 <Link
                   key={item.path}
@@ -163,8 +201,10 @@ export default function ManagerLayout({ children }) {
                   <item.icon size={14} />
                   <span>{item.label}</span>
                   {showBadge && (
-                    <span className="ml-1 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-orange-400 px-1 text-[9px] font-bold text-white shadow-sm">
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                    <span className={`ml-1 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow-sm ${
+                      item.id === 'nav-session-reactivations' ? 'bg-amber-500 animate-pulse' : 'bg-gradient-to-r from-rose-500 to-orange-400'
+                    }`}>
+                      {badgeVal > 9 ? '9+' : badgeVal}
                     </span>
                   )}
                 </Link>
@@ -268,7 +308,14 @@ export default function ManagerLayout({ children }) {
             <nav className="flex-1 py-3 overflow-y-auto space-y-1">
               {navItems.map((item) => {
                 const active = location.pathname === item.path;
-                  const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') || (manualPendingCount > 0 && item.id === 'nav-attendance');
+                const showBadge = (unreadCount > 0 && item.id === 'nav-device-requests') ||
+                                  (manualPendingCount > 0 && item.id === 'nav-attendance') ||
+                                  (pendingReactivationsCount > 0 && item.id === 'nav-session-reactivations');
+                const badgeVal = item.id === 'nav-session-reactivations'
+                  ? pendingReactivationsCount
+                  : item.id === 'nav-attendance'
+                  ? manualPendingCount
+                  : unreadCount;
                 return (
                   <Link
                     key={item.path}
@@ -286,8 +333,10 @@ export default function ManagerLayout({ children }) {
                       <span>{item.label}</span>
                     </div>
                     {showBadge && (
-                      <span className="min-w-[1.1rem] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-bold">
-                        {unreadCount > 9 ? '9+' : unreadCount}
+                      <span className={`min-w-[1.1rem] h-4 px-1 flex items-center justify-center rounded-full text-white text-[9px] font-bold ${
+                        item.id === 'nav-session-reactivations' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'
+                      }`}>
+                        {badgeVal > 9 ? '9+' : badgeVal}
                       </span>
                     )}
                   </Link>

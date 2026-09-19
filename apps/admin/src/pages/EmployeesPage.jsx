@@ -1,14 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import {
   Users, Plus, Search, Loader2, UserCheck, UserX, Pencil, X, Eye, EyeOff,
   LayoutGrid, List, Mail, Phone, Clock, Coffee, CheckCircle2,
-  Calendar, ChevronRight, Filter, Smartphone, Trash2
+  Calendar, ChevronRight, Filter, Smartphone, Trash2, AlertTriangle, ShieldAlert
 } from 'lucide-react';
 import EmployeeProfileModal from '../components/EmployeeProfileModal';
 import EmployeeCreationModal from '../components/EmployeeCreationModal';
 
 export default function EmployeesPage() {
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -164,6 +166,22 @@ export default function EmployeesPage() {
         </span>
       );
     }
+    if (emp.currentStatus === 'auto_checked_out' || emp.todayAttendance?.autoCheckedOut) {
+      if (emp.todayAttendance?.reactivationStatus === 'pending') {
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-xs animate-pulse">
+            <AlertTriangle size={11} className="text-amber-600" />
+            Reactivation Pending
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 shadow-xs">
+          <AlertTriangle size={11} className="text-rose-600" />
+          Auto-Checked Out
+        </span>
+      );
+    }
     if (emp.currentStatus === 'working') {
       return (
         <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
@@ -247,6 +265,15 @@ export default function EmployeesPage() {
               <span className="hidden sm:inline">Table</span>
             </button>
           </div>
+
+          <button
+            onClick={() => navigate('/session-reactivations')}
+            className="btn bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 font-bold px-3.5 py-2 rounded-xl shadow-xs flex items-center gap-2 text-xs transition-colors"
+            title="Review Auto-Checked Out Employees"
+          >
+            <ShieldAlert size={16} className="text-amber-600" />
+            <span>Session Reactivations</span>
+          </button>
 
           <button
             id="add-user-btn"
@@ -529,6 +556,29 @@ export default function EmployeesPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Auto-Checkout Alert Banner */}
+                  {emp.todayAttendance?.autoCheckedOut && (
+                    <div className="mt-3 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 flex items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-1.5 min-w-0 text-amber-800 font-medium">
+                        <AlertTriangle size={13} className="text-amber-600 flex-shrink-0" />
+                        <span className="truncate">
+                          {emp.todayAttendance.reactivationStatus === 'pending'
+                            ? 'Reactivation requested'
+                            : (emp.todayAttendance.outOfBoundsReason ? `Reason: ${emp.todayAttendance.outOfBoundsReason}` : 'Auto-Checked Out')}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/session-reactivations');
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-amber-200/80 hover:bg-amber-300 text-amber-900 flex items-center gap-1 flex-shrink-0 transition-colors shadow-2xs"
+                      >
+                        <ShieldAlert size={12} /> Review
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Card Footer Actions */}
