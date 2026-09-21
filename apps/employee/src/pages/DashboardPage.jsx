@@ -892,16 +892,14 @@ export default function EmployeeDashboard() {
   const [showScanner, setShowScanner] = useState(false);
   const [officeQrDataUrl, setOfficeQrDataUrl] = useState('');
 
-  // Continuous Presence Monitoring States
-  const [warningCountState, setWarningCountState] = useState(0);
-  const warningCountRef = useRef(0);
-  const warningCount = warningCountState;
-  const setWarningCount = (val) => { warningCountRef.current = val; setWarningCountState(val); };
-
-  const [consecutiveOutTicksState, setConsecutiveOutTicksState] = useState(0);
-  const consecutiveOutTicksRef = useRef(0);
-  const consecutiveOutTicks = consecutiveOutTicksState;
-  const setConsecutiveOutTicks = (val) => { consecutiveOutTicksRef.current = val; setConsecutiveOutTicksState(val); };
+  // ── Geofence Session State (backend-driven — never locally incremented) ──────
+  // Backend owns alert level, session ID, and grace period.
+  // Frontend only displays what the backend returns.
+  const [geofenceAlertLevel, setGeofenceAlertLevel] = useState(0);
+  const [geofenceStatus, setGeofenceStatus]         = useState(null); // INSIDE|OUTSIDE|BOUNDARY|RETURNING|UNCONFIGURED|LOCATION_UNAVAILABLE
+  const [geofenceSessionId, setGeofenceSessionId]   = useState(null);
+  const [insideConfirmCount, setInsideConfirmCount]  = useState(0);
+  const geofenceAlertLevelRef = useRef(0); // readable inside setInterval callbacks
 
   const [gracePeriodSeconds, setGracePeriodSeconds] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
@@ -1034,15 +1032,41 @@ export default function EmployeeDashboard() {
     return () => clearInterval(pollInterval);
   }, [dashboard?.attendance?.attendance?.reactivationStatus, fetchDashboard]);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshAll = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([fetchDashboard(), fetchHistory()]);
+      showMessage('info', 'Dashboard statistics refreshed');
+    } catch {
+      // ignore
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+
   const handlePrevDate = () => {
     const d = new Date(currentDate);
-    d.setDate(d.getDate() - 1);
+    if (viewMode === 'Week') {
+      d.setDate(d.getDate() - 7);
+    } else if (viewMode === 'Month') {
+      d.setMonth(d.getMonth() - 1);
+    } else {
+      d.setDate(d.getDate() - 1);
+    }
     setCurrentDate(d);
   };
 
   const handleNextDate = () => {
     const d = new Date(currentDate);
-    d.setDate(d.getDate() + 1);
+    if (viewMode === 'Week') {
+      d.setDate(d.getDate() + 7);
+    } else if (viewMode === 'Month') {
+      d.setMonth(d.getMonth() + 1);
+    } else {
+      d.setDate(d.getDate() + 1);
+    }
     setCurrentDate(d);
   };
 
@@ -1462,28 +1486,28 @@ export default function EmployeeDashboard() {
     await executeCheckout(token ? { token } : {});
   };
 
-  const handleAutoCheckout = useCallback(async () => {
+  const handleAutoCheckout = useCallback(async (sessionId) => {
+    if (!sessionId) return;
     try {
-      await api.post('/employee/attendance/check-out', { autoCheckOut: true, autoCheckoutReason: 'PRESENCE_VALIDATION_FAILED' });
-      setDashboard(prev => {
-        if (!prev) return prev;
-        return { 
-          ...prev, 
-          attendance: { 
-            ...prev.attendance, 
-            attendance: {
-              ...prev.attendance.attendance,
-              checkOutTime: new Date().toISOString(),
-              status: 'incomplete'
-            }
-          }
-        };
-      });
-      setShowWarningModal(true);
-      setGracePeriodSeconds(0);
+      const res  = await api.post('/employee/attendance/geofence/auto-checkout', { sessionId });
+      const data = res.data?.data;
+
+      if (data?.autoCheckedOut) {
+        // Backend confirmed and executed checkout
+        setShowWarningModal(false);
+        setGracePeriodSeconds(0);
+        setGeofenceAlertLevel(0);
+        geofenceAlertLevelRef.current = 0;
+        setGeofenceSessionId(null);
+        fetchDashboard();
+      } else {
+        // Backend rejected (employee returned, session already resolved, etc.)
+        // Refresh state to reconcile UI
+        fetchDashboard();
+      }
+    } catch (e) {
+      console.error('[geofenceAutoCheckout] failed:', e?.response?.data?.message);
       fetchDashboard();
-    } catch(e) {
-      console.error('Auto checkout failed:', e);
     }
   }, [fetchDashboard]);
 
@@ -1547,6 +1571,49 @@ export default function EmployeeDashboard() {
   // Derived from dashboard so React tracks changes when manager toggles heartbeat
   const heartbeatMonitoringEnabled = dashboard?.heartbeatMonitoringEnabled === true;
 
+  // ── Page-load geofence session restore ───────────────────────────────────────
+  // Runs once after checkin is confirmed. Fetches active session from backend
+  // to restore alert state without restarting the alert sequence.
+  useEffect(() => {
+    if (!isCheckedIn || isCheckedOut) return;
+
+    const restore = async () => {
+      try {
+        const res     = await api.get('/employee/attendance/geofence/session');
+        const session = res.data?.data;
+        if (!session?.hasActiveSession) return;
+
+        const level = session.currentAlertLevel ?? 0;
+        geofenceAlertLevelRef.current = level;
+        setGeofenceAlertLevel(level);
+        setGeofenceSessionId(session.sessionId ?? null);
+        if (session.distance != null) setCurrentDistance(session.distance);
+        if (session.radius   != null) setOfficeRadius(session.radius);
+
+        if (level > 0 && level < 5) {
+          setShowWarningModal(true);
+          // No audio on restore — audio plays only on live escalation
+        }
+
+        if (level >= 5) {
+          setShowWarningModal(true);
+          const remaining = session.gracePeriodRemainingSeconds ?? 0;
+          if (session.graceExpired || remaining <= 0) {
+            // Grace already expired during refresh — fire auto-checkout immediately
+            handleAutoCheckout(session.sessionId);
+          } else {
+            // Resume countdown from exact remaining seconds (NOT reset to 180)
+            setGracePeriodSeconds(remaining);
+          }
+        }
+      } catch {
+        // Fail silently — next ping will sync state
+      }
+    };
+
+    restore();
+  }, [isCheckedIn, isCheckedOut]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Live tick so the Workday Breakdown stays in sync with the live hero timer
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
@@ -1561,8 +1628,9 @@ export default function EmployeeDashboard() {
 
     // If manager has disabled heartbeat monitoring, skip continuous intervals and dismiss warnings
     if (!heartbeatMonitoringEnabled) {
-      if (warningCount > 0) {
-        setWarningCount(0);
+      if (geofenceAlertLevelRef.current > 0 || geofenceAlertLevel > 0) {
+        setGeofenceAlertLevel(0);
+        geofenceAlertLevelRef.current = 0;
         setShowWarningModal(false);
       }
       if (gracePeriodSeconds > 0) setGracePeriodSeconds(0);
@@ -1572,8 +1640,9 @@ export default function EmployeeDashboard() {
     // Do not track if on break or during lunch (1 PM - 2 PM)
     const isLunchHour = new Date().getHours() === 13;
     if (hasActiveBreak || isLunchHour) {
-      if (warningCount > 0) {
-        setWarningCount(0);
+      if (geofenceAlertLevelRef.current > 0 || geofenceAlertLevel > 0) {
+        setGeofenceAlertLevel(0);
+        geofenceAlertLevelRef.current = 0;
         setShowWarningModal(false);
       }
       if (gracePeriodSeconds > 0) setGracePeriodSeconds(0);
@@ -1584,64 +1653,65 @@ export default function EmployeeDashboard() {
       try {
         const loc = await getLocation(true); // silent = true
         const res = await api.post('/employee/presence/ping', {
-          currentWarningCount: warningCountRef.current,
           lat: loc.lat,
-          lng: loc.lng
+          lng: loc.lng,
+          accuracy: loc.accuracy,
         });
         
         const payload = res.data?.data ?? res.data;
-        const isOutOfBounds = payload?.isOutOfBounds;
-        const distanceMeters = typeof payload?.distanceMeters === 'number' ? Math.round(payload.distanceMeters) : null;
-        const radiusMeters = typeof payload?.radiusMeters === 'number' ? Math.round(payload.radiusMeters) : null;
 
-        if (distanceMeters !== null) setCurrentDistance(distanceMeters);
-        if (radiusMeters !== null) setOfficeRadius(radiusMeters);
+        const newLevel  = payload?.currentAlertLevel ?? 0;
+        const newStatus = payload?.geofenceStatus;  // INSIDE|OUTSIDE|BOUNDARY|RETURNING|UNCONFIGURED|LOCATION_UNAVAILABLE
+        const resolved  = payload?.sessionResolved ?? false;
+        const prevLevel = geofenceAlertLevelRef.current;
 
-        if (isOutOfBounds) {
-          const newTicks = consecutiveOutTicksRef.current + 1;
-          setConsecutiveOutTicks(newTicks);
-          
-          // Ticks happen every 30 seconds.
-          // Trigger warnings on ticks: 1 (30s), 3 (1m30s), 5 (2m30s), 7 (3m30s), 9 (4m30s)
-          const expectedWarningCount = Math.floor((newTicks + 1) / 2);
-          
-          if (expectedWarningCount > warningCountRef.current && expectedWarningCount <= 5) {
-            setWarningCount(expectedWarningCount);
-            setShowWarningModal(true);
-            
-            // Play custom audio file
-            buzzerAudio.current.play().catch(e => console.log('Audio play failed:', e));
-            
-            // If this is the 5th warning, start the grace period timer immediately
-            if (expectedWarningCount === 5) {
-              setGracePeriodSeconds(180); // 3 minutes
-            }
+        // Sync refs + state
+        geofenceAlertLevelRef.current = newLevel;
+        setGeofenceAlertLevel(newLevel);
+        setGeofenceStatus(newStatus);
+        if (payload?.sessionId)         setGeofenceSessionId(payload.sessionId);
+        if (payload?.distance != null)  setCurrentDistance(Math.round(payload.distance));
+        if (payload?.radius   != null)  setOfficeRadius(Math.round(payload.radius));
+
+        if (newLevel > prevLevel) {
+          // Alert escalated → play audio + show modal
+          buzzerAudio.current.play().catch(e => console.log('Audio play failed:', e));
+          setShowWarningModal(true);
+          if (newLevel >= 5) {
+            // Use backend-provided remaining seconds (NOT hardcoded 180)
+            setGracePeriodSeconds(payload?.gracePeriodRemainingSeconds ?? 180);
           }
-        } else {
-          // Inside office: determine if returning from outside or normal verification
-          const wasOutside = warningCountRef.current > 0 || consecutiveOutTicksRef.current > 0;
-          const distTag = distanceMeters !== null ? ` (${distanceMeters}m / ${radiusMeters ?? 100}m allowed)` : '';
-
+        } else if (resolved || (newStatus === 'INSIDE' && newLevel === 0)) {
+          // Session resolved → clear all alert UI
+          const wasOutside = prevLevel > 0;
+          setShowWarningModal(false);
+          setGracePeriodSeconds(0);
+          setGeofenceSessionId(null);
+          setInsideConfirmCount(0);
           if (wasOutside) {
-            showMessage('presence_success', `You are back in the office premises. Warning alerts have stopped.`, {
+            showMessage('presence_success', 'You are back within the office premises. Alert session cleared.', {
               isPresence: true,
               isReturn: true,
-              distance: distanceMeters,
-              radius: radiusMeters ?? 100
+              distance: payload?.distance,
+              radius: payload?.radius,
             });
           } else {
-            showMessage('presence_success', `You are safely within the authorized office perimeter.`, {
+            showMessage('presence_success', 'You are safely within the authorized office perimeter.', {
               isPresence: true,
               isReturn: false,
-              distance: distanceMeters,
-              radius: radiusMeters ?? 100
+              distance: payload?.distance,
+              radius: payload?.radius,
             });
           }
-
-          setConsecutiveOutTicks(0);
-          setWarningCount(0);
-          setGracePeriodSeconds(0);
-          setShowWarningModal(false);
+        } else if (newStatus === 'RETURNING') {
+          setInsideConfirmCount(payload?.insideConfirmationCount ?? 0);
+        } else if (newStatus === 'LOCATION_UNAVAILABLE') {
+          // GPS disabled / invalid reading — session stays ACTIVE on backend
+          // Do NOT resolve; show a separate indicator
+          showMessage('warning',
+            '📍 Location unavailable. Geofence monitoring paused until GPS is restored.',
+            { isPresence: true }
+          );
         }
       } catch (err) {
         console.error('Ping failed:', err);
@@ -1651,21 +1721,22 @@ export default function EmployeeDashboard() {
     return () => clearInterval(interval);
   }, [isCheckedIn, isCheckedOut, hasActiveBreak, getLocation, heartbeatMonitoringEnabled]);
 
+  // Grace period visual countdown — backend executes checkout, timer is display only
   useEffect(() => {
-    if (gracePeriodSeconds > 0) {
-      const timer = setInterval(() => {
-        setGracePeriodSeconds(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleAutoCheckout();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [gracePeriodSeconds, handleAutoCheckout]);
+    if (gracePeriodSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setGracePeriodSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Timer reached zero → ask backend to validate + execute checkout
+          handleAutoCheckout(geofenceSessionId);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [gracePeriodSeconds > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLogSheetLocked = useMemo(() => {
     if (!todayAtt?.checkInTime) return false;
@@ -1705,13 +1776,133 @@ export default function EmployeeDashboard() {
     return dashboard.leaveBalances.reduce((acc, b) => acc + Math.max(0, (b.allocated || 0) - (b.used || 0)), 0);
   }, [dashboard?.leaveBalances]);
 
-  const startTimeStr = todayAtt?.checkInTime
-    ? new Date(todayAtt.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-    : '--:--';
+  const isToday = useMemo(() => {
+    const today = new Date();
+    return (
+      currentDate.getDate() === today.getDate() &&
+      currentDate.getMonth() === today.getMonth() &&
+      currentDate.getFullYear() === today.getFullYear()
+    );
+  }, [currentDate]);
 
-  const lastSeenStr = isCheckedOut
-    ? new Date(todayAtt.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-    : (isCheckedIn ? 'Active Now' : '--:--');
+  // Record for selected Day view
+  const selectedDayRecord = useMemo(() => {
+    if (isToday) return todayAtt;
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const d = String(currentDate.getDate()).padStart(2, '0');
+    const targetDateKey = `${y}-${m}-${d}`;
+    return history.find(h => {
+      if (!h.date) return false;
+      const hStr = typeof h.date === 'string' ? h.date.split('T')[0] : '';
+      return hStr === targetDateKey;
+    }) || null;
+  }, [isToday, todayAtt, currentDate, history]);
+
+  // Aggregated week metrics
+  const weekSummary = useMemo(() => {
+    const start = new Date(currentDate);
+    const day = (start.getDay() + 6) % 7; // Monday
+    start.setDate(start.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+
+    const weekRecs = history.filter(h => {
+      if (!h.date) return false;
+      const d = new Date(h.date);
+      return d >= start && d <= end;
+    });
+
+    const totalWorkMins = weekRecs.reduce((acc, r) => acc + (r.actualWorkMinutes || 0), 0);
+    const totalBreakMins = weekRecs.reduce((acc, r) => acc + (r.totalBreakMinutes || 0), 0);
+    const daysPresent = weekRecs.filter(r => r.status === 'present').length;
+    const halfDays = weekRecs.filter(r => r.status === 'half_day').length;
+
+    const daysList = [];
+    for (let i = 0; i < 7; i++) {
+      const cur = new Date(start);
+      cur.setDate(cur.getDate() + i);
+      const y = cur.getFullYear();
+      const m = String(cur.getMonth() + 1).padStart(2, '0');
+      const d = String(cur.getDate()).padStart(2, '0');
+      const key = `${y}-${m}-${d}`;
+      const rec = weekRecs.find(r => (typeof r.date === 'string' ? r.date.split('T')[0] : '') === key);
+      daysList.push({
+        date: cur,
+        dateStr: cur.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }),
+        dayName: cur.toLocaleDateString('en-IN', { weekday: 'short' }),
+        record: rec || null,
+        hours: rec?.actualWorkMinutes ? Math.round((rec.actualWorkMinutes / 60) * 10) / 10 : 0,
+        status: rec?.status || (cur > new Date() ? 'upcoming' : 'absent'),
+      });
+    }
+
+    return {
+      weekRecs,
+      daysList,
+      totalHours: Math.round((totalWorkMins / 60) * 10) / 10,
+      totalBreakHours: Math.round((totalBreakMins / 60) * 10) / 10,
+      daysPresent,
+      halfDays,
+      avgHours: daysPresent > 0 ? Math.round((totalWorkMins / 60 / daysPresent) * 10) / 10 : 0,
+      startDateStr: start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+      endDateStr: end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+  }, [currentDate, history]);
+
+  // Aggregated month metrics
+  const monthSummary = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    const monthRecs = history.filter(h => {
+      if (!h.date) return false;
+      const d = new Date(h.date);
+      return d.getFullYear() === y && d.getMonth() === m;
+    });
+
+    const totalWorkMins = monthRecs.reduce((acc, r) => acc + (r.actualWorkMinutes || 0), 0);
+    const totalBreakMins = monthRecs.reduce((acc, r) => acc + (r.totalBreakMinutes || 0), 0);
+    const daysPresent = monthRecs.filter(r => r.status === 'present').length;
+    const halfDays = monthRecs.filter(r => r.status === 'half_day').length;
+
+    return {
+      monthRecs,
+      totalHours: Math.round((totalWorkMins / 60) * 10) / 10,
+      totalBreakHours: Math.round((totalBreakMins / 60) * 10) / 10,
+      daysPresent,
+      halfDays,
+      avgHours: daysPresent > 0 ? Math.round((totalWorkMins / 60 / daysPresent) * 10) / 10 : 0,
+      monthName: currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+    };
+  }, [currentDate, history]);
+
+  const startTimeStr = useMemo(() => {
+    if (viewMode === 'Week') return `${weekSummary.totalHours}h`;
+    if (viewMode === 'Month') return `${monthSummary.totalHours}h`;
+    if (!isToday) {
+      return selectedDayRecord?.checkInTime
+        ? new Date(selectedDayRecord.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+        : '--:--';
+    }
+    return todayAtt?.checkInTime
+      ? new Date(todayAtt.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      : '--:--';
+  }, [viewMode, isToday, selectedDayRecord, todayAtt, weekSummary, monthSummary]);
+
+  const lastSeenStr = useMemo(() => {
+    if (viewMode === 'Week') return `${weekSummary.avgHours} h/d`;
+    if (viewMode === 'Month') return `${monthSummary.avgHours} h/d`;
+    if (!isToday) {
+      return selectedDayRecord?.checkOutTime
+        ? new Date(selectedDayRecord.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+        : (selectedDayRecord?.checkInTime ? 'Incomplete' : '--:--');
+    }
+    return isCheckedOut
+      ? new Date(todayAtt.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      : (isCheckedIn ? 'Active Now' : '--:--');
+  }, [viewMode, isToday, selectedDayRecord, isCheckedOut, isCheckedIn, todayAtt, weekSummary, monthSummary]);
 
   const completedBreakMins = useMemo(() => {
     if (isCheckedIn && todayAtt?.checkInTime && !isCheckedOut) {
@@ -1726,9 +1917,14 @@ export default function EmployeeDashboard() {
     return att?.completedBreakMinutes ?? todayAtt?.completedBreakMinutes ?? todayAtt?.totalBreakMinutes ?? 0;
   }, [isCheckedIn, isCheckedOut, todayAtt, att, nowTick]);
 
-  const breakTimeStr = completedBreakMins > 0 ? formatDuration(completedBreakMins) : '00:00';
-
-
+  const breakTimeStr = useMemo(() => {
+    if (viewMode === 'Week') return `${weekSummary.totalBreakHours}h`;
+    if (viewMode === 'Month') return `${monthSummary.totalBreakHours}h`;
+    if (!isToday) {
+      return selectedDayRecord?.totalBreakMinutes ? formatDuration(selectedDayRecord.totalBreakMinutes) : '00:00';
+    }
+    return completedBreakMins > 0 ? formatDuration(completedBreakMins) : '00:00';
+  }, [viewMode, isToday, selectedDayRecord, completedBreakMins, weekSummary, monthSummary]);
 
   // Live net productive minutes — same clock as the hero timer, minus breaks
   const liveWorkMins = useMemo(() => {
@@ -1739,9 +1935,19 @@ export default function EmployeeDashboard() {
   }, [isCheckedIn, todayAtt, nowTick, hasActiveBreak, att]);
 
   const workBreakdownData = useMemo(() => {
-    const workMins = liveWorkMins;
-    const breakMins = completedBreakMins || 0;
-    const targetMins = 8 * 60;
+    let workMins = liveWorkMins;
+    let breakMins = completedBreakMins || 0;
+    if (!isToday && selectedDayRecord) {
+      workMins = selectedDayRecord.actualWorkMinutes || 0;
+      breakMins = selectedDayRecord.totalBreakMinutes || 0;
+    } else if (viewMode === 'Week') {
+      workMins = Math.round(weekSummary.totalHours * 60);
+      breakMins = Math.round(weekSummary.totalBreakHours * 60);
+    } else if (viewMode === 'Month') {
+      workMins = Math.round(monthSummary.totalHours * 60);
+      breakMins = Math.round(monthSummary.totalBreakHours * 60);
+    }
+    const targetMins = viewMode === 'Week' ? (5 * 8 * 60) : viewMode === 'Month' ? (22 * 8 * 60) : (8 * 60);
     const remainingMins = Math.max(0, targetMins - workMins - breakMins);
 
     return [
@@ -1754,17 +1960,17 @@ export default function EmployeeDashboard() {
       { 
         name: 'Completed Breaks', 
         value: breakMins, 
-        displayValue: `${breakMins}m`,
+        displayValue: `${Math.floor(breakMins / 60)}h ${breakMins % 60}m`,
         color: '#f59e0b' 
       },
       { 
-        name: 'Remaining Shift', 
+        name: viewMode === 'Day' ? 'Remaining Shift' : 'Pending Hours', 
         value: remainingMins, 
         displayValue: `${Math.floor(remainingMins / 60)}h ${remainingMins % 60}m`,
         color: '#334155' 
       },
     ];
-  }, [liveWorkMins, completedBreakMins]);
+  }, [liveWorkMins, completedBreakMins, isToday, selectedDayRecord, viewMode, weekSummary, monthSummary]);
 
   const paginatedHistory = useMemo(() => {
     const start = (historyPage - 1) * historyPageSize;
@@ -1822,14 +2028,11 @@ export default function EmployeeDashboard() {
         badgeText={`Active Mode: ${activeMethod?.replace('_', ' ').toUpperCase() || 'QR CODE'}`}
         rightActions={
           <button
-            onClick={() => {
-              fetchDashboard();
-              fetchHistory();
-            }}
+            onClick={handleRefreshAll}
             className="p-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm transition-colors"
             title="Refresh statistics"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={15} className={isRefreshing ? 'animate-spin text-violet-600' : ''} />
           </button>
         }
       />
@@ -2102,45 +2305,61 @@ export default function EmployeeDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiTile
           icon={Clock}
-          label="Start Time"
+          label={viewMode === 'Day' ? 'Start Time' : 'Total Work'}
           value={startTimeStr}
           variant="green"
-          subtext="First Punch"
+          subtext={viewMode === 'Day' ? (isToday ? 'First Punch' : 'Recorded Punch') : (viewMode === 'Week' ? 'Week Total' : 'Month Total')}
         />
         <KpiTile
           icon={Timer}
-          label="Working Time"
+          label={viewMode === 'Day' ? 'Working Time' : 'Attendance Days'}
           value={
-            <MainWorkTimerKpi
-              checkInTime={todayAtt?.checkInTime}
-              checkOutTime={todayAtt?.checkOutTime}
-              breaks={todayAtt?.breaks || []}
-              activeBreak={att?.activeBreak}
-            />
+            viewMode === 'Day' ? (
+              isToday ? (
+                <MainWorkTimerKpi
+                  checkInTime={todayAtt?.checkInTime}
+                  checkOutTime={todayAtt?.checkOutTime}
+                  breaks={todayAtt?.breaks || []}
+                  activeBreak={att?.activeBreak}
+                />
+              ) : (
+                selectedDayRecord ? formatDuration(selectedDayRecord.actualWorkMinutes || 0) : '00:00'
+              )
+            ) : (
+              `${viewMode === 'Week' ? weekSummary.daysPresent : monthSummary.daysPresent} Days`
+            )
           }
           variant="blue"
-          subtext={isCheckedIn ? 'Net Focus Time' : 'Offline'}
+          subtext={viewMode === 'Day' ? (isToday ? (isCheckedIn ? 'Net Focus Time' : 'Offline') : 'Recorded Hours') : 'Days Present'}
         />
         <KpiTile
           icon={Smartphone}
-          label="Last Seen"
+          label={viewMode === 'Day' ? 'Last Seen' : 'Daily Average'}
           value={lastSeenStr}
           variant="purple"
-          subtext={todayAtt?.checkInMethod?.replace('_', ' ').toUpperCase() || 'ENFORCED'}
+          subtext={viewMode === 'Day' ? (selectedDayRecord?.checkInMethod?.replace('_', ' ').toUpperCase() || 'ENFORCED') : 'Avg / Present Day'}
         />
         <KpiTile
           icon={Coffee}
           label="Break Time"
           value={breakTimeStr}
           variant="amber"
-          subtext="Deductions"
+          subtext={viewMode === 'Day' ? 'Deductions' : 'Total Breaks'}
         />
         <KpiTile
           icon={FileText}
-          label="Daily Work Log"
-          value={isLogSubmitted ? 'Submitted' : 'Mandatory'}
+          label={viewMode === 'Day' ? 'Daily Work Log' : 'Half-Days'}
+          value={
+            viewMode === 'Day' ? (
+              isToday
+                ? (isLogSubmitted ? 'Submitted' : 'Mandatory')
+                : (selectedDayRecord?.dailyLogSubmitted ? 'Submitted' : (selectedDayRecord ? 'Missing' : '--'))
+            ) : (
+              `${viewMode === 'Week' ? weekSummary.halfDays : monthSummary.halfDays} Days`
+            )
+          }
           variant={isLogSubmitted ? 'green' : 'amber'}
-          subtext="Step 1 Req"
+          subtext={viewMode === 'Day' ? 'Step 1 Req' : 'Recorded Half Days'}
           onClick={() => navigate('/daily-log')}
         />
         <KpiTile
@@ -2152,6 +2371,31 @@ export default function EmployeeDashboard() {
           onClick={() => navigate('/leave')}
         />
       </div>
+
+      {/* ── Date/View Mode Notice Banner when not on Today's Live Day View ── */}
+      {(!isToday || viewMode !== 'Day') && (
+        <div className="flex items-center justify-between gap-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200 text-xs text-violet-900 shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2.5 font-medium">
+            <Calendar size={16} className="text-violet-600 flex-shrink-0" />
+            <span>
+              {viewMode === 'Day'
+                ? `Viewing past attendance record for ${currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}`
+                : viewMode === 'Week'
+                ? `Viewing Weekly Summary (${weekSummary.startDateStr} – ${weekSummary.endDateStr})`
+                : `Viewing Monthly Summary (${monthSummary.monthName})`}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setCurrentDate(new Date());
+              setViewMode('Day');
+            }}
+            className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors flex-shrink-0"
+          >
+            Jump to Today
+          </button>
+        </div>
+      )}
 
       {/* ── Trusted Device Status ── */}
       {!isCheckedIn && <DeviceStatusCard deviceStatus={deviceStatus} navigate={navigate} />}
@@ -2200,7 +2444,234 @@ export default function EmployeeDashboard() {
 
       {/* ── Main Full-Width Attendance Action Panel — pastel soft card ── */}
       <div className="bg-white/80 backdrop-blur-sm rounded-3xl border border-white/90 p-5 shadow-[0_12px_32px_-14px_rgba(148,163,184,0.45),inset_0_1px_0_rgba(255,255,255,0.9)]">
-        {isCheckedIn && isCheckedOut ? (
+        {viewMode === 'Week' ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Calendar size={18} className="text-violet-600" />
+                  Weekly Attendance Breakdown
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Overview of hours and punch records for {weekSummary.startDateStr} – {weekSummary.endDateStr}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+                  {weekSummary.daysPresent} Days Present
+                </span>
+                <span className="px-3 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-xs font-bold">
+                  {weekSummary.totalHours}h Total Work
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {weekSummary.daysList.map((item, idx) => {
+                const isSelected = currentDate.toDateString() === item.date.toDateString();
+                const isItemToday = new Date().toDateString() === item.date.toDateString();
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setCurrentDate(item.date);
+                      setViewMode('Day');
+                    }}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md ${
+                      isSelected
+                        ? 'border-violet-400 bg-violet-50/70 shadow-sm ring-2 ring-violet-200'
+                        : isItemToday
+                        ? 'border-emerald-300 bg-emerald-50/40'
+                        : 'border-slate-200/80 bg-white hover:border-violet-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-800">{item.dayName}</span>
+                      {isItemToday && (
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                          TODAY
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-2">{item.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                    <div className="mb-2">
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        item.record?.status === 'present'
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                          : item.record?.status === 'half_day'
+                          ? 'bg-amber-100 text-amber-700 border-amber-300'
+                          : item.date > new Date()
+                          ? 'bg-slate-100 text-slate-400 border-slate-200'
+                          : 'bg-rose-100 text-rose-700 border-rose-200'
+                      }`}>
+                        {item.record ? item.record.status?.replace('_', ' ').toUpperCase() : (item.date > new Date() ? 'UPCOMING' : 'ABSENT')}
+                      </span>
+                    </div>
+                    <p className="text-sm font-black text-slate-800 font-mono">
+                      {item.hours > 0 ? `${item.hours}h` : '--'}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {item.record?.checkInTime ? new Date(item.record.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'No Punch'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : viewMode === 'Month' ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Calendar size={18} className="text-violet-600" />
+                  Monthly Attendance Overview · {monthSummary.monthName}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Monthly log of working hours, days present, and attendance status
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+                  {monthSummary.daysPresent} Days Present
+                </span>
+                <span className="px-3 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-xs font-bold">
+                  {monthSummary.totalHours}h Total Work
+                </span>
+              </div>
+            </div>
+
+            {monthSummary.monthRecs.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                No attendance records found for {monthSummary.monthName}.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
+                    <tr>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">First Punch</th>
+                      <th className="py-2.5 px-3">Last Punch</th>
+                      <th className="py-2.5 px-3">Working Time</th>
+                      <th className="py-2.5 px-3">Breaks</th>
+                      <th className="py-2.5 px-3">Method</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {monthSummary.monthRecs.map((rec, i) => (
+                      <tr key={i} className="hover:bg-slate-50/60 cursor-pointer" onClick={() => {
+                        if (rec.date) {
+                          setCurrentDate(new Date(rec.date));
+                          setViewMode('Day');
+                        }
+                      }}>
+                        <td className="py-2.5 px-3 font-bold text-slate-800">
+                          {new Date(rec.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' })}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            rec.status === 'present'
+                              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-100 text-amber-700 border-amber-200'
+                          }`}>
+                            {rec.status?.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600 font-mono">
+                          {rec.checkInTime ? new Date(rec.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600 font-mono">
+                          {rec.checkOutTime ? new Date(rec.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-slate-800 font-mono">
+                          {formatDuration(rec.actualWorkMinutes || 0)}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 font-mono">
+                          {formatDuration(rec.totalBreakMinutes || 0)}
+                        </td>
+                        <td className="py-2.5 px-3 uppercase text-violet-600 text-[10px] font-bold">
+                          {rec.checkInMethod?.replace('_', ' ') || 'QR'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : !isToday ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Calendar size={18} className="text-violet-600" />
+                  Past Attendance Record · {currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Historical attendance shift log and compliance status
+                </p>
+              </div>
+              <button
+                onClick={() => setCurrentDate(new Date())}
+                className="px-3.5 py-1.5 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-700 text-xs font-bold transition-colors"
+              >
+                ↩ Return to Today
+              </button>
+            </div>
+
+            {selectedDayRecord ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Attendance Status</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-base font-extrabold text-slate-800 uppercase">
+                      {selectedDayRecord.status?.replace('_', ' ') || 'PRESENT'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Method Used: <strong className="text-violet-600 uppercase">{selectedDayRecord.checkInMethod?.replace('_', ' ') || 'QR CODE'}</strong>
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Punch Timestamps</p>
+                  <p className="text-xs text-slate-700 mt-2">
+                    Check In: <strong className="font-mono">{selectedDayRecord.checkInTime ? new Date(selectedDayRecord.checkInTime).toLocaleTimeString('en-IN') : '--:--'}</strong>
+                  </p>
+                  <p className="text-xs text-slate-700 mt-1">
+                    Check Out: <strong className="font-mono">{selectedDayRecord.checkOutTime ? new Date(selectedDayRecord.checkOutTime).toLocaleTimeString('en-IN') : '--:--'}</strong>
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hours & Daily Log</p>
+                  <p className="text-xs text-slate-700 mt-2">
+                    Actual Work: <strong className="text-emerald-600 font-mono">{formatDuration(selectedDayRecord.actualWorkMinutes || 0)}</strong>
+                  </p>
+                  <p className="text-xs text-slate-700 mt-1">
+                    Daily Log: <strong>{selectedDayRecord.dailyLogSubmitted ? '✅ Log Sheet Submitted' : '⚠️ No Log Sheet on Record'}</strong>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-10 rounded-2xl bg-slate-50 border border-slate-200/70">
+                <Calendar size={36} className="mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-bold text-slate-700">No Attendance Recorded</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {currentDate > new Date() ? 'This is a future date.' : 'No punch-in was recorded for this day (Absent or Weekend).'}
+                </p>
+                <button
+                  onClick={() => setCurrentDate(new Date())}
+                  className="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs hover:bg-violet-700 shadow-xs"
+                >
+                  Return to Today
+                </button>
+              </div>
+            )}
+          </div>
+        ) : isCheckedIn && isCheckedOut ? (
           <DailyAttendanceReport attendance={{ ...todayAtt, breaks: todayAtt?.breaks || att?.breaks || [] }} />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -3085,8 +3556,8 @@ export default function EmployeeDashboard() {
                 </p>
                 
                 <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 mb-4">
-                  {warningCount < 5 ? (
-                    <p className="text-rose-600 font-semibold">Warning {warningCount} of 5</p>
+                  {geofenceAlertLevel < 5 ? (
+                    <p className="text-rose-600 font-semibold">Warning {geofenceAlertLevel} of 5</p>
                   ) : (
                     <>
                       <p className="text-rose-700 font-bold mb-1">Final Grace Period</p>

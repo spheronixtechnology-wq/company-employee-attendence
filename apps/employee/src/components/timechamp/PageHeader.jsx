@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Globe } from 'lucide-react';
 
 export default function PageHeader({
@@ -17,9 +17,23 @@ export default function PageHeader({
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const formattedDate = date instanceof Date
-    ? date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
-    : (date || new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }));
+  const formattedDate = useMemo(() => {
+    if (!(date instanceof Date)) return date || '';
+    if (viewMode === 'Week') {
+      const start = new Date(date);
+      const day = (start.getDay() + 6) % 7; // Monday = 0
+      start.setDate(start.getDate() - day);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const startStr = start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+      const endStr = end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+      return `${startStr} – ${endStr}`;
+    }
+    if (viewMode === 'Month') {
+      return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    }
+    return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+  }, [date, viewMode]);
 
   return (
     <div className="space-y-4 pb-2">

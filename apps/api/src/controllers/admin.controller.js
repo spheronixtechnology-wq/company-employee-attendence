@@ -471,6 +471,8 @@ const createOfficeLocation = async (req, res) => {
     });
 
     await newLocation.save();
+    emitToAll('attendance-setting:updated');
+    emitToAll('office-location:updated', { location: newLocation });
     return success(res, 'Office location created', { location: newLocation });
   } catch (error) {
     console.error('Error creating office location:', error);
@@ -504,6 +506,8 @@ const updateOfficeLocation = async (req, res) => {
     location.updatedBy = req.user._id;
 
     await location.save();
+    emitToAll('attendance-setting:updated');
+    emitToAll('office-location:updated', { location });
     return success(res, 'Office location updated', { location });
   } catch (error) {
     console.error('Error updating office location:', error);

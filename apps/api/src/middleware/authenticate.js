@@ -11,7 +11,9 @@ const authenticate = async (req, res, next) => {
   try {
     const portalRole = req.headers['x-portal-role'] || 'employee';
     const cookieName = `token_${portalRole}`;
-    const token = req.cookies?.[cookieName];
+    const authHeader = req.headers['authorization'];
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+    const token = req.cookies?.[cookieName] || bearerToken;
 
     if (!token) {
       return unauthorized(res, 'Authentication required. Please log in.');

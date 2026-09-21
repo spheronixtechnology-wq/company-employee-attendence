@@ -108,11 +108,26 @@ const userSchema = new mongoose.Schema(
       select: false,
       default: null,
     },
+    employeeId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// Auto-generate employeeId (EMP-0001 format) for new users
+userSchema.pre('save', async function (next) {
+  if (this.isNew && !this.employeeId) {
+    const count = await mongoose.model('User').countDocuments();
+    this.employeeId = `EMP-${String(count + 1).padStart(4, '0')}`;
+  }
+  next();
+});
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import {
   LayoutDashboard, FileText, Calendar, Smartphone,
   ClipboardList, User, LogOut, Menu, X, ChevronRight, Loader2, ShieldAlert, Clock
@@ -25,12 +26,27 @@ const navItems = [
 ];
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, setUser } = useAuth();
+  const { socket } = useSocket();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [deviceStatus, setDeviceStatus] = useState(null);
   const [checkingDevice, setCheckingDevice] = useState(true);
+
+  // Real-time synchronization of profile photo & employee info across devices
+  useEffect(() => {
+    if (!socket) return;
+    const onProfileUpdated = (data) => {
+      if (data?.user && setUser) {
+        setUser(data.user);
+      }
+    };
+    socket.on('user:profile_updated', onProfileUpdated);
+    return () => {
+      socket.off('user:profile_updated', onProfileUpdated);
+    };
+  }, [socket, setUser]);
 
   useEffect(() => {
     const checkDevice = async () => {

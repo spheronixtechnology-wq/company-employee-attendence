@@ -12,6 +12,7 @@ const isPunchUser = [authenticate, authorize('employee', 'manager')];
 const isAnyUser = [authenticate, authorize('employee', 'manager', 'admin')];
 
 router.get('/status', employeeController.getStatus);
+router.get('/notifications', isEmployee, employeeController.getMyNotifications);
 
 // Dashboard
 router.get('/dashboard', isEmployee, employeeController.getDashboard);
@@ -25,6 +26,10 @@ router.post('/attendance/send-report', isEmployee, employeeController.sendDailyR
 router.get('/network-status', isEmployee, employeeController.getNetworkStatus);
 router.post('/presence/ping', isEmployee, employeeController.recordPresencePing);
 router.post('/presence/reason', isEmployee, employeeController.submitOutOfBoundsReason);
+
+// Geofence session
+router.get('/attendance/geofence/session', isEmployee, employeeController.getGeofenceSession);
+router.post('/attendance/geofence/auto-checkout', isEmployee, employeeController.geofenceAutoCheckout);
 
 // Profile
 router.put('/profile', isAnyUser, employeeController.updateProfile);

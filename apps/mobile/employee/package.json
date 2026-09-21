@@ -1,0 +1,35 @@
+{
+  "name": "attendance-mobile-employee",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.20.0",
+    "expo": "~57.0.24",
+    "expo-application": "~57.0.3",
+    "expo-av": "^16.0.8",
+    "expo-camera": "~57.0.5",
+    "expo-constants": "~57.0.19",
+    "expo-device": "~57.0.2",
+    "expo-document-picker": "~57.0.2",
+    "expo-image-picker": "~57.0.19",
+    "expo-local-authentication": "~57.0.3",
+    "expo-location": "~57.0.19",
+    "expo-secure-store": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.19",
+    "lucide-react-native": "^1.47.0",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
+    "socket.io-client": "^4.8.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild",
+    "test": "node test-work-metrics.js && node test-checkin-modalities.js && node test-geofence-state-machine.js && node test-checkout-synchronization.js && node test-phase7-compliance.js",
+    "export": "expo export --platform android"
+  },
+  "private": true
+}

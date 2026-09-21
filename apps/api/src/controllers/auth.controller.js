@@ -52,7 +52,7 @@ const login = async (req, res, next) => {
     const portalRole = req.headers['x-portal-role'] || result.user?.role || 'employee';
     res.cookie(`token_${portalRole}`, result.token, authService.getCookieOptions());
 
-    return success(res, 'Login successful', { user: result.user });
+    return success(res, 'Login successful', { user: result.user, token: result.token });
   } catch (err) {
     if (err.statusCode) {
       return res.status(err.statusCode).json({

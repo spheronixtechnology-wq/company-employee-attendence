@@ -5,11 +5,13 @@ import {
   ChevronRight, RefreshCw, Info, Check, ShieldAlert, ArrowRight
 } from 'lucide-react';
 import api from '../lib/api';
+import { useSocket } from '../contexts/SocketContext';
 import PageHeader from '../components/timechamp/PageHeader';
 import KpiTile from '../components/timechamp/KpiTile';
 import Panel from '../components/timechamp/Panel';
 
 export default function OvertimePage() {
+  const { socket } = useSocket();
   const [data, setData] = useState({ records: [], stats: {} });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,6 +61,39 @@ export default function OvertimePage() {
   useEffect(() => {
     fetchOvertime();
   }, [fetchOvertime]);
+
+  // Real-time sync: manager resolves overtime permission or work verification
+  useEffect(() => {
+    if (!socket) return;
+
+    const onPermissionResolved = (payload) => {
+      fetchOvertime(true);
+      const approved = payload?.status === 'permission_approved';
+      if (approved) {
+        setSuccessMsg('✅ Your overtime permission request has been approved. You can now start your session.');
+      } else {
+        setErrorMsg(`❌ Your overtime request was rejected.${payload?.notes ? ` Note: ${payload.notes}` : ''}`);
+      }
+    };
+
+    const onWorkResolved = (payload) => {
+      fetchOvertime(true);
+      const approved = payload?.status === 'completed_approved';
+      if (approved) {
+        setSuccessMsg('✅ Your overtime work has been verified and approved.');
+      } else {
+        setErrorMsg(`❌ Your overtime work submission was not approved.${payload?.notes ? ` Note: ${payload.notes}` : ''}`);
+      }
+    };
+
+    socket.on('overtime:permission_resolved', onPermissionResolved);
+    socket.on('overtime:work_resolved', onWorkResolved);
+
+    return () => {
+      socket.off('overtime:permission_resolved', onPermissionResolved);
+      socket.off('overtime:work_resolved', onWorkResolved);
+    };
+  }, [socket, fetchOvertime]);
 
   // Active in-progress stopwatch
   const activeSession = data.stats?.activeSession;

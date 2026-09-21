@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 import {
@@ -9,6 +9,8 @@ import {
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
+  // Derive display ID from MongoDB _id (matches mobile 'EMP-001' pattern)
+  const empDisplayId = user?.employeeId || null;
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -21,6 +23,17 @@ export default function ProfilePage() {
   const [message, setMessage] = useState(null);
 
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!isEditing && user) {
+      setFormData({
+        name: user.name || '',
+        phone: user.phone || '',
+        designation: user.designation || '',
+      });
+      setAvatarPreview(user.avatarUrl || null);
+    }
+  }, [user, isEditing]);
 
   const handleEditClick = () => {
     setFormData({
@@ -232,11 +245,16 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-center sm:justify-start gap-2">
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                 <h2 className="text-xl font-bold text-slate-800">{isEditing ? formData.name || 'Your Name' : user?.name}</h2>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100/80 text-violet-600 capitalize">
                   {user?.role || 'employee'}
                 </span>
+                {empDisplayId && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500 font-mono tracking-wide">
+                    ID: {empDisplayId}
+                  </span>
+                )}
               </div>
               <p className="text-slate-400 text-sm mt-0.5">{user?.email}</p>
               {(isEditing ? formData.designation || user?.designation : user?.designation) && (
@@ -263,6 +281,15 @@ export default function ProfilePage() {
         {!isEditing ? (
           <div className="pt-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {empDisplayId && (
+                <div className="p-3.5 bg-violet-50/60 rounded-2xl border border-violet-100 shadow-[inset_0_2px_8px_-4px_rgba(148,163,184,0.3)]">
+                  <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-1">
+                    <Shield size={13} className="text-violet-500" /> Employee ID
+                  </div>
+                  <p className="text-slate-800 text-sm font-bold font-mono tracking-wide">{empDisplayId}</p>
+                </div>
+              )}
+
               <div className="p-3.5 bg-white/70 rounded-2xl border border-violet-50 shadow-[inset_0_2px_8px_-4px_rgba(148,163,184,0.3)]">
                 <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-1">
                   <User size={13} className="text-violet-500" /> Full Name

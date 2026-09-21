@@ -27,6 +27,7 @@ const { emitToTeam, emitToManagers, emitToAdmins, emitToUser } = require('../soc
 const crypto = require('crypto');
 const webauthnService = require('../services/webauthn.service');
 const { getActiveOfficeQr, verifyOfficeQrPayload } = require('../utils/qrUtils');
+const geofenceSessionService = require('../services/geofenceSession.service');
 
 // In-memory active checkout sessions: Map<userIdStr, { token: string, expiresAt: number }>
 const activeCheckoutSessions = new Map();
@@ -191,7 +192,13 @@ const getDashboard = async (req, res) => {
 
     const { deviceStatus, pendingRequest } = await computeDeviceStatus(userId);
 
+    const activeOffice = await OfficeLocation.findOne({ status: 'active' }).lean();
+    const officeRadius = activeOffice?.radiusMeters || 100;
+
+    const userPayload = await authService.buildUserPayload(req.user);
+
     return success(res, 'Dashboard data fetched', {
+      user: userPayload,
       attendance: {
         attendance: formattedAttendance,
         activeBreak,
@@ -204,6 +211,14 @@ const getDashboard = async (req, res) => {
       managerDefaultMethod: activeMethod,
       allowedMethods,
       heartbeatMonitoringEnabled,
+      officeRadius,
+      officeLocation: activeOffice ? {
+        id: activeOffice._id,
+        officeName: activeOffice.officeName,
+        latitude: activeOffice.latitude,
+        longitude: activeOffice.longitude,
+        radiusMeters: activeOffice.radiusMeters,
+      } : null,
       deviceStatus,
       pendingLeaves,
       unreadNotifications,
@@ -727,6 +742,12 @@ const checkOut = async (req, res) => {
     
     await attendance.save();
 
+    // Cancel any active geofence session — attendance is now closed
+    // (fire-and-forget: do not block checkout if this fails)
+    geofenceSessionService.cancelSession(userId, attendance._id).catch((err) =>
+      console.error('[checkOut] cancelSession failed (non-fatal):', err.message)
+    );
+
     // Synchronize daily log hours with finalized actual work duration
     if (dailyLog && metrics.actualWorkMinutes > 0) {
       dailyLog.hoursSpent = Math.round((metrics.actualWorkMinutes / 60) * 10) / 10;
@@ -1049,6 +1070,16 @@ const submitDailyLog = async (req, res) => {
       file: req.file,
     });
 
+    // Real-time synchronization across web & mobile portals
+    try {
+      emitToUser(userId, 'attendance:update', {
+        dailyLogSubmitted: true,
+        todayLog: log,
+      });
+    } catch (socketErr) {
+      console.warn('Socket notification error on submitDailyLog:', socketErr.message);
+    }
+
     return success(res, 'Daily log submitted successfully', { log });
   } catch (error) {
     console.error('Submit daily log error:', error);
@@ -1222,6 +1253,14 @@ const updateProfile = async (req, res) => {
     }
 
     const userPayload = await authService.buildUserPayload(updatedUser);
+
+    // Broadcast real-time profile/avatar update to all user devices & sessions
+    try {
+      emitToUser(userId, 'user:profile_updated', { user: userPayload });
+    } catch (socketErr) {
+      console.warn('Socket notification error on updateProfile:', socketErr.message);
+    }
+
     return success(res, 'Profile updated successfully', { user: userPayload });
   } catch (error) {
     console.error('Update profile error:', error);
@@ -1354,47 +1393,16 @@ const getMyManualAttendanceRequests = async (req, res) => {
   }
 };
 
-module.exports = {
-  getStatus,
-  getDashboard,
-  checkIn,
-  initiateCheckout,
-  checkOut,
-  sendDailyReport,
-  getCurrentQrCode,
-  requestDeviceApproval,
-  getDeviceStatus,
-  getMyDeviceRequests,
-  startBreak,
-  endBreak,
-  getDailyLog,
-  submitDailyLog,
-  getLeaveTypes,
-  getLeaveBalance,
-  getMyLeaveRequests,
-  applyForLeave,
-  getMyAttendanceHistory,
-  updateProfile,
-  getNetworkStatus,
-  requestManualAttendance,
-  getMyManualAttendanceRequests,
-};
-
 const recordPresencePing = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { currentWarningCount, lat, lng } = req.body;
+    const { lat, lng, accuracy } = req.body;
     const today = getTodayDateString();
 
+    // Update heartbeat on attendance record
     const attendance = await Attendance.findOneAndUpdate(
       { userId, date: today, checkInTime: { $ne: null }, checkOutTime: null },
-      { 
-        $set: { 
-          lastHeartbeatAt: new Date(),
-          heartbeatStatus: 'HEALTHY',
-          currentWarningCount: currentWarningCount || 0
-        }
-      },
+      { $set: { lastHeartbeatAt: new Date(), heartbeatStatus: 'HEALTHY' } },
       { new: true }
     );
 
@@ -1402,35 +1410,145 @@ const recordPresencePing = async (req, res) => {
       return badRequest(res, 'No active attendance session found to ping.');
     }
 
-    let isOutOfBounds = false;
-    let distanceMeters = null;
-    let radiusMeters = null;
-    
-    // Check geofence if lat/lng provided
-    if (lat && lng) {
-      const office = await OfficeLocation.findOne({ status: 'active' });
-      if (office && office.latitude && office.longitude) {
-        const result = isWithinGeofence(
-          lat,
-          lng,
-          office.latitude,
-          office.longitude,
-          office.radiusMeters ?? 100
-        );
-        isOutOfBounds = !result.inside;
-        distanceMeters = typeof result?.distanceMeters === 'number' ? Math.round(result.distanceMeters) : null;
-        radiusMeters = typeof result?.radiusMeters === 'number' ? Math.round(result.radiusMeters) : null;
-      }
+    // Delegate entirely to geofence session service (backend owns all state)
+    const result = await geofenceSessionService.processLocationUpdate({
+      employeeId:   userId,
+      attendanceId: attendance._id,
+      lat:      lat      ?? null,
+      lng:      lng      ?? null,
+      accuracy: accuracy ?? 0,
+    });
+
+    // Keep isOutOfBounds for any legacy frontend consumers
+    result.isOutOfBounds = result.currentAlertLevel > 0 &&
+      (result.geofenceStatus === 'OUTSIDE' || result.geofenceStatus === 'RETURNING');
+
+    if (result.radius !== undefined && result.officeRadius === undefined) {
+      result.officeRadius = result.radius;
     }
 
-    return success(res, 'Ping recorded successfully', {
-      isOutOfBounds,
-      distanceMeters,
-      radiusMeters,
-    });
+    return success(res, 'Ping recorded successfully', result);
   } catch (error) {
     console.error('recordPresencePing error:', error);
     return badRequest(res, 'Failed to record ping');
+  }
+};
+
+/**
+ * GET /api/employee/attendance/geofence/session
+ * Returns the currently ACTIVE geofence session for the employee.
+ * Used by the client on page load / app start to restore alert state without
+ * restarting the alert sequence.
+ */
+const getGeofenceSession = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today  = getTodayDateString();
+
+    const attendance = await Attendance.findOne({
+      userId,
+      date: today,
+      checkInTime:  { $ne: null },
+      checkOutTime: null,
+    });
+
+    if (!attendance) {
+      return success(res, 'No active attendance', { hasActiveSession: false });
+    }
+
+    const payload = await geofenceSessionService.getSessionRestorePayload(
+      userId,
+      attendance._id
+    );
+
+    if (payload?.radius !== undefined && payload.officeRadius === undefined) {
+      payload.officeRadius = payload.radius;
+    }
+
+    return success(res, 'Geofence session state fetched', payload);
+  } catch (error) {
+    console.error('getGeofenceSession error:', error);
+    return badRequest(res, 'Failed to fetch geofence session');
+  }
+};
+
+/**
+ * POST /api/employee/attendance/geofence/auto-checkout
+ * Validates all conditions and executes geofence-triggered auto-checkout.
+ * The backend is the authority — a stale frontend timer cannot cause incorrect checkout.
+ *
+ * Validation: session ACTIVE + Alert 5 + grace expired + attendance still open.
+ */
+const geofenceAutoCheckout = async (req, res) => {
+  try {
+    const userId     = req.user._id;
+    const { sessionId } = req.body;
+    const today      = getTodayDateString();
+
+    if (!sessionId) {
+      return badRequest(res, 'sessionId is required.');
+    }
+
+    const attendance = await Attendance.findOne({
+      userId,
+      date: today,
+      checkInTime:  { $ne: null },
+      checkOutTime: null,
+    });
+
+    // Full backend revalidation — all conditions must hold
+    const check = await geofenceSessionService.validateAutoCheckout(
+      sessionId,
+      attendance?._id
+    );
+
+    if (!check.ok) {
+      // Condition not met (employee returned, already checked out, etc.) — safe no-op
+      console.log(`[geofenceAutoCheckout] Rejected for ${userId}: ${check.reason}`);
+      return success(res, 'Auto-checkout condition not met', {
+        autoCheckedOut: false,
+        reason: check.reason,
+      });
+    }
+
+    // Execute checkout
+    const { attendance: att } = check;
+    const checkOutTime = new Date();
+    const metrics = finalizeAttendanceCheckout(att, checkOutTime);
+    att.status             = 'incomplete';
+    att.checkOutTime       = checkOutTime;
+    att.autoCheckedOut     = true;
+    att.autoCheckoutAt     = checkOutTime;
+    att.autoCheckoutReason = 'GEOFENCE_GRACE_EXPIRED';
+    await att.save();
+
+    // Mark geofence session terminal
+    await geofenceSessionService.markAutoCheckedOut(sessionId);
+
+    // Notify managers
+    const teamId = req.user.teamId?._id || req.user.teamId;
+    emitToManagers('attendance:auto_checkout', {
+      userId,
+      userName: req.user.name,
+      teamId,
+      reason: 'GEOFENCE_GRACE_EXPIRED',
+    });
+    if (teamId) {
+      emitToTeam(teamId, 'attendance:update', {
+        type: 'auto_checkout',
+        userId,
+        userName: req.user.name,
+        reason: 'GEOFENCE_GRACE_EXPIRED',
+      });
+    }
+
+    return success(res, 'Auto-checkout completed', {
+      autoCheckedOut: true,
+      checkOutTime: checkOutTime.toISOString(),
+    });
+  } catch (error) {
+    console.error('geofenceAutoCheckout error:', error);
+    return badRequest(res, 'Auto-checkout failed');
   }
 };
 
@@ -1501,6 +1619,21 @@ const submitOutOfBoundsReason = async (req, res) => {
   }
 };
 
+/**
+ * Get employee notifications
+ */
+const getMyNotifications = async (req, res) => {
+  try {
+    const notifications = await Notification.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    return success(res, 'Notifications fetched successfully', { notifications });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return badRequest(res, 'Failed to fetch notifications');
+  }
+};
+
 module.exports = {
   getStatus,
   getDashboard,
@@ -1527,4 +1660,8 @@ module.exports = {
   getMyManualAttendanceRequests,
   recordPresencePing,
   submitOutOfBoundsReason,
+  // Geofence session
+  getGeofenceSession,
+  geofenceAutoCheckout,
+  getMyNotifications,
 };

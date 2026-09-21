@@ -7,5 +7,6 @@ router.post('/enroll/options', biometricController.getEnrollOptions);
 router.post('/enroll/verify', biometricController.verifyEnroll);
 router.post('/auth/options', biometricController.getAuthOptions);
 router.post('/auth/verify', biometricController.verifyAuth);
+router.post('/mobile-verify', biometricController.mobileVerify);
 
 module.exports = router;

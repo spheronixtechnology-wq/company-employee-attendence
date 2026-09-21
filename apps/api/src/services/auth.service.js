@@ -38,6 +38,7 @@ const buildUserPayload = async (user) => {
     designation: user.designation,
     avatarUrl: user.avatarUrl,
     mfaEnabled: !!user.mfaEnabled,
+    employeeId: user.employeeId || null,
   };
 
   if (user.role === 'manager') {
