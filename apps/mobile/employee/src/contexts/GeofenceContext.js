@@ -59,6 +59,10 @@ export function GeofenceProvider({
           setOfficeRadius(Number(r));
         }
 
+        if (data.distance !== undefined && data.distance !== null) {
+          setDistance(Math.round(data.distance));
+        }
+
         if (level > 0) {
           setWarningModalOpen(true);
         }

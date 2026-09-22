@@ -25,6 +25,10 @@ const managerPermissionSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
+      canViewAllDepartments: {
+        type: Boolean,
+        default: false,
+      },
     },
   },
   {

@@ -72,7 +72,7 @@ TaskManager.defineTask(PRESENCE_TASK_NAME, async ({ data, error }) => {
   }
 });
 
-let foregroundInterval = null;
+let foregroundSubscription = null;
 
 /**
  * Start Foreground Service with persistent sticky ongoing notification
@@ -106,20 +106,26 @@ export async function startPresenceTracking() {
     await Location.requestForegroundPermissionsAsync().catch(() => {});
   }
 
-  // Also maintain an active in-app 30s timer while app is alive in foreground
-  if (!foregroundInterval) {
-    foregroundInterval = setInterval(async () => {
-      try {
-        const loc = await Location.getCurrentPositionAsync({
+  // Use watchPositionAsync for highly reliable foreground tracking (works perfectly in Expo Go)
+  if (!foregroundSubscription) {
+    try {
+      foregroundSubscription = await Location.watchPositionAsync(
+        {
           accuracy: Location.Accuracy.Balanced,
-        });
-        if (loc?.coords) {
-          await sendPresencePing(loc.coords);
+          timeInterval: 15000, // Emit every 15 seconds
+          distanceInterval: 5, // Or every 5 meters
+        },
+        async (loc) => {
+          if (loc && loc.coords) {
+            console.log('[watchPositionAsync] Got fresh coords:', loc.coords.latitude, loc.coords.longitude);
+            await sendPresencePing(loc.coords);
+          }
         }
-      } catch (err) {
-        // Location acquire failure
-      }
-    }, 30000);
+      );
+      console.log('✅ Foreground watchPositionAsync started.');
+    } catch (err) {
+      console.error('[watchPositionAsync] failed to start:', err.message);
+    }
   }
 }
 
@@ -127,9 +133,10 @@ export async function startPresenceTracking() {
  * Stop Foreground Service and clear ping timer upon checkout
  */
 export async function stopPresenceTracking() {
-  if (foregroundInterval) {
-    clearInterval(foregroundInterval);
-    foregroundInterval = null;
+  if (foregroundSubscription) {
+    foregroundSubscription.remove();
+    foregroundSubscription = null;
+    console.log('🛑 Foreground watchPositionAsync stopped.');
   }
 
   if (!isAndroidExpoGo) {

@@ -14,6 +14,7 @@ import { getDeviceSignals } from '../lib/device';
 import { getStabilizedLocation } from '../lib/location';
 import { authenticateAndGetBiometricToken, checkBiometricAvailability } from '../lib/biometrics';
 import CheckInQrScanner from './CheckInQrScanner';
+import * as Network from 'expo-network';
 
 export default function CheckInModal({
   visible,
@@ -62,6 +63,16 @@ export default function CheckInModal({
   const fetchNetworkStatus = async () => {
     setLoadingNetwork(true);
     try {
+      const netState = await Network.getNetworkStateAsync();
+      if (netState.type === Network.NetworkStateType.CELLULAR) {
+        setNetworkStatus({ 
+          isOfficeNetwork: false, 
+          error: 'You are on Mobile Data. Please connect to Office Wi-Fi.' 
+        });
+        setLoadingNetwork(false);
+        return;
+      }
+
       const res = await api.get('/employee/network-status');
       if (res.data?.success) {
         setNetworkStatus(res.data.data);
@@ -329,11 +340,13 @@ export default function CheckInModal({
                     <Text
                       style={[
                         styles.networkVal,
-                        { color: networkStatus?.isOfficeNetwork ? '#059669' : '#d97706' },
+                        { color: networkStatus?.error ? '#dc2626' : (networkStatus?.isOfficeNetwork ? '#059669' : '#d97706') },
                       ]}
                     >
                       {loadingNetwork
                         ? 'Checking...'
+                        : networkStatus?.error
+                        ? networkStatus.error
                         : networkStatus?.isOfficeNetwork
                         ? 'Connected to Office Network'
                         : 'Checking server egress IP'}

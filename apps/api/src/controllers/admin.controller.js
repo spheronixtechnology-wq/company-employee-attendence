@@ -929,6 +929,7 @@ const getManagerPermissions = async (req, res) => {
       canEditAttendance: false,
       canAddPerformanceNotes: true,
       canViewTeamReports: true,
+      canViewAllDepartments: false,
     };
 
     const result = managers.map(m => ({
@@ -972,6 +973,7 @@ const updateManagerPermission = async (req, res) => {
           'permissions.canEditAttendance': !!permissions.canEditAttendance,
           'permissions.canAddPerformanceNotes': !!permissions.canAddPerformanceNotes,
           'permissions.canViewTeamReports': !!permissions.canViewTeamReports,
+          'permissions.canViewAllDepartments': !!permissions.canViewAllDepartments,
         },
       },
       { upsert: true, new: true }

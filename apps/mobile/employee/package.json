@@ -14,7 +14,9 @@
     "expo-image-picker": "~57.0.19",
     "expo-local-authentication": "~57.0.3",
     "expo-location": "~57.0.19",
+    "expo-network": "~57.0.2",
     "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-task-manager": "~57.0.19",
     "lucide-react-native": "^1.47.0",
@@ -30,6 +32,13 @@
     "prebuild": "expo prebuild",
     "test": "node test-work-metrics.js && node test-checkin-modalities.js && node test-geofence-state-machine.js && node test-checkout-synchronization.js && node test-phase7-compliance.js",
     "export": "expo export --platform android"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["expo-av"]
+      }
+    }
   },
   "private": true
 }

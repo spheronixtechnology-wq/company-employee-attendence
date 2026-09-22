@@ -35,6 +35,13 @@ const { formatDeviceLabel } = require('../utils/deviceUtils');
  */
 const getManagedTeams = async (user) => {
   const userId = user._id || user;
+  
+  // Check if manager has permission to view all departments
+  const perm = await ManagerPermission.findOne({ userId });
+  if (perm && perm.permissions?.canViewAllDepartments) {
+    return await Team.find({ isActive: true });
+  }
+
   let teamId = user.teamId?._id || user.teamId;
   if (!teamId && user._id) {
     const userDoc = await User.findById(userId).select('teamId');
@@ -68,10 +75,10 @@ const getTeamMemberIds = async (teamIds, excludeUserId = null) => {
 };
 
 const checkManagerPermission = async (managerId, permissionKey) => {
-  const perm = await ManagerPermission.findOne({ managerId });
+  const perm = await ManagerPermission.findOne({ userId: managerId });
   // If no permission doc, default to allow. Otherwise check the specific key.
-  if (!perm) return true;
-  return perm[permissionKey] !== false;
+  if (!perm || !perm.permissions) return true;
+  return perm.permissions[permissionKey] !== false;
 };
 
 // --- Endpoints ---

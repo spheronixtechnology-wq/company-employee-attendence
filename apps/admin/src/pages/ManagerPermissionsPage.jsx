@@ -110,7 +110,8 @@ export default function ManagerPermissionsPage() {
         m.permissions?.canApproveLeaves &&
         m.permissions?.canEditAttendance &&
         m.permissions?.canAddPerformanceNotes &&
-        m.permissions?.canViewTeamReports
+        m.permissions?.canViewTeamReports &&
+        m.permissions?.canViewAllDepartments
     ).length;
 
     return {
@@ -141,7 +142,8 @@ export default function ManagerPermissionsPage() {
           m.permissions?.canApproveLeaves &&
           m.permissions?.canEditAttendance &&
           m.permissions?.canAddPerformanceNotes &&
-          m.permissions?.canViewTeamReports
+          m.permissions?.canViewTeamReports &&
+          m.permissions?.canViewAllDepartments
         );
       }
       return true;
@@ -270,7 +272,7 @@ export default function ManagerPermissionsPage() {
           icon={Shield}
           value={stats.fullAccess}
           label="Full Authority"
-          subtext="All 4 Privileges Active"
+          subtext="All 5 Privileges Active"
           variant="emerald"
         />
       </div>
@@ -352,6 +354,7 @@ export default function ManagerPermissionsPage() {
                 permissions.canEditAttendance,
                 permissions.canAddPerformanceNotes,
                 permissions.canViewTeamReports,
+                permissions.canViewAllDepartments,
               ].filter(Boolean).length;
 
               return (
@@ -375,14 +378,14 @@ export default function ManagerPermissionsPage() {
                           </span>
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                              activeCount === 4
+                              activeCount === 5
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : activeCount > 0
                                 ? 'bg-sky-50 text-sky-700 border-sky-200'
                                 : 'bg-slate-100 text-slate-600 border-slate-200'
                             }`}
                           >
-                            {activeCount}/4 Privileges Active
+                            {activeCount}/5 Privileges Active
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 font-mono truncate mt-0.5">{manager.email}</p>
@@ -423,8 +426,8 @@ export default function ManagerPermissionsPage() {
                     </div>
                   </div>
 
-                  {/* 4 Interactive Permission Toggles */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-5">
+                  {/* 5 Interactive Permission Toggles */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-5">
                     <PermissionToggle
                       id={`perm-leaves-${manager._id}`}
                       label="Approve Leaves"
@@ -456,6 +459,14 @@ export default function ManagerPermissionsPage() {
                       icon={<ShieldCheck size={18} />}
                       isActive={permissions.canViewTeamReports}
                       onToggle={() => togglePermission(manager._id, 'canViewTeamReports')}
+                    />
+                    <PermissionToggle
+                      id={`perm-all-depts-${manager._id}`}
+                      label="All Depts Data"
+                      description="Access all departments & teams"
+                      icon={<Users size={18} />}
+                      isActive={permissions.canViewAllDepartments}
+                      onToggle={() => togglePermission(manager._id, 'canViewAllDepartments')}
                     />
                   </div>
                 </div>

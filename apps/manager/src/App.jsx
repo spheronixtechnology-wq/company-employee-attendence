@@ -418,68 +418,86 @@ const TeamMembersPage = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {data.members.map(member => (
-          <div
-            key={member._id}
-            onClick={() => setSelectedMemberId(member._id)}
-            className="card relative overflow-hidden flex flex-col justify-between border-slate-200 hover:border-violet-300 hover:shadow-lg transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
-          >
-            <div className="flex items-start gap-3.5">
-              {member.avatarUrl ? (
-                <img
-                  src={member.avatarUrl}
-                  alt={member.name}
-                  className="w-11 h-11 rounded-xl object-cover flex-shrink-0 shadow-sm ring-1 ring-violet-200 group-hover:scale-105 transition-transform"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextSibling.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div
-                className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform"
-                style={{ display: member.avatarUrl ? 'none' : 'flex' }}
-              >
-                {member.name?.[0]?.toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-slate-900 font-bold truncate group-hover:text-violet-600 transition-colors">{member.name}</p>
-                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                    member.currentStatus === 'checked_in' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                    member.currentStatus === 'on_break' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                      member.currentStatus === 'checked_out' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                      'bg-slate-100 text-slate-600 border border-slate-200'
-                    }`}>
-                      {member.currentStatus === 'checked_in' ? '● Working' :
-                       member.currentStatus === 'on_break' ? '☕ On Break' :
-                       member.currentStatus === 'checked_out' ? '✓ Checked Out' : 'Offline'}
-                    </span>
-                    <button
-                      onClick={(e) => openDelete(member, e)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="Archive Member"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                <p className="text-slate-600 text-xs mt-0.5 truncate">{member.designation || 'Employee'}</p>
-                <p className="text-slate-500 text-xs truncate">{member.email}</p>
-              </div>
-            </div>
-            <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-              <span>Team: {member.teamId?.name || 'Unassigned'}</span>
-              <span className="text-violet-600 font-medium group-hover:underline flex items-center gap-1">
-                View Profile & Records &rarr;
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-      {data.members.length === 0 && (
+      {data.members.length === 0 ? (
         <div className="card text-center py-12 text-slate-500">
           No team members found in your assigned team(s).
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {Object.values(
+            data.members.reduce((acc, member) => {
+              const teamId = member.teamId?._id || 'unassigned';
+              const teamName = member.teamId?.name || 'Unassigned';
+              if (!acc[teamId]) acc[teamId] = { name: teamName, members: [] };
+              acc[teamId].members.push(member);
+              return acc;
+            }, {})
+          ).sort((a, b) => a.name.localeCompare(b.name)).map(group => (
+            <div key={group.name} className="space-y-4 mt-2">
+              <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
+                {group.name} <span className="text-sm font-normal text-slate-500 ml-2">· {group.members.length} member{group.members.length === 1 ? '' : 's'}</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {group.members.map(member => (
+                  <div
+                    key={member._id}
+                    onClick={() => setSelectedMemberId(member._id)}
+                    className="card relative overflow-hidden flex flex-col justify-between border-slate-200 hover:border-violet-300 hover:shadow-lg transition-all duration-200 cursor-pointer group hover:-translate-y-0.5"
+                  >
+                    <div className="flex items-start gap-3.5">
+                      {member.avatarUrl ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt={member.name}
+                          className="w-11 h-11 rounded-xl object-cover flex-shrink-0 shadow-sm ring-1 ring-violet-200 group-hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white font-bold text-base flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform"
+                        style={{ display: member.avatarUrl ? 'none' : 'flex' }}
+                      >
+                        {member.name?.[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-slate-900 font-bold truncate group-hover:text-violet-600 transition-colors">{member.name}</p>
+                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                            member.currentStatus === 'checked_in' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            member.currentStatus === 'on_break' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                              member.currentStatus === 'checked_out' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                              'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                              {member.currentStatus === 'checked_in' ? '● Working' :
+                               member.currentStatus === 'on_break' ? '☕ On Break' :
+                               member.currentStatus === 'checked_out' ? '✓ Checked Out' : 'Offline'}
+                            </span>
+                            <button
+                              onClick={(e) => openDelete(member, e)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Archive Member"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        <p className="text-slate-600 text-xs mt-0.5 truncate">{member.designation || 'Employee'}</p>
+                        <p className="text-slate-500 text-xs truncate">{member.email}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                      <span>Team: {member.teamId?.name || 'Unassigned'}</span>
+                      <span className="text-violet-600 font-medium group-hover:underline flex items-center gap-1">
+                        View Profile & Records &rarr;
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
