@@ -81,23 +81,29 @@ export async function startPresenceTracking() {
   if (!isAndroidExpoGo) {
     const hasStarted = await Location.hasStartedLocationUpdatesAsync(PRESENCE_TASK_NAME).catch(() => false);
     if (!hasStarted) {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        try {
-          await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 30000, // 30 seconds
-            distanceInterval: 10, // 10 meters
-            deferredUpdatesInterval: 30000,
-            foregroundService: {
-              notificationTitle: 'Spheronix Active Shift Tracking',
-              notificationBody: 'Attendance geofence monitoring is active.',
-              notificationColor: '#6366f1',
-            },
-          });
-          console.log('✅ Android Foreground Service location updates started.');
-        } catch (e) {
-          console.log('Location.startLocationUpdatesAsync notice:', e.message);
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus === 'granted') {
+        // MUST request background permissions before starting a background task, otherwise Android throws a fatal SecurityException
+        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus === 'granted') {
+          try {
+            await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 30000, // 30 seconds
+              distanceInterval: 10, // 10 meters
+              deferredUpdatesInterval: 30000,
+              foregroundService: {
+                notificationTitle: 'Spheronix Active Shift Tracking',
+                notificationBody: 'Attendance geofence monitoring is active.',
+                notificationColor: '#6366f1',
+              },
+            });
+            console.log('✅ Android Foreground Service location updates started.');
+          } catch (e) {
+            console.log('Location.startLocationUpdatesAsync notice:', e.message);
+          }
+        } else {
+          console.warn('Background location permission denied. Cannot start background tracking.');
         }
       }
     }
