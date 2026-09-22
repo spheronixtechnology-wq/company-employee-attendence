@@ -36,9 +36,14 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["expo-av"]
+        "exclude": [
+          "expo-av"
+        ]
       }
     }
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "babel-preset-expo": "^57.0.12"
+  }
 }
