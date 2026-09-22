@@ -542,8 +542,6 @@ function DashboardInner(props) {
   useEffect(() => {
     if (isCheckedIn) {
       setPresenceDismissed(false);
-      const t = setTimeout(() => setPresenceDismissed(true), 8000);
-      return () => clearTimeout(t);
     }
   }, [isCheckedIn]);
 
