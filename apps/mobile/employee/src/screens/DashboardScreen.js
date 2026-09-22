@@ -522,6 +522,7 @@ function DashboardInner(props) {
     geofenceStatus,
     distance,
     officeRadius,
+    lastPingAt,
   } = useGeofence();
 
   // Selected attendance modality tab in action panel (Office QR default)
@@ -540,10 +541,13 @@ function DashboardInner(props) {
   const [presenceDismissed, setPresenceDismissed] = useState(false);
 
   useEffect(() => {
-    if (isCheckedIn) {
+    // Show banner on initial check-in or when a new ping confirms we are inside
+    if (isCheckedIn && alertLevel === 0) {
       setPresenceDismissed(false);
+      const t = setTimeout(() => setPresenceDismissed(true), 8000);
+      return () => clearTimeout(t);
     }
-  }, [isCheckedIn]);
+  }, [isCheckedIn, lastPingAt, alertLevel]);
 
   const selectedDate = useMemo(() => {
     const d = new Date();
