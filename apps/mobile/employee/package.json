@@ -6,7 +6,6 @@
     "axios": "^1.20.0",
     "expo": "~57.0.24",
     "expo-application": "~57.0.3",
-    "expo-av": "^16.0.8",
     "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.19",
     "expo-dev-client": "~57.0.19",
