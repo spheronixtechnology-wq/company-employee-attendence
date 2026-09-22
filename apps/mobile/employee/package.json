@@ -6,9 +6,10 @@
     "axios": "^1.20.0",
     "expo": "~57.0.24",
     "expo-application": "~57.0.3",
-    "expo-av": "^16.0.8",
+    "expo-av": "~57.0.0",
     "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.19",
+    "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-document-picker": "~57.0.2",
     "expo-image-picker": "~57.0.19",
@@ -33,15 +34,7 @@
     "test": "node test-work-metrics.js && node test-checkin-modalities.js && node test-geofence-state-machine.js && node test-checkout-synchronization.js && node test-phase7-compliance.js",
     "export": "expo export --platform android"
   },
-  "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "expo-av"
-        ]
-      }
-    }
-  },
+  "expo": {},
   "private": true,
   "devDependencies": {
     "babel-preset-expo": "^57.0.12"
