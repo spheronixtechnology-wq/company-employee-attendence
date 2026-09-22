@@ -8,7 +8,11 @@ import { getDeviceInfo } from './device';
  * Automatically falls back to current Metro packager LAN IP on physical devices.
  */
 export const getBaseUrl = () => {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  // Safe check for process.env in case babel-preset-expo is missing or misconfigured
+  const envUrl = (typeof process !== 'undefined' && process.env) 
+    ? process.env.EXPO_PUBLIC_API_URL 
+    : undefined;
+    
   if (envUrl && !envUrl.includes('10.0.2.2') && !envUrl.includes('localhost')) {
     return envUrl;
   }

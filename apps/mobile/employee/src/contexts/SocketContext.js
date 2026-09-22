@@ -9,7 +9,10 @@ const SocketContext = createContext({
 });
 
 export const getSocketUrl = () => {
-  const envUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
+  const envUrl = (typeof process !== 'undefined' && process.env)
+    ? process.env.EXPO_PUBLIC_SOCKET_URL
+    : undefined;
+    
   if (envUrl && !envUrl.includes('10.0.2.2') && !envUrl.includes('localhost')) {
     return envUrl;
   }
