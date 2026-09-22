@@ -18,6 +18,7 @@ LogBox.ignoreLogs([
 ]);
 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import './src/services/presenceTracking'; // Ensure TaskManager is defined in global scope to prevent background crashes
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SocketProvider } from './src/contexts/SocketContext';
 import LoginScreen from './src/screens/LoginScreen';

@@ -335,6 +335,17 @@ const createUser = async (req, res) => {
       return badRequest(res, 'User with this email already exists.');
     }
     
+    let primaryTeamId = null;
+    let assignedTeamIds = [];
+
+    if (Array.isArray(teamId)) {
+      assignedTeamIds = teamId.filter(id => id && String(id).trim() !== '');
+      if (assignedTeamIds.length > 0) primaryTeamId = assignedTeamIds[0];
+    } else {
+      primaryTeamId = teamId && String(teamId).trim() !== '' ? teamId : null;
+      if (primaryTeamId) assignedTeamIds = [primaryTeamId];
+    }
+
     const user = new User({
       name, middleName, lastName, dob, gender,
       email, companyEmail, phone: finalPhone, currentAddress,
@@ -343,15 +354,15 @@ const createUser = async (req, res) => {
       workLocation, country, officeBranch, teamShift,
       passwordHash: password,
       role: role || 'employee',
-      teamId: teamId && teamId.trim() !== '' ? teamId : null,
+      teamId: primaryTeamId,
       forcePasswordChange: true
     });
     
     await user.save();
 
     // If manager is assigned to a team, keep Team.leadUserId in sync
-    if (user.role === 'manager' && user.teamId) {
-      await Team.findByIdAndUpdate(user.teamId, { leadUserId: user._id });
+    if (user.role === 'manager' && assignedTeamIds.length > 0) {
+      await Team.updateMany({ _id: { $in: assignedTeamIds } }, { leadUserId: user._id });
     }
 
     return success(res, 'User created successfully', { user: user.toSafeObject() });
@@ -372,7 +383,19 @@ const updateUser = async (req, res) => {
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (role !== undefined) user.role = role;
-    if (teamId !== undefined) user.teamId = teamId && teamId.trim() !== '' ? teamId : null;
+    
+    let assignedTeamIds = [];
+    if (teamId !== undefined) {
+      let primaryTeamId = null;
+      if (Array.isArray(teamId)) {
+        assignedTeamIds = teamId.filter(id => id && String(id).trim() !== '');
+        if (assignedTeamIds.length > 0) primaryTeamId = assignedTeamIds[0];
+      } else {
+        primaryTeamId = teamId && String(teamId).trim() !== '' ? teamId : null;
+        if (primaryTeamId) assignedTeamIds = [primaryTeamId];
+      }
+      user.teamId = primaryTeamId;
+    }
     if (designation !== undefined) user.designation = designation || null;
     if (phone !== undefined) user.phone = phone || null;
     if (isActive !== undefined) user.isActive = isActive;
@@ -380,8 +403,14 @@ const updateUser = async (req, res) => {
 
     await user.save();
 
-    // If manager is assigned to a team, keep Team.leadUserId in sync
-    if (user.role === 'manager' && user.teamId) {
+    // If manager is assigned to a team, keep Team.leadUserId
+    if (teamId !== undefined && (role === 'manager' || user.role === 'manager') && assignedTeamIds.length > 0) {
+      // Remove this user from being lead of ANY team first, to avoid stale leads
+      await Team.updateMany({ leadUserId: user._id }, { $unset: { leadUserId: 1 } });
+      // Assign this user as lead of the selected teams
+      await Team.updateMany({ _id: { $in: assignedTeamIds } }, { leadUserId: user._id });
+    } else if (teamId !== undefined && user.role === 'manager' && user.teamId) {
+      // Fallback for single team case if assignedTeamIds is empty
       await Team.findByIdAndUpdate(user.teamId, { leadUserId: user._id });
     }
 

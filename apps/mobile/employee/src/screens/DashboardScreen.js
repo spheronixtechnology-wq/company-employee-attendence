@@ -169,7 +169,17 @@ export default function DashboardScreen({
       const statusText = data?.status === 'approved' ? 'Approved ✅' : 'Rejected ❌';
       Alert.alert('Leave Request Update', `Your leave request has been ${statusText}.`);
     };
-    const onSettingUpdated = () => fetchDashboard();
+    const onSettingUpdated = (data) => {
+      fetchDashboard();
+      if (data && typeof data.heartbeatMonitoringEnabled === 'boolean') {
+        const status = data.heartbeatMonitoringEnabled ? 'ON' : 'OFF';
+        const emoji = data.heartbeatMonitoringEnabled ? '🟢' : '🔴';
+        Alert.alert(
+          'Heartbeat Monitoring Update',
+          `${emoji} Workstation heartbeat monitoring has been turned ${status} by management.`
+        );
+      }
+    };
     const onReactivated = () => {
       fetchDashboard();
       Alert.alert('Session Reactivated', 'Your attendance session has been resumed by management.');

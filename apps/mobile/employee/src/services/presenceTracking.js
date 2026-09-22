@@ -83,27 +83,25 @@ export async function startPresenceTracking() {
     if (!hasStarted) {
       const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
       if (fgStatus === 'granted') {
-        // MUST request background permissions before starting a background task, otherwise Android throws a fatal SecurityException
-        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-        if (bgStatus === 'granted') {
-          try {
-            await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
-              accuracy: Location.Accuracy.High,
-              timeInterval: 30000, // 30 seconds
-              distanceInterval: 10, // 10 meters
-              deferredUpdatesInterval: 30000,
-              foregroundService: {
-                notificationTitle: 'Spheronix Active Shift Tracking',
-                notificationBody: 'Attendance geofence monitoring is active.',
-                notificationColor: '#6366f1',
-              },
-            });
-            console.log('✅ Android Foreground Service location updates started.');
-          } catch (e) {
-            console.log('Location.startLocationUpdatesAsync notice:', e.message);
-          }
-        } else {
-          console.warn('Background location permission denied. Cannot start background tracking.');
+        // Try to request background permissions, but don't strictly require it to start the foreground service.
+        // Android foreground services with a sticky notification can continue tracking without 'Allow all the time'.
+        await Location.requestBackgroundPermissionsAsync().catch(() => {});
+        
+        try {
+          await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 30000, // 30 seconds
+            distanceInterval: 0, // removed distance interval so it always pings on time
+            deferredUpdatesInterval: 30000,
+            foregroundService: {
+              notificationTitle: 'Spheronix Active Shift Tracking',
+              notificationBody: 'Attendance geofence monitoring is active.',
+              notificationColor: '#6366f1',
+            },
+          });
+          console.log('✅ Android Foreground Service location updates started.');
+        } catch (e) {
+          console.log('Location.startLocationUpdatesAsync notice:', e.message);
         }
       }
     }
@@ -119,7 +117,7 @@ export async function startPresenceTracking() {
         {
           accuracy: Location.Accuracy.Balanced,
           timeInterval: 15000, // Emit every 15 seconds
-          distanceInterval: 5, // Or every 5 meters
+          distanceInterval: 0, // Removed distance interval so it emits every 15s even when stationary
         },
         async (loc) => {
           if (loc && loc.coords) {

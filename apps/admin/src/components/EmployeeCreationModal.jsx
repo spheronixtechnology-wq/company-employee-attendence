@@ -305,7 +305,7 @@ const EmployeeCreationModal = ({ onClose, onSuccess, teams = [] }) => {
     emergencyContactName: '', emergencyContactNumber: '', emergencyContactRelation: '',
     department: '', designation: '', jobType: 'Full-Time', dateOfJoining: '',
     workLocation: '', country: '', officeBranch: '', teamShift: '',
-    teamId: teams.length === 1 ? teams[0]._id : '', password: '', role: 'employee'
+    teamId: teams && teams.length > 0 ? (teams[0]._id || teams[0].id) : '', password: '', role: 'employee'
   });
 
   const handleChange = (e) => {
@@ -609,7 +609,7 @@ const EmployeeCreationModal = ({ onClose, onSuccess, teams = [] }) => {
                         value={form.teamId}
                         onChange={handleChange}
                         placeholder="Select Team"
-                        options={teams.map(t => ({ value: t._id, label: t.name }))}
+                        options={teams ? teams.map(t => ({ value: t._id || t.id, label: t.name })) : []}
                       />
                     </div>
                   )}

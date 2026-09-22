@@ -481,11 +481,19 @@ const createTeamMember = async (req, res) => {
     if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any teams.');
     
     const validTeamIds = teams.map(t => t._id.toString());
-    let assignedTeamId = teamId;
+    
+    let assignedTeamId = null;
     if (validTeamIds.length === 1) {
       assignedTeamId = validTeamIds[0];
-    } else if (!validTeamIds.includes(assignedTeamId)) {
-      return forbidden(res, 'You are not authorized to add members to this team.');
+    } else {
+      if (Array.isArray(teamId)) {
+        const filtered = teamId.filter(id => validTeamIds.includes(id));
+        if (filtered.length === 0) return forbidden(res, 'You are not authorized to add members to these teams.');
+        assignedTeamId = filtered[0]; // employees can only be assigned to one primary team
+      } else {
+        if (!validTeamIds.includes(teamId)) return forbidden(res, 'You are not authorized to add members to this team.');
+        assignedTeamId = teamId;
+      }
     }
 
     const user = new User({
