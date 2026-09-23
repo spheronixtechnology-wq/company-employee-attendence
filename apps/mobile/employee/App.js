@@ -21,18 +21,6 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import './src/services/presenceTracking'; // Ensure TaskManager is defined in global scope to prevent background crashes
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SocketProvider } from './src/contexts/SocketContext';
-import LoginScreen from './src/screens/LoginScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
-import AttendanceHistoryScreen from './src/screens/AttendanceHistoryScreen';
-import DailyLogScreen from './src/screens/DailyLogScreen';
-import OvertimeScreen from './src/screens/OvertimeScreen';
-import LeaveScreen from './src/screens/LeaveScreen';
-import DeviceStatusScreen from './src/screens/DeviceStatusScreen';
-import ManualAttendanceScreen from './src/screens/ManualAttendanceScreen';
-import ServicesHubScreen from './src/screens/ServicesHubScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import DiagnosticsScreen from './src/screens/DiagnosticsScreen';
-import NotificationsScreen from './src/screens/NotificationsScreen';
 
 import RootNavigation from './src/navigation/RootNavigation';
 

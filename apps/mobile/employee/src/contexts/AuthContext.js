@@ -71,12 +71,46 @@ export const AuthProvider = ({ children }) => {
 
     const res = await api.post('/auth/login', payload);
     const data = res.data?.data;
+    
+    // Handle MFA Requirement for Managers
+    if (data?.mfaRequired) {
+      return { mfaRequired: true, ...data };
+    }
+
     const loggedUser = data?.user;
     const token = data?.token;
 
     // Strict UI-to-Backend role validation (Zero-Regression security flow)
     if (extraData.expectedRole && loggedUser?.role) {
-      if (extraData.expectedRole !== loggedUser.role) {
+      const isManagerOrAdmin = extraData.expectedRole === 'manager' && (loggedUser.role === 'manager' || loggedUser.role === 'admin');
+      if (extraData.expectedRole !== loggedUser.role && !isManagerOrAdmin) {
+        const error = new Error(`Access Denied: You selected ${extraData.expectedRole} but this account is registered as a ${loggedUser.role}.`);
+        error.isRoleMismatch = true;
+        throw error;
+      }
+    }
+
+    if (token) {
+      await setAuthToken(token);
+    }
+    if (loggedUser) {
+      setUser(loggedUser);
+      await setUserSession(loggedUser);
+    }
+
+    return loggedUser;
+  };
+
+  const verifyMfaLogin = async (tempToken, otp, extraData = {}) => {
+    const res = await api.post('/auth/mfa/verify', { tempToken, otp });
+    const data = res.data?.data;
+    const loggedUser = data?.user;
+    const token = data?.token;
+    
+    // Strict UI-to-Backend role validation
+    if (extraData.expectedRole && loggedUser?.role) {
+      const isManagerOrAdmin = extraData.expectedRole === 'manager' && (loggedUser.role === 'manager' || loggedUser.role === 'admin');
+      if (extraData.expectedRole !== loggedUser.role && !isManagerOrAdmin) {
         const error = new Error(`Access Denied: You selected ${extraData.expectedRole} but this account is registered as a ${loggedUser.role}.`);
         error.isRoleMismatch = true;
         throw error;
@@ -118,7 +152,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, setUser, updateUserLocally, restoreSession }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyMfaLogin, logout, setUser, updateUserLocally, restoreSession }}>
       {children}
     </AuthContext.Provider>
   );

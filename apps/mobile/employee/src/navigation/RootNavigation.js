@@ -27,7 +27,7 @@ export default function RootNavigation() {
     return <EmployeeNavigation />;
   }
 
-  if (user.role === 'manager') {
+  if (user.role === 'manager' || user.role === 'admin') {
     return <ManagerNavigation />;
   }
 

@@ -233,7 +233,7 @@ const mfaVerify = async (req, res, next) => {
     const portalRole = req.headers['x-portal-role'] || user.role || 'manager';
     res.cookie(`token_${portalRole}`, token, authService.getCookieOptions());
 
-    return success(res, 'MFA verified successfully', { user });
+    return success(res, 'MFA verified successfully', { user, token });
   } catch (err) {
     if (err.statusCode) {
       return res.status(err.statusCode).json({

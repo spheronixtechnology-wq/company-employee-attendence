@@ -49,6 +49,12 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [pendingReqId, setPendingReqId] = useState(null);
   const [rejectionNote, setRejectionNote] = useState(null);
 
+  // MFA State
+  const [mfaData, setMfaData] = useState(null);
+  const [otp, setOtp] = useState('');
+  const [verifyingMfa, setVerifyingMfa] = useState(false);
+  const { verifyMfaLogin } = useAuth();
+
   // ── Guest Socket: Listen for Real-Time Manager Approval ───────────────────
   useEffect(() => {
     if (!socket || viewMode !== 'pending' || !pendingReqId) return;
@@ -84,11 +90,18 @@ export default function LoginScreen({ onLoginSuccess }) {
 
     try {
       const devInfo = await getDeviceInfo();
-      await login(form.email, form.password, {
+      const loginResult = await login(form.email, form.password, {
         deviceFingerprint: devInfo.fingerprint,
         deviceLabel: devInfo.deviceLabel,
         expectedRole: selectedRole,
       });
+
+      // Handle Manager MFA Challenge
+      if (loginResult && loginResult.mfaRequired) {
+        setMfaData(loginResult);
+        setViewMode('mfa');
+        return; // Don't call onLoginSuccess yet
+      }
 
       if (onLoginSuccess) {
         onLoginSuccess();
@@ -104,6 +117,27 @@ export default function LoginScreen({ onLoginSuccess }) {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Handle MFA Verification ────────────────────────────────────────────────
+  const handleMfaVerify = async () => {
+    if (!otp || otp.length !== 6) {
+      setError('Please enter a valid 6-digit code.');
+      return;
+    }
+    setError('');
+    setVerifyingMfa(true);
+
+    try {
+      await verifyMfaLogin(mfaData.tempToken, otp, { expectedRole: selectedRole });
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
+    } catch (err) {
+      setError(err.userMessage || 'Invalid OTP. Please try again.');
+    } finally {
+      setVerifyingMfa(false);
     }
   };
 
@@ -153,7 +187,7 @@ export default function LoginScreen({ onLoginSuccess }) {
           {/* Brand Header */}
           <View style={styles.header}>
             <Image
-              source={require('../../assets/logo.png')}
+              source={require('../../../assets/logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -367,6 +401,78 @@ export default function LoginScreen({ onLoginSuccess }) {
                 onPress={handleApprovedContinue}
               >
                 <Text style={styles.primaryButtonText}>Continue to Dashboard</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              MODE 5: MANAGER MFA VERIFICATION
+             ═══════════════════════════════════════════════════════════════════ */}
+          {viewMode === 'mfa' && (
+            <View style={styles.card}>
+              <Text style={styles.cardHeading}>Two-Factor Authentication</Text>
+              <Text style={styles.cardDesc}>
+                {mfaData?.mfaEnrolled 
+                  ? 'Enter the 6-digit code from your Authenticator app.' 
+                  : 'Scan the QR code below with your Authenticator app, then enter the 6-digit code to activate MFA.'}
+              </Text>
+
+              {error ? (
+                <View style={styles.errorAlert}>
+                  <Text style={styles.errorAlertText}>{error}</Text>
+                </View>
+              ) : null}
+
+              {/* Show QR Code for first-time setup */}
+              {!mfaData?.mfaEnrolled && mfaData?.qrCode && (
+                <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                  <Image
+                    source={{ uri: mfaData.qrCode }}
+                    style={{ width: 160, height: 160, borderRadius: 8 }}
+                  />
+                  <Text style={{ marginTop: 12, fontSize: 13, color: '#64748b', fontWeight: '500' }}>
+                    Or enter setup key manually:
+                  </Text>
+                  <View style={{ backgroundColor: '#f1f5f9', padding: 8, borderRadius: 6, marginTop: 4 }}>
+                    <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12, color: '#334155', letterSpacing: 1 }}>
+                      {mfaData.secret}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* OTP Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Verification Code</Text>
+                <TextInput
+                  style={[styles.input, { fontSize: 18, letterSpacing: 4, textAlign: 'center' }]}
+                  placeholder="------"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="numeric"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={setOtp}
+                  editable={!verifyingMfa}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, verifyingMfa && styles.disabledButton]}
+                onPress={handleMfaVerify}
+                disabled={verifyingMfa}
+              >
+                {verifyingMfa ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Verify & Sign In</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => { setViewMode('login'); setOtp(''); }}
+              >
+                <Text style={styles.cancelButtonText}>Back to Sign In</Text>
               </TouchableOpacity>
             </View>
           )}

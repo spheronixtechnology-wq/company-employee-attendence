@@ -795,7 +795,7 @@ function DashboardInner(props) {
       <View style={styles.brandBar}>
         <View style={styles.brandLeft}>
           <Image
-            source={require('../../assets/logo.png')}
+            source={require('../../../assets/logo.png')}
             style={styles.brandLogo}
             resizeMode="contain"
           />
@@ -2237,7 +2237,7 @@ function DashboardInner(props) {
             <View style={styles.drawerHeader}>
               <View style={styles.drawerHeaderBrand}>
                 <Image
-                  source={require('../../assets/logo.png')}
+                  source={require('../../../assets/logo.png')}
                   style={{ width: 120, height: 32 }}
                   resizeMode="contain"
                 />
