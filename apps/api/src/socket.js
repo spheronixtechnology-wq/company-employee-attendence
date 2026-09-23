@@ -136,6 +136,20 @@ const getIO = () => {
 };
 
 /**
+ * Get all connected (online) user IDs.
+ */
+const getOnlineUserIds = () => {
+  if (!io) return [];
+  const ids = new Set();
+  for (const [_, socket] of io.sockets.sockets) {
+    if (socket.user && socket.user._id) {
+      ids.add(socket.user._id.toString());
+    }
+  }
+  return Array.from(ids);
+};
+
+/**
  * Emit event to a specific user's personal room.
  */
 const emitToUser = (userId, event, data) => {
@@ -189,6 +203,7 @@ const emitToAll = (event, data) => {
 module.exports = {
   initSocket,
   getIO,
+  getOnlineUserIds,
   emitToUser,
   emitToTeam,
   emitToManagers,

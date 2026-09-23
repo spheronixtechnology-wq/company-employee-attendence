@@ -255,12 +255,12 @@ export default function DashboardPage() {
       />
 
       {/* ── Manager Personal Shift Tracking Card ── */}
-      <ManagerPunchCard
+      {/* <ManagerPunchCard
         onAttendanceChanged={() => {
           fetchDashboard();
           fetchMembers();
         }}
-      />
+      /> */}
 
       {/* ── 6 KPI Tiles Ribbon (TimeChamp style) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

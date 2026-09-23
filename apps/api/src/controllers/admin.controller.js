@@ -8,7 +8,7 @@ const DeviceRequest = require('../models/DeviceRequest');
 const RegisteredDevice = require('../models/RegisteredDevice');
 const Notification = require('../models/Notification');
 const { createNotification } = require('../services/notification.service');
-const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest, emitToAll } = require('../socket');
+const { emitToUser, emitToManagers, emitToAdmins, emitToDeviceRequest, emitToAll, getOnlineUserIds } = require('../socket');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
 const ManagerPermission = require('../models/ManagerPermission');
@@ -223,11 +223,13 @@ const getEmployees = async (req, res) => {
 
     const attMap = new Map(todayAttendances.map(a => [a.userId.toString(), a]));
     const leaveSet = new Set(todayLeaves.map(l => l.userId.toString()));
+    const onlineUsers = new Set(getOnlineUserIds());
 
     const enrichedEmployees = employees.map(e => {
       const safe = e.toSafeObject();
       const att = attMap.get(e._id.toString());
       const onLeave = leaveSet.has(e._id.toString());
+      const isOnline = onlineUsers.has(e._id.toString());
 
       let currentStatus = 'not_checked_in';
       if (onLeave) {
@@ -242,6 +244,12 @@ const getEmployees = async (req, res) => {
         } else if (att.checkInTime) {
           currentStatus = 'working';
         }
+      }
+
+      // If the user is a manager and is currently logged in, force their status to 'working' 
+      // (because they don't have a manual check-in button anymore)
+      if (e.role === 'manager' && isOnline && currentStatus === 'not_checked_in') {
+        currentStatus = 'working';
       }
 
       return {
@@ -1072,11 +1080,16 @@ const getAttendance = async (req, res) => {
       }
     }
 
+    const todayStr = getTodayDateString();
+    const onlineUsers = new Set(getOnlineUserIds());
+
     const fullAttendance = members.map((member) => {
       const existing = attendanceMap.get(member._id.toString());
       const manualReq = manualRequestMap.get(member._id.toString()) || null;
       const dailyLog = dailyLogMap.get(member._id.toString()) || null;
       const dailyLogSubmitted = Boolean(dailyLog);
+      
+      const isOnlineManager = member.role === 'manager' && date === todayStr && onlineUsers.has(member._id.toString());
 
       if (existing) {
         return {
@@ -1085,17 +1098,19 @@ const getAttendance = async (req, res) => {
           dailyLogSubmitted,
           dailyLog,
           hoursSpent: dailyLog?.hoursSpent || 0,
+          status: isOnlineManager && existing.status !== 'present' ? 'present' : existing.status,
+          checkInTime: isOnlineManager && !existing.checkInTime ? new Date() : existing.checkInTime,
         };
       }
       return {
         _id: `roster-${member._id}`,
         userId: member,
         date,
-        checkInTime: null,
+        checkInTime: isOnlineManager ? new Date() : null,
         checkOutTime: null,
         totalWorkMinutes: 0,
         totalBreakMinutes: 0,
-        status: manualReq && manualReq.status === 'pending' ? 'manual_pending' : 'not_checked_in',
+        status: isOnlineManager ? 'present' : (manualReq && manualReq.status === 'pending' ? 'manual_pending' : 'not_checked_in'),
         breaks: [],
         manualRequest: manualReq,
         dailyLogSubmitted,
