@@ -33,6 +33,7 @@ export default function LoginScreen({ onLoginSuccess }) {
   // Mode: 'login' | 'mismatch' | 'pending' | 'approved'
   const [viewMode, setViewMode] = useState('login');
 
+  const [selectedRole, setSelectedRole] = useState('employee');
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -86,13 +87,16 @@ export default function LoginScreen({ onLoginSuccess }) {
       await login(form.email, form.password, {
         deviceFingerprint: devInfo.fingerprint,
         deviceLabel: devInfo.deviceLabel,
+        expectedRole: selectedRole,
       });
 
       if (onLoginSuccess) {
         onLoginSuccess();
       }
     } catch (err) {
-      if (err.isDeviceMismatch || err.response?.status === 403) {
+      if (err.isRoleMismatch) {
+        setError(err.message);
+      } else if (err.isDeviceMismatch || err.response?.status === 403) {
         setMismatchData(err.mismatchData || err.response?.data?.data);
         setViewMode('mismatch');
       } else {
@@ -170,6 +174,24 @@ export default function LoginScreen({ onLoginSuccess }) {
                   <Text style={styles.errorAlertText}>{error}</Text>
                 </View>
               ) : null}
+
+              {/* Role Selector */}
+              <View style={styles.roleSelectorContainer}>
+                <TouchableOpacity
+                  style={[styles.roleTab, selectedRole === 'employee' && styles.roleTabActive]}
+                  onPress={() => setSelectedRole('employee')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.roleTabText, selectedRole === 'employee' && styles.roleTabTextActive]}>Employee</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.roleTab, selectedRole === 'manager' && styles.roleTabActive]}
+                  onPress={() => setSelectedRole('manager')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.roleTabText, selectedRole === 'manager' && styles.roleTabTextActive]}>Manager</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Email Field */}
               <View style={styles.inputGroup}>
@@ -406,6 +428,36 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
     marginBottom: 20,
+  },
+  roleSelectorContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  roleTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  roleTabActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  roleTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  roleTabTextActive: {
+    color: '#0f172a',
+    fontWeight: '800',
   },
   inputGroup: {
     marginBottom: 16,

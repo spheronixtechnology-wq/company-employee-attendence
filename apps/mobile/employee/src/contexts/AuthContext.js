@@ -74,6 +74,15 @@ export const AuthProvider = ({ children }) => {
     const loggedUser = data?.user;
     const token = data?.token;
 
+    // Strict UI-to-Backend role validation (Zero-Regression security flow)
+    if (extraData.expectedRole && loggedUser?.role) {
+      if (extraData.expectedRole !== loggedUser.role) {
+        const error = new Error(`Access Denied: You selected ${extraData.expectedRole} but this account is registered as a ${loggedUser.role}.`);
+        error.isRoleMismatch = true;
+        throw error;
+      }
+    }
+
     if (token) {
       await setAuthToken(token);
     }
