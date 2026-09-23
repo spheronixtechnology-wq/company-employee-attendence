@@ -9,6 +9,7 @@ import SessionReactivationsScreen from '../screens/manager/sessions/SessionReact
 import TeamOvertimeScreen from '../screens/manager/overtime/TeamOvertimeScreen';
 import ManagerSettingsScreen from '../screens/manager/settings/ManagerSettingsScreen';
 import ManagerRequestsScreen from '../screens/manager/requests/ManagerRequestsScreen';
+import EmployeeNavigation from './EmployeeNavigation';
 
 export default function ManagerNavigation() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -34,9 +35,8 @@ export default function ManagerNavigation() {
         )}
 
         {activeTab === 'attendance' && (
-          <View style={styles.placeholder}>
-            <Text style={styles.title}>My Attendance</Text>
-            <Text style={styles.subtitle}>Phase 10 - Coming Soon</Text>
+          <View style={{ flex: 1 }}>
+            <EmployeeNavigation />
           </View>
         )}
 
