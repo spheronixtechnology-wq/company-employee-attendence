@@ -12,9 +12,9 @@ import {
   Alert,
 } from 'react-native';
 import { ArrowLeft, Home } from 'lucide-react-native';
-import api from '../lib/api';
-import { getDeviceFingerprint, getDeviceContext } from '../lib/device';
-import { useSocket } from '../contexts/SocketContext';
+import api from '../../lib/api';
+import { getDeviceFingerprint, getDeviceContext } from '../../lib/device';
+import { useSocket } from '../../contexts/SocketContext';
 
 const STATUS_CONFIG = {
   active: { label: 'Trusted Device', color: '#10b981', bg: '#ecfdf5', dot: '#10b981' },

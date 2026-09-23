@@ -40,29 +40,29 @@ import {
   Activity,
   Bell,
 } from 'lucide-react-native';
-import { useAuth } from '../contexts/AuthContext';
-import { useSocket } from '../contexts/SocketContext';
-import api from '../lib/api';
-import { getDeviceSignals } from '../lib/device';
-import { getStabilizedLocation } from '../lib/location';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
+import api from '../../lib/api';
+import { getDeviceSignals } from '../../lib/device';
+import { getStabilizedLocation } from '../../lib/location';
 import {
   calculateLiveWorkMetrics,
   calculateLiveWorkMs,
   formatDuration,
   formatTime,
   formatDate,
-} from '../utils/workMetrics';
-import MainWorkTimer, { MainWorkTimerKpi } from '../components/MainWorkTimer';
-import BreakTimer from '../components/BreakTimer';
-import DonutChart from '../components/DonutChart';
-import BreakModal from '../components/BreakModal';
-import DailyAttendanceReport from '../components/DailyAttendanceReport';
-import CheckInModal from '../components/CheckInModal';
-import CheckoutQrScanner from '../components/CheckoutQrScanner';
-import AttendanceReportModal from '../components/AttendanceReportModal';
-import DailyLogModal from '../components/DailyLogModal';
-import { GeofenceProvider, useGeofence } from '../contexts/GeofenceContext';
-import GeofenceAlertModal from '../components/GeofenceAlertModal';
+} from '../../utils/workMetrics';
+import MainWorkTimer, { MainWorkTimerKpi } from '../../components/MainWorkTimer';
+import BreakTimer from '../../components/BreakTimer';
+import DonutChart from '../../components/DonutChart';
+import BreakModal from '../../components/BreakModal';
+import DailyAttendanceReport from '../../components/DailyAttendanceReport';
+import CheckInModal from '../../components/CheckInModal';
+import CheckoutQrScanner from '../../components/CheckoutQrScanner';
+import AttendanceReportModal from '../../components/AttendanceReportModal';
+import DailyLogModal from '../../components/DailyLogModal';
+import { GeofenceProvider, useGeofence } from '../../contexts/GeofenceContext';
+import GeofenceAlertModal from '../../components/GeofenceAlertModal';
 
 export default function DashboardScreen({
   onNavigateHistory,

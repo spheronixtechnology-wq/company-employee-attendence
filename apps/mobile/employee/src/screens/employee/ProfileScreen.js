@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Home } from 'lucide-react-native';
-import { useAuth } from '../contexts/AuthContext';
-import api from '../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../lib/api';
 
 export default function ProfileScreen({ onBack }) {
   const { user, updateUserLocally, logout } = useAuth();

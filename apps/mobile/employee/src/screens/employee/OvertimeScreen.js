@@ -13,8 +13,8 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import api from '../lib/api';
-import { useSocket } from '../contexts/SocketContext';
+import api from '../../lib/api';
+import { useSocket } from '../../contexts/SocketContext';
 
 const STATUS_CONFIG = {
   permission_pending: { label: 'Permission Pending', color: '#d97706', bg: '#fef3c7' },

@@ -8,9 +8,9 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import api from '../lib/api';
+import api from '../../lib/api';
 import { ArrowLeft, Home, RefreshCw, Calendar, Clock, Coffee } from 'lucide-react-native';
-import { formatDuration, formatTime, formatDate } from '../utils/workMetrics';
+import { formatDuration, formatTime, formatDate } from '../../utils/workMetrics';
 
 const StatusBadge = ({ status }) => {
   const config = {

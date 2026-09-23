@@ -26,8 +26,8 @@ import {
   FileText,
   ClipboardList,
 } from 'lucide-react-native';
-import api from '../lib/api';
-import { useSocket } from '../contexts/SocketContext';
+import api from '../../lib/api';
+import { useSocket } from '../../contexts/SocketContext';
 
 // ─── Notification type → icon + color ─────────────────────────────────────────
 const TYPE_CONFIG = {

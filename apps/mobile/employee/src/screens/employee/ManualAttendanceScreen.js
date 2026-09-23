@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { ArrowLeft, Home } from 'lucide-react-native';
-import api from '../lib/api';
+import api from '../../lib/api';
 
 const STATUS_CONFIG = {
   pending: { label: 'Pending Review', color: '#d97706', bg: '#fef3c7' },

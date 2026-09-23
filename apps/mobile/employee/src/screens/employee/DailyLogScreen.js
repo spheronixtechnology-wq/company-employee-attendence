@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { ArrowLeft, Home, ChevronLeft } from 'lucide-react-native';
-import api from '../lib/api';
+import api from '../../lib/api';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 

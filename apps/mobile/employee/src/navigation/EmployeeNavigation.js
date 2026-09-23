@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import DashboardScreen from '../screens/DashboardScreen';
-import AttendanceHistoryScreen from '../screens/AttendanceHistoryScreen';
-import DailyLogScreen from '../screens/DailyLogScreen';
-import OvertimeScreen from '../screens/OvertimeScreen';
-import LeaveScreen from '../screens/LeaveScreen';
-import DeviceStatusScreen from '../screens/DeviceStatusScreen';
-import ManualAttendanceScreen from '../screens/ManualAttendanceScreen';
-import ServicesHubScreen from '../screens/ServicesHubScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import DiagnosticsScreen from '../screens/DiagnosticsScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
+import DashboardScreen from '../screens/employee/DashboardScreen';
+import AttendanceHistoryScreen from '../screens/employee/AttendanceHistoryScreen';
+import DailyLogScreen from '../screens/employee/DailyLogScreen';
+import OvertimeScreen from '../screens/employee/OvertimeScreen';
+import LeaveScreen from '../screens/employee/LeaveScreen';
+import DeviceStatusScreen from '../screens/employee/DeviceStatusScreen';
+import ManualAttendanceScreen from '../screens/employee/ManualAttendanceScreen';
+import ServicesHubScreen from '../screens/employee/ServicesHubScreen';
+import ProfileScreen from '../screens/employee/ProfileScreen';
+import DiagnosticsScreen from '../screens/employee/DiagnosticsScreen';
+import NotificationsScreen from '../screens/employee/NotificationsScreen';
 
 export default function EmployeeNavigation() {
   const [activeTab, setActiveTab] = useState('dashboard');

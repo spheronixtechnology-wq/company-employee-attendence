@@ -25,10 +25,10 @@ import {
   Shield,
   Server,
 } from 'lucide-react-native';
-import api, { getBaseUrl } from '../lib/api';
-import { useSocket, getSocketUrl } from '../contexts/SocketContext';
-import { getDeviceInfo } from '../lib/device';
-import { setSecureItem, getSecureItem } from '../lib/storage';
+import api, { getBaseUrl } from '../../lib/api';
+import { useSocket, getSocketUrl } from '../../contexts/SocketContext';
+import { getDeviceInfo } from '../../lib/device';
+import { setSecureItem, getSecureItem } from '../../lib/storage';
 
 // ─── Animated status dot ───────────────────────────────────────────────────────
 function PulseDot({ color }) {
