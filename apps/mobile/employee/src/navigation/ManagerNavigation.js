@@ -7,6 +7,7 @@ import ManagerDashboardScreen from '../screens/manager/dashboard/ManagerDashboar
 import ManagerMoreScreen from '../screens/manager/more/ManagerMoreScreen';
 import SessionReactivationsScreen from '../screens/manager/sessions/SessionReactivationsScreen';
 import TeamOvertimeScreen from '../screens/manager/overtime/TeamOvertimeScreen';
+import ManagerSettingsScreen from '../screens/manager/settings/ManagerSettingsScreen';
 import ManagerRequestsScreen from '../screens/manager/requests/ManagerRequestsScreen';
 
 export default function ManagerNavigation() {
@@ -51,13 +52,7 @@ export default function ManagerNavigation() {
               <TeamOvertimeScreen navigation={{ goBack: navigateToMore }} />
             )}
             {moreSubScreen === 'settings' && (
-              <View style={styles.placeholder}>
-                <TouchableOpacity onPress={navigateToMore} style={{ marginBottom: 20 }}>
-                  <Text style={{ color: '#0ea5e9' }}>← Back to More Settings</Text>
-                </TouchableOpacity>
-                <Text style={styles.title}>Manager Settings</Text>
-                <Text style={styles.subtitle}>Phase 9 - Coming Soon</Text>
-              </View>
+              <ManagerSettingsScreen navigation={{ goBack: navigateToMore }} />
             )}
           </>
         )}

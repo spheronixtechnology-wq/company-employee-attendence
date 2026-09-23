@@ -49,4 +49,19 @@ export const managerApi = {
   getTeamOvertime: () => request('get', `/manager/team/overtime`),
   decideOvertimePermission: (id, payload) => request('post', `/manager/team/overtime/${id}/permission-decision`, payload),
   decideOvertimeWork: (id, payload) => request('post', `/manager/team/overtime/${id}/work-decision`, payload),
+
+  // --- Phase 9: Manager Settings ---
+  // 9.1 Attendance Method
+  getActiveAttendanceMethod: () => request('get', `/manager/attendance-method/active`),
+  switchAttendanceMethod: (payload) => request('patch', `/manager/attendance-method/switch`, payload),
+  heartbeatAttendanceMethod: () => request('patch', `/manager/attendance-method/heartbeat`),
+
+  // 9.2 Office Locations
+  getOfficeLocations: () => request('get', `/manager/office-locations`),
+  createOfficeLocation: (payload) => request('post', `/manager/office-locations`, payload),
+  updateOfficeLocation: (id, payload) => request('patch', `/manager/office-locations/${id}`, payload),
+  deleteOfficeLocation: (id) => request('delete', `/manager/office-locations/${id}`),
+
+  // 9.3 Wi-Fi Settings
+  getCurrentIp: () => request('get', `/manager/current-ip`),
 };
