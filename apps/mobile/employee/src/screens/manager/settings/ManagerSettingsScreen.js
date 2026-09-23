@@ -28,8 +28,8 @@ const ATTENDANCE_METHODS = [
   { key: 'biometric', label: 'Biometric (WebAuthn)', icon: Fingerprint, desc: 'Device-owner biometric verification using hardware sensors.', badge: 'High Security' },
 ];
 
-export default function ManagerSettingsScreen({ navigation }) {
-  const [activeTab, setActiveTab] = useState('attendance');
+export default function ManagerSettingsScreen({ navigation, initialTab }) {
+  const [activeTab, setActiveTab] = useState(initialTab || 'attendance');
   const [refreshing, setRefreshing] = useState(false);
 
   // --- Attendance Method State ---

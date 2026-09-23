@@ -43,7 +43,11 @@ const getSessionReactivations = async ({ date, teamIds = null, search = '' }) =>
       { outOfBoundsReason: { $ne: null } },
     ],
   })
-    .populate('userId', 'name email designation avatarUrl teamId role')
+    .populate({
+      path: 'userId',
+      select: 'name email designation avatarUrl teamId role',
+      populate: { path: 'teamId', select: 'name' }
+    })
     .populate('reactivationDecisionBy', 'name email role')
     .sort({ checkOutTime: -1, autoCheckoutAt: -1, updatedAt: -1 })
     .lean();

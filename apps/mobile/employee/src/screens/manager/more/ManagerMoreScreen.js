@@ -1,37 +1,89 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { ShieldAlert, Clock, Settings, ChevronRight } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ShieldAlert, Clock, Settings, ChevronRight, Users, UserCheck, FileText, UserCircle2, MapPin, Wifi, ShieldCheck, ClipboardList, CalendarDays } from 'lucide-react-native';
 
 export default function ManagerMoreScreen({ navigation }) {
   const menuItems = [
     {
-      id: 'session-reactivations',
-      title: 'Session Reactivations',
-      subtitle: 'Review and approve auto-checkout sessions',
+      id: 'leave-requests',
+      title: 'Pending Requests',
+      subtitle: 'Review and approve leave requests',
+      icon: Clock,
+      color: '#eab308' // yellow
+    },
+    {
+      id: 'device-requests',
+      title: 'Device Approvals',
+      subtitle: 'Review and approve device registrations',
       icon: ShieldAlert,
-      color: '#f97316' // Orange
+      color: '#f97316' // orange
+    },
+    {
+      id: 'team-attendance',
+      title: 'Attendance',
+      subtitle: 'Review historical team attendance',
+      icon: UserCheck,
+      color: '#3b82f6' // blue
+    },
+    {
+      id: 'team-daily-logs',
+      title: 'Daily Logs',
+      subtitle: 'Review end-of-day reports',
+      icon: FileText,
+      color: '#06b6d4' // cyan
     },
     {
       id: 'team-overtime',
-      title: 'Team Overtime',
+      title: 'Overtime',
       subtitle: 'Manage overtime permissions and work logs',
       icon: Clock,
-      color: '#0ea5e9' // Blue
+      color: '#10b981' // emerald
     },
     {
-      id: 'settings',
-      title: 'Manager Settings',
-      subtitle: 'Configure office locations and attendance methods',
-      icon: Settings,
-      color: '#8b5cf6' // Violet
+      id: 'session-reactivations',
+      title: 'Session Reactivations',
+      subtitle: 'Review and approve auto-checkout sessions',
+      icon: ShieldCheck,
+      color: '#8b5cf6' // violet
+    },
+    {
+      id: 'team-members',
+      title: 'Team Directory',
+      subtitle: 'View and manage team directory',
+      icon: Users,
+      color: '#6366f1' // indigo
+    },
+    {
+      id: 'attendance-method',
+      title: 'Attendance Method',
+      subtitle: 'Configure company-wide attendance verification',
+      icon: ShieldCheck,
+      color: '#8b5cf6' // violet
+    },
+    {
+      id: 'office-locations',
+      title: 'Office Locations',
+      subtitle: 'Manage allowed office coordinates and IPs',
+      icon: MapPin,
+      color: '#ec4899' // pink
+    },
+    {
+      id: 'wifi-settings',
+      title: 'WiFi / IP Settings',
+      subtitle: 'Configure office network restrictions',
+      icon: Wifi,
+      color: '#14b8a6' // teal
     }
   ];
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>More Options</Text>
-      </View>
+      <SafeAreaView style={{ backgroundColor: '#ffffff' }} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>More Options</Text>
+        </View>
+      </SafeAreaView>
       
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {menuItems.map((item) => {

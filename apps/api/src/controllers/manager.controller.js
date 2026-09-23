@@ -173,13 +173,18 @@ const getTeamAttendance = async (req, res) => {
 
     const teamIds = teams.map(t => t._id);
     const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true, deletedAt: null })
-      .select('name designation email avatarUrl phone')
+      .select('name designation email avatarUrl phone teamId')
+      .populate('teamId', 'name')
       .sort({ name: 1 });
 
     const memberIds = members.map(m => m._id);
     const [attendanceRecords, manualRequests] = await Promise.all([
       Attendance.find({ userId: { $in: memberIds }, date })
-        .populate('userId', 'name designation email avatarUrl phone')
+        .populate({
+          path: 'userId',
+          select: 'name designation email avatarUrl phone teamId',
+          populate: { path: 'teamId', select: 'name' }
+        })
         .sort({ 'userId.name': 1 }),
       ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
     ]);
@@ -381,7 +386,11 @@ const getTeamDailyLogs = async (req, res) => {
     }
 
     const logsQuery = DailyLog.find(query)
-      .populate('userId', 'name email designation avatarUrl phone teamId')
+      .populate({
+        path: 'userId',
+        select: 'name email designation avatarUrl phone teamId',
+        populate: { path: 'teamId', select: 'name' }
+      })
       .populate('teamId', 'name')
       .sort({ logDate: -1, createdAt: -1 });
 
@@ -424,7 +433,8 @@ const getTeamDailyLogs = async (req, res) => {
     });
 
     const teamMembers = await User.find({ _id: { $in: memberIds } })
-      .select('name email designation avatarUrl joinedDate')
+      .select('name email designation avatarUrl joinedDate teamId')
+      .populate('teamId', 'name')
       .lean();
 
     // Compute missing logs
@@ -1365,6 +1375,9 @@ const updateTeamLeaveQuotas = async (req, res) => {
       targetId: team._id,
       details: `Manager updated leave quotas for team: ${team.name}`,
     });
+
+    // Notify all managers that quotas were updated in real-time
+    emitToManagers('leave:quotas_updated', { teamId: team._id, quotas: team.leaveQuotas });
 
     return success(res, 'Team leave quotas updated successfully');
   } catch (error) {

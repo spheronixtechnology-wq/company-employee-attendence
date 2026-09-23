@@ -1200,11 +1200,18 @@ const TeamLeaveRequestsPage = () => {
   useEffect(() => {
     if (!socket) return;
     const onLeave = () => fetchRequests();
+    const onQuotasUpdated = (data) => {
+      if (data?.quotas) {
+        setLeaveQuotas(data.quotas);
+      }
+    };
     socket.on('leave:request_created', onLeave);
     socket.on('leave:request_resolved', onLeave);
+    socket.on('leave:quotas_updated', onQuotasUpdated);
     return () => {
       socket.off('leave:request_created', onLeave);
       socket.off('leave:request_resolved', onLeave);
+      socket.off('leave:quotas_updated', onQuotasUpdated);
     };
   }, [socket, fetchRequests]);
 

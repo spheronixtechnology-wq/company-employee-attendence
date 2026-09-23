@@ -7,8 +7,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ShieldAlert, Clock, AlertTriangle, Calendar,
-  CheckCircle2, XCircle, Search, RefreshCw, X, Check
+  CheckCircle2, XCircle, Search, RefreshCw, X, Check, ChevronLeft, ChevronRight
 } from 'lucide-react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { managerApi } from '../../../services/api/managerApi';
 
 const colors = {
@@ -23,10 +24,9 @@ const colors = {
 };
 
 export default function SessionReactivationsScreen({ navigation }) {
-  const [date, setDate] = useState(() => {
-    const today = new Date();
-    return today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  });
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   
@@ -49,7 +49,7 @@ export default function SessionReactivationsScreen({ navigation }) {
     else setLoading(true);
 
     try {
-      const res = await managerApi.getSessionReactivations(date, search);
+      const res = await managerApi.getSessionReactivations(dateStr, search);
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
       }
@@ -59,7 +59,7 @@ export default function SessionReactivationsScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [date, search]);
+  }, [dateStr, search]);
 
   useEffect(() => {
     fetchRecords();
@@ -80,14 +80,47 @@ export default function SessionReactivationsScreen({ navigation }) {
     return data.records;
   }, [data.records, activeFilter]);
 
+  const groupedRecords = useMemo(() => {
+    const groups = {};
+    filteredRecords.forEach(record => {
+      const teamName = record.userId?.teamId?.name || 'Unassigned';
+      if (!groups[teamName]) {
+        groups[teamName] = [];
+      }
+      groups[teamName].push(record);
+    });
+    
+    return Object.entries(groups)
+      .map(([teamName, items]) => ({
+        teamName,
+        items
+      }))
+      .sort((a, b) => a.teamName.localeCompare(b.teamName));
+  }, [filteredRecords]);
+
   const isPast6PmToday = useMemo(() => {
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-    if (date < todayStr) return true;
-    if (date > todayStr) return false;
+    if (dateStr < todayStr) return true;
+    if (dateStr > todayStr) return false;
     const now = new Date();
     const shiftEnd = new Date(`${todayStr}T18:00:00.000+05:30`);
     return now.getTime() >= shiftEnd.getTime();
-  }, [date]);
+  }, [dateStr]);
+
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDate(selectedDate);
+      setLoading(true);
+    }
+  };
+
+  const changeDateByDays = (days) => {
+    const newDate = new Date(date);
+    newDate.setDate(newDate.getDate() + days);
+    setDate(newDate);
+    setLoading(true);
+  };
 
   const handleOpenActionModal = (record, action) => {
     setSelectedRecord(record);
@@ -157,12 +190,13 @@ export default function SessionReactivationsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <SafeAreaView style={{ backgroundColor: '#ffffff' }} edges={['top', 'left', 'right']}>
+        {/* Header */}
+        <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => navigation?.goBack()} style={{ marginRight: 12 }}>
-            <X size={24} color="#334155" />
+            <ChevronLeft size={28} color="#0f172a" />
           </TouchableOpacity>
           <View style={styles.iconCircle}>
             <ShieldAlert size={20} color="#fff" />
@@ -173,19 +207,43 @@ export default function SessionReactivationsScreen({ navigation }) {
           </View>
         </View>
       </View>
+      </SafeAreaView>
 
-      {/* Controls: Date, Search, Refresh */}
-      <View style={styles.controlsContainer}>
-        <View style={styles.dateSelector}>
-          <Calendar size={16} color="#64748b" />
-          <TextInput
-            style={styles.dateInput}
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
+      {/* Date Navigation */}
+      <View style={styles.dateNav}>
+        <TouchableOpacity onPress={() => changeDateByDays(-1)} style={styles.dateBtn}>
+          <ChevronLeft size={20} color="#475569" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateCenter}>
+          <Calendar size={16} color={colors.primary} style={{ marginRight: 8 }} />
+          <Text style={styles.dateText}>
+            {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => changeDateByDays(1)} 
+          style={styles.dateBtn}
+          disabled={date.toISOString().split('T')[0] >= new Date().toISOString().split('T')[0]}
+        >
+          <ChevronRight 
+            size={20} 
+            color={date.toISOString().split('T')[0] >= new Date().toISOString().split('T')[0] ? '#cbd5e1' : '#475569'} 
           />
-        </View>
-        
+        </TouchableOpacity>
+      </View>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          onChange={handleDateChange}
+        />
+      )}
+
+      {/* Controls: Search, Refresh */}
+      <View style={styles.controlsContainer}>
         <View style={styles.searchBox}>
           <Search size={16} color="#64748b" />
           <TextInput
@@ -237,87 +295,95 @@ export default function SessionReactivationsScreen({ navigation }) {
             <Text style={styles.emptySubtitle}>All caught up!</Text>
           </View>
         ) : (
-          filteredRecords.map((record) => {
-            const employee = record.userId;
-            const isPending = record.reactivationStatus === 'pending';
-            const isApproved = record.reactivationStatus === 'approved';
-            const isRejected = record.reactivationStatus === 'rejected';
-
-            return (
-              <View key={record._id} style={styles.recordCard}>
-                <View style={styles.employeeHeader}>
-                  {employee?.avatarUrl ? (
-                    <Image source={{ uri: employee.avatarUrl }} style={styles.avatar} />
-                  ) : (
-                    <View style={styles.avatarFallback}>
-                      <Text style={styles.avatarText}>{employee?.name?.[0]?.toUpperCase() || 'U'}</Text>
-                    </View>
-                  )}
-                  <View style={styles.employeeInfo}>
-                    <Text style={styles.employeeName}>{employee?.name || 'Unknown'}</Text>
-                    <Text style={styles.employeeEmail}>{employee?.email}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.timeRow}>
-                  <Text style={styles.timeLabel}>In: {formatTime(record.checkInTime)}</Text>
-                  <Text style={styles.timeLabel}>Auto-Out: {formatTime(record.autoCheckoutAt || record.checkOutTime)}</Text>
-                </View>
-
-                <View style={styles.reasonBox}>
-                  <Text style={styles.reasonTag}>
-                    {record.autoCheckoutReason === 'PRESENCE_VALIDATION_FAILED' ? 'Presence Validation Failed' : record.autoCheckoutReason}
-                  </Text>
-                  {record.outOfBoundsReason ? (
-                    <Text style={styles.employeeNote}>"{record.outOfBoundsReason}"</Text>
-                  ) : (
-                    <Text style={styles.noNoteText}>No explanation submitted</Text>
-                  )}
-                </View>
-
-                {/* Actions */}
-                <View style={styles.actionRow}>
-                  {isPending || (!isApproved && !isRejected) ? (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.approveBtn, isPast6PmToday && styles.disabledBtn]}
-                        disabled={isPast6PmToday}
-                        onPress={() => handleOpenActionModal(record, 'approve')}
-                      >
-                        <Check size={16} color={isPast6PmToday ? "#94a3b8" : "#fff"} />
-                        <Text style={[styles.actionBtnText, { color: isPast6PmToday ? "#94a3b8" : "#fff" }]}>
-                          Reactivate
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.rejectBtn]}
-                        onPress={() => handleOpenActionModal(record, 'reject')}
-                      >
-                        <X size={16} color="#ef4444" />
-                        <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Close</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : isApproved && record.isCurrentlyActive ? (
-                    <View style={styles.statusBadgeApproved}>
-                      <CheckCircle2 size={14} color="#059669" />
-                      <Text style={styles.statusBadgeTextApproved}>Approved & Resumed</Text>
-                    </View>
-                  ) : isRejected ? (
-                    <View style={styles.statusBadgeRejected}>
-                      <XCircle size={14} color="#e11d48" />
-                      <Text style={styles.statusBadgeTextRejected}>Rejected / Closed</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.statusBadgeWarning}>
-                      <AlertTriangle size={14} color="#b45309" />
-                      <Text style={styles.statusBadgeTextWarning}>Needs Action</Text>
-                    </View>
-                  )}
-                </View>
+          groupedRecords.map(group => (
+            <View key={group.teamName} style={styles.teamGroup}>
+              <View style={styles.teamGroupHeader}>
+                <Text style={styles.teamGroupTitle}>{group.teamName}</Text>
+                <Text style={styles.teamGroupSubtitle}>· {group.items.length} record{group.items.length !== 1 ? 's' : ''}</Text>
               </View>
-            );
-          })
+              {group.items.map((record) => {
+                const employee = record.userId;
+                const isPending = record.reactivationStatus === 'pending';
+                const isApproved = record.reactivationStatus === 'approved';
+                const isRejected = record.reactivationStatus === 'rejected';
+
+                return (
+                  <View key={record._id} style={styles.recordCard}>
+                    <View style={styles.employeeHeader}>
+                      {employee?.avatarUrl ? (
+                        <Image source={{ uri: employee.avatarUrl }} style={styles.avatar} />
+                      ) : (
+                        <View style={styles.avatarFallback}>
+                          <Text style={styles.avatarText}>{employee?.name?.[0]?.toUpperCase() || 'U'}</Text>
+                        </View>
+                      )}
+                      <View style={styles.employeeInfo}>
+                        <Text style={styles.employeeName}>{employee?.name || 'Unknown'}</Text>
+                        <Text style={styles.employeeEmail}>{employee?.email}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.timeRow}>
+                      <Text style={styles.timeLabel}>In: {formatTime(record.checkInTime)}</Text>
+                      <Text style={styles.timeLabel}>Auto-Out: {formatTime(record.autoCheckoutAt || record.checkOutTime)}</Text>
+                    </View>
+
+                    <View style={styles.reasonBox}>
+                      <Text style={styles.reasonTag}>
+                        {record.autoCheckoutReason === 'PRESENCE_VALIDATION_FAILED' ? 'Presence Validation Failed' : record.autoCheckoutReason}
+                      </Text>
+                      {record.outOfBoundsReason ? (
+                        <Text style={styles.employeeNote}>"{record.outOfBoundsReason}"</Text>
+                      ) : (
+                        <Text style={styles.noNoteText}>No explanation submitted</Text>
+                      )}
+                    </View>
+
+                    {/* Actions */}
+                    <View style={styles.actionRow}>
+                      {isPending || (!isApproved && !isRejected) ? (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.approveBtn, isPast6PmToday && styles.disabledBtn]}
+                            disabled={isPast6PmToday}
+                            onPress={() => handleOpenActionModal(record, 'approve')}
+                          >
+                            <Check size={16} color={isPast6PmToday ? "#94a3b8" : "#fff"} />
+                            <Text style={[styles.actionBtnText, { color: isPast6PmToday ? "#94a3b8" : "#fff" }]}>
+                              Reactivate
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.rejectBtn]}
+                            onPress={() => handleOpenActionModal(record, 'reject')}
+                          >
+                            <X size={16} color="#ef4444" />
+                            <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Close</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : isApproved && record.isCurrentlyActive ? (
+                        <View style={styles.statusBadgeApproved}>
+                          <CheckCircle2 size={14} color="#059669" />
+                          <Text style={styles.statusBadgeTextApproved}>Approved & Resumed</Text>
+                        </View>
+                      ) : isRejected ? (
+                        <View style={styles.statusBadgeRejected}>
+                          <XCircle size={14} color="#e11d48" />
+                          <Text style={styles.statusBadgeTextRejected}>Rejected / Closed</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.statusBadgeWarning}>
+                          <AlertTriangle size={14} color="#b45309" />
+                          <Text style={styles.statusBadgeTextWarning}>Needs Action</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ))
         )}
       </ScrollView>
 
@@ -361,7 +427,7 @@ export default function SessionReactivationsScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -373,10 +439,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
   headerSubtitle: { fontSize: 12, color: colors.secondary },
   
-  controlsContainer: { flexDirection: 'row', padding: 12, gap: 8 },
-  dateSelector: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  dateInput: { flex: 1, height: 36, marginLeft: 8, fontSize: 13, color: '#334155' },
-  searchBox: { flex: 2, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  dateBtn: { padding: 8, backgroundColor: colors.background, borderRadius: 8 },
+  dateCenter: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.primary + '10', borderRadius: 20 },
+  dateText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+
+  controlsContainer: { flexDirection: 'row', padding: 12, gap: 8, backgroundColor: colors.background },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
   searchInput: { flex: 1, height: 36, marginLeft: 8, fontSize: 13, color: '#334155' },
   refreshButton: { width: 36, height: 36, backgroundColor: colors.card, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   
@@ -394,7 +463,7 @@ const styles = StyleSheet.create({
   filterCountTextActive: { color: '#ffffff' },
 
   listContent: { padding: 12, gap: 12, paddingBottom: 40 },
-  centerBox: { alignItems: 'center', justifyContent: 'center', padding: 40, backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  centerBox: { alignItems: 'center', justifyContent: 'center', padding: 40 },
   centerText: { marginTop: 12, color: colors.secondary, fontSize: 14 },
   emptyTitle: { marginTop: 12, fontSize: 16, fontWeight: '700', color: '#334155' },
   emptySubtitle: { marginTop: 4, fontSize: 13, color: colors.secondary },
@@ -442,4 +511,23 @@ const styles = StyleSheet.create({
   approveBg: { backgroundColor: colors.success },
   rejectBg: { backgroundColor: colors.danger },
   modalBtnConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  teamGroup: {
+    marginBottom: 16,
+  },
+  teamGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  teamGroupTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  teamGroupSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginLeft: 8,
+  }
 });

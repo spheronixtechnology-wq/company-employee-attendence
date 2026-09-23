@@ -331,7 +331,11 @@ const getTeamOvertime = async (req, res) => {
     }
 
     const records = await Overtime.find(filter)
-      .populate('userId', 'name email designation avatarUrl teamId')
+      .populate({
+        path: 'userId',
+        select: 'name email designation avatarUrl teamId',
+        populate: { path: 'teamId', select: 'name' }
+      })
       .populate('permissionDecisionBy', 'name email')
       .populate('workVerifiedBy', 'name email')
       .sort({ createdAt: -1 })
