@@ -4,10 +4,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayoutDashboard, Inbox, UserCheck, Menu } from 'lucide-react-native';
 
 import ManagerDashboardScreen from '../screens/manager/dashboard/ManagerDashboardScreen';
+import ManagerMoreScreen from '../screens/manager/more/ManagerMoreScreen';
+import SessionReactivationsScreen from '../screens/manager/sessions/SessionReactivationsScreen';
 import ManagerRequestsScreen from '../screens/manager/requests/ManagerRequestsScreen';
 
 export default function ManagerNavigation() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [moreSubScreen, setMoreSubScreen] = useState(null);
+
+  // Navigate back to More list from sub-screens
+  const navigateToMore = () => setMoreSubScreen(null);
 
   return (
     <SafeAreaView style={styles.appContainer}>
@@ -33,10 +39,32 @@ export default function ManagerNavigation() {
         )}
 
         {activeTab === 'more' && (
-          <View style={styles.placeholder}>
-            <Text style={styles.title}>More Settings</Text>
-            <Text style={styles.subtitle}>Phases 7, 8, 9 - Coming Soon</Text>
-          </View>
+          <>
+            {!moreSubScreen && (
+              <ManagerMoreScreen navigation={{ navigate: setMoreSubScreen }} />
+            )}
+            {moreSubScreen === 'session-reactivations' && (
+              <SessionReactivationsScreen navigation={{ goBack: navigateToMore }} />
+            )}
+            {moreSubScreen === 'team-overtime' && (
+              <View style={styles.placeholder}>
+                <TouchableOpacity onPress={navigateToMore} style={{ marginBottom: 20 }}>
+                  <Text style={{ color: '#0ea5e9' }}>← Back to More Settings</Text>
+                </TouchableOpacity>
+                <Text style={styles.title}>Team Overtime</Text>
+                <Text style={styles.subtitle}>Phase 8 - Coming Soon</Text>
+              </View>
+            )}
+            {moreSubScreen === 'settings' && (
+              <View style={styles.placeholder}>
+                <TouchableOpacity onPress={navigateToMore} style={{ marginBottom: 20 }}>
+                  <Text style={{ color: '#0ea5e9' }}>← Back to More Settings</Text>
+                </TouchableOpacity>
+                <Text style={styles.title}>Manager Settings</Text>
+                <Text style={styles.subtitle}>Phase 9 - Coming Soon</Text>
+              </View>
+            )}
+          </>
         )}
       </View>
 

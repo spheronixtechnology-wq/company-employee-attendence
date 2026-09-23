@@ -41,4 +41,7 @@ export const managerApi = {
   // Manual Attendance
   getTeamAttendanceRoster: (dateStr) => request('get', `/manager/team/attendance?date=${dateStr}`),
   decideManualAttendance: (id, payload) => request('post', `/manager/team/manual-attendance/${id}/decision`, payload),
+  // --- Phase 7: Session Reactivation ---
+  getSessionReactivations: (dateStr, search = '') => request('get', `/manager/session-reactivations?date=${dateStr}&search=${encodeURIComponent(search)}`),
+  decideSessionReactivation: (id, payload) => request('post', `/manager/session-reactivations/${id}/decision`, payload),
 };
