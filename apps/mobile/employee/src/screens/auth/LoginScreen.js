@@ -13,10 +13,10 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../contexts/AuthContext';
-import { useSocket } from '../contexts/SocketContext';
-import api from '../lib/api';
-import { getDeviceInfo } from '../lib/device';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
+import api from '../../lib/api';
+import { getDeviceInfo } from '../../lib/device';
 
 const PRESET_REASONS = [
   'Bought a new phone',

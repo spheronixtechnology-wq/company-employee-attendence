@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 
-import LoginScreen from '../screens/LoginScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
 import EmployeeNavigation from './EmployeeNavigation';
 import ManagerNavigation from './ManagerNavigation';
 
