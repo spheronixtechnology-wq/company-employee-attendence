@@ -44,4 +44,9 @@ export const managerApi = {
   // --- Phase 7: Session Reactivation ---
   getSessionReactivations: (dateStr, search = '') => request('get', `/manager/session-reactivations?date=${dateStr}&search=${encodeURIComponent(search)}`),
   decideSessionReactivation: (id, payload) => request('post', `/manager/session-reactivations/${id}/decision`, payload),
+
+  // --- Phase 8: Team Overtime ---
+  getTeamOvertime: () => request('get', `/manager/team/overtime`),
+  decideOvertimePermission: (id, payload) => request('post', `/manager/team/overtime/${id}/permission-decision`, payload),
+  decideOvertimeWork: (id, payload) => request('post', `/manager/team/overtime/${id}/work-decision`, payload),
 };
