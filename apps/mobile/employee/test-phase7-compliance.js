@@ -74,12 +74,12 @@ function runPhase7ComplianceTests() {
   // --- Suite 2: Daily Log File Limit & Streak Milestones ---
   console.log('\n--- Suite 2: Daily Log File Limit & Streak Milestones ---');
   {
-    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+    const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 
     const isFileSizeAllowed = (bytes) => bytes <= MAX_FILE_SIZE;
-    assert(isFileSizeAllowed(1024 * 500) === true, '500KB file is allowed (under 2MB)');
-    assert(isFileSizeAllowed(2 * 1024 * 1024) === true, 'Exact 2MB file is allowed');
-    assert(isFileSizeAllowed(2 * 1024 * 1024 + 1) === false, 'File exceeding 2MB by 1 byte is rejected');
+    assert(isFileSizeAllowed(1024 * 500) === true, '500KB file is allowed (under 1MB)');
+    assert(isFileSizeAllowed(1 * 1024 * 1024) === true, 'Exact 1MB file is allowed');
+    assert(isFileSizeAllowed(1 * 1024 * 1024 + 1) === false, 'File exceeding 1MB by 1 byte is rejected');
 
     // Streak milestone calculations: milestones = [7, 14, 30]
     const calculateMilestone = (streak) => {

@@ -341,7 +341,7 @@ Every authenticated request sent from the mobile client must provide:
 ### 5.2 Daily Work Log (`/employee/daily-log/*`)
 * **Get My Logs**: `GET /employee/daily-log/me` $\rightarrow$ `{ logs: [...], streak: 5 }`
 * **Submit Log Document**: `POST /employee/daily-log/me` (Multipart `multipart/form-data`)
-  - Form field: `document` (File up to 2MB)
+  - Form field: `document` (File up to 1MB)
 
 ### 5.3 Overtime Module (`/employee/overtime/*`)
 * **Stage 1 Permission Request**: `POST /employee/overtime/request`  

@@ -29,15 +29,15 @@ const ALLOWED_MIME_TYPES = [
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    const error = new Error('Invalid file type. Only documents and spreadsheets (.doc, .docx, .pdf, .txt, .xlsx, .xls, .csv) up to 2MB are allowed.');
+    const error = new Error('Invalid file type. Only documents and spreadsheets (.doc, .docx, .pdf, .txt, .xlsx, .xls, .csv) up to 1MB are allowed.');
     error.code = 'INVALID_FILE_TYPE';
     return cb(error, false);
   }
   cb(null, true);
 };
 
-// 2MB size limit in bytes
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+// 1MB size limit in bytes
+const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 
 const upload = multer({
   storage,
@@ -63,7 +63,7 @@ const uploadDailyLogDoc = (req, res, next) => {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
           success: false,
-          message: 'File size exceeds 2MB limit. Please upload a document smaller than 2MB.',
+          message: 'File size exceeds 1MB limit. Please upload a document 1MB or smaller.',
         });
       }
       if (err.code === 'INVALID_FILE_TYPE') {

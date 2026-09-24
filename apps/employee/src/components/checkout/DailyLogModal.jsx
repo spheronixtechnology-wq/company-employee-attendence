@@ -17,7 +17,7 @@ export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
     setUploadError(null);
 
     if (!selectedFile) {
-      setError('Please choose or drop a work document (up to 2MB) before checking out.');
+      setError('Please choose or drop a work document (up to 1MB) before checking out.');
       return;
     }
 
@@ -50,7 +50,7 @@ export default function DailyLogModal({ isOpen, onClose, onSuccess }) {
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Upload Daily Work Document</h2>
-              <p className="text-xs text-slate-400">Upload your work document (within 2MB) to proceed to check-out</p>
+              <p className="text-xs text-slate-400">Upload your work document (within 1MB) to proceed to check-out</p>
             </div>
           </div>
           <button

@@ -42,7 +42,7 @@ export default function DailyLogPage() {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!selectedFile) {
-      setUploadError('Please choose or drop a work document (up to 2MB) before submitting.');
+      setUploadError('Please choose or drop a work document (up to 1MB) before submitting.');
       return;
     }
 
@@ -198,7 +198,7 @@ export default function DailyLogPage() {
             <div>
               <h2 className="font-bold text-slate-800">Upload Today's Work Document</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Attach your daily work report file (.doc, .docx, .pdf, .xlsx, or .txt) within 2MB size.
+                Attach your daily work report file (.doc, .docx, .pdf, .xlsx, or .txt) within 1MB size.
               </p>
             </div>
 

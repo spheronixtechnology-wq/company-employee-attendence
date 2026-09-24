@@ -101,7 +101,7 @@ const submitDailyLog = async ({ user, logData, file }) => {
   // Validate that either a document was uploaded, or previously uploaded
   if (!documentUrl && !document && !file) {
     if (uploadResultKey) await storageService.deleteFile(uploadResultKey).catch(() => {});
-    throw { statusCode: 400, message: 'Please upload a daily work document (within 2MB).' };
+    throw { statusCode: 400, message: 'Please upload a daily work document (within 1MB).' };
   }
 
   // Unified fields: provide friendly defaults if omitted

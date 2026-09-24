@@ -14,7 +14,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { ArrowLeft, Home, ChevronLeft } from 'lucide-react-native';
 import api from '../../lib/api';
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 
 export default function DailyLogScreen({ onBack }) {
   const [logs, setLogs] = useState([]);
@@ -103,7 +103,7 @@ export default function DailyLogScreen({ onBack }) {
 
   const handleSubmit = async () => {
     if (!selectedFile) {
-      Alert.alert('No Document Selected', 'Please select a daily work document (up to 2MB) before submitting.');
+      Alert.alert('No Document Selected', 'Please select a daily work document (up to 1MB) before submitting.');
       return;
     }
 
@@ -261,7 +261,7 @@ export default function DailyLogScreen({ onBack }) {
           <View style={styles.uploadCard}>
             <Text style={styles.uploadCardTitle}>Upload Today's Work Document</Text>
             <Text style={styles.uploadCardSub}>
-              Attach your daily work report file (.doc, .docx, .pdf, .xlsx, or .txt) within 2MB size.
+              Attach your daily work report file (.doc, .docx, .pdf, .xlsx, or .txt) within 1MB size.
             </Text>
 
             {/* Shift duration auto-calc banner */}
@@ -298,7 +298,7 @@ export default function DailyLogScreen({ onBack }) {
               >
                 <Text style={styles.pickerIcon}>📁</Text>
                 <Text style={styles.pickerTitle}>Choose Document</Text>
-                <Text style={styles.pickerSub}>PDF, Word, Excel, CSV, TXT up to 2MB</Text>
+                <Text style={styles.pickerSub}>PDF, Word, Excel, CSV, TXT up to 1MB</Text>
               </TouchableOpacity>
             )}
 

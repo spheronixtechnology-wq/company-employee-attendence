@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { UploadCloud, CheckCircle2, AlertCircle, X, FileCheck } from 'lucide-react';
 
-export const MAX_DOC_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+export const MAX_DOC_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
 export const ALLOWED_DOC_EXTENSIONS = ['.doc', '.docx', '.pdf', '.txt', '.rtf', '.odt', '.xlsx', '.xls', '.csv'];
 
 export const formatFileSize = (bytes) => {
@@ -25,11 +25,11 @@ export default function DailyLogDocUpload({
   const validateAndSetFile = (selectedFile) => {
     if (!selectedFile) return;
 
-    // Check file size (Strict 2MB limit)
+    // Check file size (Strict 1MB limit)
     if (selectedFile.size > MAX_DOC_SIZE_BYTES) {
       const actualSizeMb = (selectedFile.size / (1024 * 1024)).toFixed(2);
       if (setError) {
-        setError(`File size exceeds 2MB limit (Selected: ${actualSizeMb} MB). Please choose a file within 2 MB.`);
+        setError(`File size exceeds 1MB limit (Selected: ${actualSizeMb} MB). Please choose a file within 1 MB.`);
       }
       onFileSelect(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -151,7 +151,7 @@ export default function DailyLogDocUpload({
                   <span className="font-mono text-violet-500">{formatFileSize(file.size)}</span>
                   <span>•</span>
                   <span className="text-emerald-500 flex items-center gap-1 font-medium">
-                    <CheckCircle2 size={12} /> Within 2MB limit
+                    <CheckCircle2 size={12} /> Within 1MB limit
                   </span>
                 </div>
               </div>

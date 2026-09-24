@@ -11,7 +11,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import api from '../lib/api';
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 
 export default function DailyLogModal({ visible, onClose, onSuccess }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -37,7 +37,7 @@ export default function DailyLogModal({ visible, onClose, onSuccess }) {
 
       const file = result.assets[0];
       if (file.size && file.size > MAX_FILE_SIZE) {
-        Alert.alert('File Too Large', 'Please select a document under 2MB.');
+        Alert.alert('File Too Large', 'Please select a document under 1MB.');
         return;
       }
 
@@ -50,7 +50,7 @@ export default function DailyLogModal({ visible, onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     if (!selectedFile) {
-      Alert.alert('Document Required', 'Please select a daily work document (under 2MB).');
+      Alert.alert('Document Required', 'Please select a daily work document (under 1MB).');
       return;
     }
 
@@ -125,7 +125,7 @@ export default function DailyLogModal({ visible, onClose, onSuccess }) {
             <TouchableOpacity style={styles.pickerBox} onPress={handlePick}>
               <Text style={styles.pickerIcon}>📁</Text>
               <Text style={styles.pickerTitle}>Select Work Document</Text>
-              <Text style={styles.pickerSub}>PDF, Word, Excel, CSV, TXT up to 2MB</Text>
+              <Text style={styles.pickerSub}>PDF, Word, Excel, CSV, TXT up to 1MB</Text>
             </TouchableOpacity>
           )}
 

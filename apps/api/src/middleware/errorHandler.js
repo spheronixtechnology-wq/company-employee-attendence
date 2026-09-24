@@ -38,7 +38,7 @@ const errorHandler = (err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({
       success: false,
-      message: 'File size exceeds 2MB limit. Please upload a document smaller than 2MB.',
+      message: 'File size exceeds 1MB limit. Please upload a document 1MB or smaller.',
     });
   }
 
