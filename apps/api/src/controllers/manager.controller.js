@@ -176,8 +176,7 @@ const getTeamAttendance = async (req, res) => {
     const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true, deletedAt: null })
       .select('name designation email avatarUrl phone teamId')
       .populate('teamId', 'name')
-      .sort({ name: 1 })
-      .lean();
+      .sort({ name: 1 });
 
     const memberIds = members.map(m => m._id);
     const [attendanceRecords, manualRequests] = await Promise.all([
@@ -187,8 +186,7 @@ const getTeamAttendance = async (req, res) => {
           select: 'name designation email avatarUrl phone teamId',
           populate: { path: 'teamId', select: 'name' }
         })
-        .sort({ 'userId.name': 1 })
-        .lean(),
+        .sort({ 'userId.name': 1 }),
       ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
     ]);
 
@@ -210,11 +208,9 @@ const getTeamAttendance = async (req, res) => {
       const manualReq = manualRequestMap.get(member._id.toString()) || null;
 
       if (existing) {
-        const enriched = employeeProfileService.enrichAttendanceRecord(existing);
-        return {
-          ...enriched,
-          manualRequest: manualReq
-        };
+        const obj = existing.toObject ? existing.toObject() : { ...existing };
+        obj.manualRequest = manualReq;
+        return obj;
       }
       return {
         _id: `roster-${member._id}`,
@@ -267,8 +263,7 @@ const getTeamMembers = async (req, res) => {
     const logMap = new Map(dailyLogs.map(l => [l.userId.toString(), l]));
 
     const enrichedMembers = members.map(member => {
-      let att = attMap.get(member._id.toString());
-      if (att) att = employeeProfileService.enrichAttendanceRecord(att);
+      const att = attMap.get(member._id.toString());
       const dLog = logMap.get(member._id.toString());
       let currentStatus = 'not_checked_in';
       if (att) {

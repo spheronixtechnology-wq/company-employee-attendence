@@ -71,7 +71,7 @@ const getDashboard = async (req, res) => {
       const [checkedInUsers, onLeaveUsers, loggedUserIds] = await Promise.all([
         Attendance.distinct('userId', {
           date: targetDate,
-          status: { $in: ['present', 'half_day'] },
+          checkInTime: { $ne: null },
         }),
         LeaveRequest.distinct('userId', {
           status: 'approved',
@@ -100,7 +100,7 @@ const getDashboard = async (req, res) => {
       const [distinctCheckedIn, distinctOnLeave, distinctLogged] = await Promise.all([
         Attendance.distinct('userId', {
           date: { $gte: rangeStart, $lte: rangeEnd },
-          status: { $in: ['present', 'half_day'] },
+          checkInTime: { $ne: null },
         }),
         LeaveRequest.distinct('userId', {
           status: 'approved',
@@ -135,7 +135,7 @@ const getDashboard = async (req, res) => {
       {
         $match: {
           date: { $in: trendDates },
-          status: { $in: ['present', 'half_day'] },
+          checkInTime: { $ne: null },
         },
       },
       {
@@ -1137,7 +1137,7 @@ const getAttendance = async (req, res) => {
     const monthPrefix = date.slice(0, 7);
     const activeDatesInMonth = await Attendance.distinct('date', {
       date: { $regex: `^${monthPrefix}` },
-      status: { $in: ['present', 'half_day'] },
+      checkInTime: { $ne: null },
     });
 
     return success(res, 'Fetched attendance records', {
