@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@simplewebauthn/server": "^10.0.1",
+    "@supabase/supabase-js": "^2.117.1",
     "attendance-system-monorepo": "file:../..",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",

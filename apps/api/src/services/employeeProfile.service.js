@@ -162,63 +162,59 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
     }
   }
 
-  // 2. Parallel Aggregate Queries for defined period [period.from, period.to]
-  const [
-    periodAttendances,
-    periodLogs,
-    periodOvertimes,
-    periodLeaves,
-    registeredDevice,
-    deviceRequests,
-    recentPunchAttendances,
-  ] = await Promise.all([
-    // Attendance in period
-    Attendance.find({
-      userId: member._id,
-      date: { $gte: period.from, $lte: period.to },
-    })
-      .populate('reactivationDecisionBy', 'name email role')
-      .sort({ date: -1 })
-      .lean(),
+  // 2. Sequential Queries for defined period [period.from, period.to]
+  // Running these sequentially prevents MongoNetworkTimeoutError on Atlas M0 clusters
+  // by avoiding sudden connection pool spikes.
+  const periodAttendances = await Attendance.find({
+    userId: member._id,
+    date: { $gte: period.from, $lte: period.to },
+  })
+    .populate('reactivationDecisionBy', 'name email role')
+    .sort({ date: -1 })
+    .lean();
 
-    // Daily work logs in period
-    DailyLog.find({
-      userId: member._id,
-      logDate: { $gte: period.from, $lte: period.to },
-    }).sort({ logDate: -1, createdAt: -1 }).lean(),
+  const periodLogs = await DailyLog.find({
+    userId: member._id,
+    logDate: { $gte: period.from, $lte: period.to },
+  })
+    .sort({ logDate: -1, createdAt: -1 })
+    .limit(10)
+    .lean();
 
-    // Overtime in period
-    Overtime.find({
-      userId: member._id,
-      date: { $gte: period.from, $lte: period.to },
-    })
-      .populate('permissionDecisionBy', 'name email')
-      .populate('workVerifiedBy', 'name email')
-      .sort({ date: -1, createdAt: -1 })
-      .lean(),
+  const periodOvertimes = await Overtime.find({
+    userId: member._id,
+    date: { $gte: period.from, $lte: period.to },
+  })
+    .populate('permissionDecisionBy', 'name email')
+    .populate('workVerifiedBy', 'name email')
+    .sort({ date: -1, createdAt: -1 })
+    .lean();
 
-    // Leaves overlapping period
-    LeaveRequest.find({
-      userId: member._id,
-      startDate: { $lte: period.to },
-      endDate: { $gte: period.from },
-    })
-      .populate('leaveTypeId', 'name code')
-      .sort({ startDate: -1 })
-      .lean(),
+  const periodLeaves = await LeaveRequest.find({
+    userId: member._id,
+    startDate: { $lte: period.to },
+    endDate: { $gte: period.from },
+  })
+    .populate('leaveTypeId', 'name code')
+    .sort({ startDate: -1 })
+    .lean();
 
-    // Active registered hardware device
-    RegisteredDevice.findOne({ userId: member._id }).sort({ updatedAt: -1 }).lean(),
+  const registeredDevice = await RegisteredDevice.findOne({ userId: member._id })
+    .sort({ updatedAt: -1 })
+    .lean();
 
-    // Device requests (hardware enrollment & replacement history)
-    DeviceRequest.find({ userId: member._id }).sort({ createdAt: -1 }).limit(10).lean(),
+  const deviceRequests = await DeviceRequest.find({ userId: member._id })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
 
-    // Recent attendances with punch IP & method (for device audit)
-    Attendance.find({ userId: member._id, checkInTime: { $exists: true, $ne: null } })
-      .sort({ date: -1 })
-      .limit(10)
-      .lean(),
-  ]);
+  const recentPunchAttendances = await Attendance.find({ 
+    userId: member._id, 
+    checkInTime: { $exists: true, $ne: null } 
+  })
+    .sort({ date: -1 })
+    .limit(10)
+    .lean();
 
   // --- Enrich Attendances with Accurate Net Work Duration ---
   // (Total duration from checkin to checkout minus break time)

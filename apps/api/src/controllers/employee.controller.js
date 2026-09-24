@@ -1035,7 +1035,8 @@ const getDailyLog = async (req, res) => {
     const userId = req.user._id;
     const today = getTodayDateString();
     
-    const log = await DailyLog.findOne({ userId, logDate: today });
+    const log = await DailyLog.findOne({ userId, logDate: today })
+      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks documentName documentSize documentMimeType doctype document.fileName document.fileSize document.mimeType document.storageProvider');
     return success(res, 'Daily log fetched', { log });
   } catch (error) {
     console.error('Fetch daily log error:', error);

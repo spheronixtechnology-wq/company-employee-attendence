@@ -17,6 +17,7 @@ import {
   Globe,
   Network,
 } from 'lucide-react';
+import { useSocket } from '../contexts/SocketContext';
 import api from '../lib/api';
 
 // Helper Haversine distance calculator for on-page simulation
@@ -35,6 +36,7 @@ const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
 };
 
 export default function WifiSettingsPage() {
+  const { socket } = useSocket();
   const [locations, setLocations] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -99,8 +101,8 @@ export default function WifiSettingsPage() {
     setLoading(true);
     try {
       const [locRes, methodRes, ipRes] = await Promise.allSettled([
-        api.get('/manager/office-locations'),
-        api.get('/manager/attendance-method/active'),
+        api.get(`/manager/office-locations?t=${Date.now()}`),
+        api.get(`/manager/attendance-method/active?t=${Date.now()}`),
         api.get('/manager/current-ip'),
       ]);
 
@@ -161,6 +163,19 @@ export default function WifiSettingsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => {
+      fetchData();
+    };
+    socket.on('office-location:updated', handleUpdate);
+    socket.on('attendance-setting:updated', handleUpdate);
+    return () => {
+      socket.off('office-location:updated', handleUpdate);
+      socket.off('attendance-setting:updated', handleUpdate);
+    };
+  }, [socket, fetchData]);
 
   // When selected office changes
   const handleOfficeSelect = (e) => {

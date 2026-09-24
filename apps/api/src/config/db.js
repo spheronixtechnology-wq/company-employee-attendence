@@ -7,9 +7,9 @@ const connectDB = async () => {
 
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      // Mongoose 8+ has good defaults, minimal options needed
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 120000,
+      readPreference: 'primary',
     });
 
     isConnected = true;
@@ -20,11 +20,18 @@ const connectDB = async () => {
   }
 };
 
-// Graceful shutdown
+// Graceful shutdown for App termination (Ctrl+C)
 process.on('SIGINT', async () => {
   await mongoose.connection.close();
   console.log('MongoDB connection closed (app terminated).');
   process.exit(0);
+});
+
+// Graceful shutdown for Nodemon restarts
+process.on('SIGUSR2', async () => {
+  await mongoose.connection.close();
+  console.log('MongoDB connection closed (nodemon restart).');
+  process.kill(process.pid, 'SIGUSR2');
 });
 
 module.exports = connectDB;

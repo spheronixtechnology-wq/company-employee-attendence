@@ -17,6 +17,7 @@ const DailyLog = require('../models/DailyLog');
 const LeaveRequest = require('../models/LeaveRequest');
 const LocationRequest = require('../models/LocationRequest');
 const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
+const LeaveType = require('../models/LeaveType');
 const leaveService = require('../services/leave.service');
 const employeeProfileService = require('../services/employeeProfile.service');
 const { writeAuditLog } = require('../services/audit.service');
@@ -1056,7 +1057,9 @@ const getAttendance = async (req, res) => {
         .populate('userId', 'name designation email avatarUrl phone teamId role')
         .lean(),
       ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
-      DailyLog.find({ userId: { $in: memberIds }, logDate: date }).lean(),
+      DailyLog.find({ userId: { $in: memberIds }, logDate: date })
+        .select('userId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks documentName documentSize documentMimeType doctype document.fileName document.fileSize document.mimeType document.storageProvider')
+        .lean(),
     ]);
 
     const manualRequestMap = new Map();

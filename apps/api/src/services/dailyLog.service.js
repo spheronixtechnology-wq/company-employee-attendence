@@ -3,6 +3,7 @@ const Attendance = require('../models/Attendance');
 const { writeAuditLog } = require('./audit.service');
 const { getTodayDateString } = require('../utils/dateUtils');
 const { getFileUrl } = require('./upload.service');
+const storageService = require('./storage/storageService');
 
 /**
  * Submit or update a daily log.
@@ -47,6 +48,8 @@ const submitDailyLog = async ({ user, logData, file }) => {
   let documentSize = null;
   let documentMimeType = null;
   let doctype = null;
+  let document = null;
+  let uploadResultKey = null;
 
   if (file) {
     documentName = file.originalname;
@@ -56,9 +59,30 @@ const submitDailyLog = async ({ user, logData, file }) => {
     doctype = extMatch ? extMatch.toLowerCase() : 'doc';
 
     if (file.buffer) {
-      // 64-base convert the doc into data link
-      const base64Data = file.buffer.toString('base64');
-      documentUrl = `data:${documentMimeType};base64,${base64Data}`;
+      // Phase 3: Upload directly to cloud storage (Supabase) instead of Base64
+      const uniqueId = Math.random().toString(36).substring(2, 10);
+      const safeName = documentName.replace(/[^a-zA-Z0-9.\-]/g, '_');
+      
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      
+      const storageKey = `daily-logs/${user._id}/${year}/${month}/${day}/${uniqueId}-${safeName}`;
+      
+      try {
+        uploadResultKey = await storageService.uploadFile(file.buffer, storageKey, documentMimeType);
+        
+        document = {
+          storageProvider: 'supabase',
+          storageKey: uploadResultKey,
+          fileName: documentName,
+          mimeType: documentMimeType,
+          fileSize: documentSize
+        };
+      } catch (err) {
+        throw { statusCode: 500, message: 'Failed to upload document to storage provider.' };
+      }
     } else if (file.filename) {
       documentUrl = getFileUrl(file.filename, 'daily-logs');
     }
@@ -75,7 +99,8 @@ const submitDailyLog = async ({ user, logData, file }) => {
   }
 
   // Validate that either a document was uploaded, or previously uploaded
-  if (!documentUrl && !file) {
+  if (!documentUrl && !document && !file) {
+    if (uploadResultKey) await storageService.deleteFile(uploadResultKey).catch(() => {});
     throw { statusCode: 400, message: 'Please upload a daily work document (within 2MB).' };
   }
 
@@ -116,39 +141,47 @@ const submitDailyLog = async ({ user, logData, file }) => {
     .filter(Boolean)
     .map((link) => normalizeUrl(link));
 
-  const log = await DailyLog.findOneAndUpdate(
-    { userId: user._id, logDate: today },
-    {
-      $set: {
-        teamId: user.teamId?._id || user.teamId,
-        logDate: today,
-        hoursSpent: logData.hoursSpent,
-        // Document upload fields (Base64 data link & metadata)
-        documentUrl: documentUrl || undefined,
-        documentName: documentName || undefined,
-        documentSize: documentSize || undefined,
-        documentMimeType: documentMimeType || undefined,
-        doctype: doctype || undefined,
-        // Common / backward compatibility
-        attachmentUrl: documentUrl || undefined,
-        // Unified fields
-        taskTitle,
-        projectName,
-        description,
-        githubLink: normalizedGithubLink,
-        researchLinks: cleanedResearchLinks,
-        // Legacy fields retained for backwards compatibility
-        ticketId: logData.ticketId || null,
-        blockers: logData.blockers || null,
-        campaignName: logData.campaignName || null,
-        platform: logData.platform || null,
-        outputSummary: logData.outputSummary || null,
-        status: 'submitted',
-        submittedAt: new Date(),
+  let log;
+  try {
+    log = await DailyLog.findOneAndUpdate(
+      { userId: user._id, logDate: today },
+      {
+        $set: {
+          teamId: user.teamId?._id || user.teamId,
+          logDate: today,
+          hoursSpent: logData.hoursSpent,
+          // Phase 3 Document upload metadata
+          document: document || undefined,
+          // Base64 data link & metadata (Legacy fallback if existing)
+          documentUrl: documentUrl || undefined,
+          documentName: documentName || undefined,
+          documentSize: documentSize || undefined,
+          documentMimeType: documentMimeType || undefined,
+          doctype: doctype || undefined,
+          // Common / backward compatibility
+          attachmentUrl: documentUrl || undefined,
+          // Unified fields
+          taskTitle,
+          projectName,
+          description,
+          githubLink: normalizedGithubLink,
+          researchLinks: cleanedResearchLinks,
+          // Legacy fields retained for backwards compatibility
+          ticketId: logData.ticketId || null,
+          blockers: logData.blockers || null,
+          campaignName: logData.campaignName || null,
+          platform: logData.platform || null,
+          outputSummary: logData.outputSummary || null,
+          status: 'submitted',
+          submittedAt: new Date(),
+        },
       },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (err) {
+    if (uploadResultKey) await storageService.deleteFile(uploadResultKey).catch(() => {});
+    throw err;
+  }
 
   // Update attendance dailyLogSubmitted cache
   await Attendance.updateOne(

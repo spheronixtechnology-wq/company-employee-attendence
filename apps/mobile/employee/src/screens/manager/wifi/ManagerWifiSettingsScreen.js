@@ -137,6 +137,26 @@ export default function ManagerWifiSettingsScreen({ navigation }) {
     }
   };
 
+  const handleAutoConfigureAll = () => {
+    const required = [
+      networkInfo.publicIpv4,
+      networkInfo.ipv6Subnet,
+      networkInfo.localWifi?.subnet,
+      networkInfo.localWifi?.ip,
+    ].filter(Boolean);
+
+    const newAllowed = Array.from(new Set([...form.allowedIps, ...required]));
+    const newSsid = form.wifiSsid || networkInfo.wifiSsid || '';
+
+    setForm(prev => ({
+      ...prev,
+      wifiSsid: newSsid,
+      allowedIps: newAllowed,
+    }));
+
+    Alert.alert('Auto-Configured', `Added ${required.length} network addresses to the whitelist.`);
+  };
+
   const handleOfficeChange = (officeId) => {
     const loc = locations.find(l => l._id === officeId);
     setSelectedOfficeId(officeId);
@@ -198,6 +218,8 @@ export default function ManagerWifiSettingsScreen({ navigation }) {
 
   const isIpv4Allowed = networkInfo.publicIpv4 ? form.allowedIps.includes(networkInfo.publicIpv4) : false;
   const isIpv6SubnetAllowed = networkInfo.ipv6Subnet ? form.allowedIps.includes(networkInfo.ipv6Subnet) : false;
+  const isLocalIpAllowed = networkInfo.localWifi?.ip ? form.allowedIps.includes(networkInfo.localWifi.ip) : false;
+  const isLocalSubnetAllowed = networkInfo.localWifi?.subnet ? form.allowedIps.includes(networkInfo.localWifi.subnet) : false;
 
   if (loading && !refreshing) {
     return (
@@ -289,13 +311,66 @@ export default function ManagerWifiSettingsScreen({ navigation }) {
                   <Zap size={18} color={colors.primary} />
                   <Text style={styles.sectionTitle}>Admin Network Signature</Text>
                 </View>
-                <TouchableOpacity onPress={handleRefreshNetwork} disabled={refreshing}>
-                  <RefreshCw size={18} color={refreshing ? colors.secondary : colors.primary} style={refreshing ? { opacity: 0.5 } : {}} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <TouchableOpacity 
+                    style={styles.autoConfigBtn}
+                    onPress={handleAutoConfigureAll}
+                  >
+                    <Zap size={14} color="#fff" />
+                    <Text style={styles.autoConfigBtnText}>Auto-Detect All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleRefreshNetwork} disabled={refreshing}>
+                    <RefreshCw size={18} color={refreshing ? colors.secondary : colors.primary} style={refreshing ? { opacity: 0.5 } : {}} />
+                  </TouchableOpacity>
+                </View>
               </View>
               <Text style={styles.cardSubtitle}>Your current device's network fingerprint. Add these to the whitelist to approve this network.</Text>
 
               <View style={styles.networkList}>
+                {/* Local Wi-Fi Subnet (LAN) */}
+                {networkInfo.localWifi?.subnet && (
+                  <View style={styles.networkItem}>
+                    <View style={styles.networkItemLeft}>
+                      <Wifi size={16} color={colors.primary} />
+                      <View>
+                        <Text style={styles.networkItemLabel}>Wi-Fi Subnet (LAN)</Text>
+                        <Text style={styles.networkItemValue}>{networkInfo.localWifi.subnet}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity 
+                      style={[styles.whitelistBtn, isLocalSubnetAllowed && styles.whitelistedBtn]}
+                      onPress={() => handleAddWhitelist(networkInfo.localWifi.subnet)}
+                      disabled={isLocalSubnetAllowed}
+                    >
+                      <Text style={[styles.whitelistBtnText, isLocalSubnetAllowed && styles.whitelistedBtnText]}>
+                        {isLocalSubnetAllowed ? 'Whitelisted' : 'Whitelist'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Local Wi-Fi IP (LAN) */}
+                {networkInfo.localWifi?.ip && (
+                  <View style={styles.networkItem}>
+                    <View style={styles.networkItemLeft}>
+                      <Globe size={16} color={colors.primary} />
+                      <View>
+                        <Text style={styles.networkItemLabel}>Device IP (LAN)</Text>
+                        <Text style={styles.networkItemValue}>{networkInfo.localWifi.ip}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity 
+                      style={[styles.whitelistBtn, isLocalIpAllowed && styles.whitelistedBtn]}
+                      onPress={() => handleAddWhitelist(networkInfo.localWifi.ip)}
+                      disabled={isLocalIpAllowed}
+                    >
+                      <Text style={[styles.whitelistBtnText, isLocalIpAllowed && styles.whitelistedBtnText]}>
+                        {isLocalIpAllowed ? 'Whitelisted' : 'Whitelist'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* IPv4 */}
                 <View style={styles.networkItem}>
                   <View style={styles.networkItemLeft}>
@@ -448,6 +523,9 @@ const styles = StyleSheet.create({
   whitelistBtnText: { fontSize: 12, fontWeight: '600', color: '#fff' },
   whitelistedBtn: { backgroundColor: '#e2e8f0' },
   whitelistedBtnText: { color: colors.secondary },
+  
+  autoConfigBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  autoConfigBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 13, fontWeight: '600', color: colors.textDark, marginBottom: 8 },

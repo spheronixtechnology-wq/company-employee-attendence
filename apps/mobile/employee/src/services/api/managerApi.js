@@ -21,7 +21,8 @@ export const managerApi = {
   // --- Phase 5: Dashboard ---
   getDashboard: (dateStr) => request('get', `/manager/dashboard?date=${dateStr}`),
   getTeamMembers: (dateStr) => request('get', `/manager/team/members${dateStr ? `?date=${dateStr}` : ''}`),
-  getMemberProfile: (id) => request('get', `/manager/team/members/${id}/profile`),
+  getMemberProfile: (id, preset = 'current_month') => request('get', `/manager/team/members/${id}/profile?preset=${preset}`),
+  getMemberLeaveBalances: (id) => request('get', `/manager/team/members/${id}/leave-balances`),
   createTeamMember: (payload) => request('post', '/manager/team/members', payload),
   deleteTeamMember: (id) => request('delete', `/manager/team/members/${id}`),
   getPendingLeaves: () => request('get', '/manager/team/leave-requests?status=pending'),
@@ -64,7 +65,7 @@ export const managerApi = {
   // 9.1 Attendance Method
   getActiveAttendanceMethod: () => request('get', `/manager/attendance-method/active`),
   switchAttendanceMethod: (payload) => request('patch', `/manager/attendance-method/switch`, payload),
-  heartbeatAttendanceMethod: () => request('patch', `/manager/attendance-method/heartbeat`),
+  heartbeatAttendanceMethod: (payload) => request('patch', `/manager/attendance-method/heartbeat`, payload),
 
   // 9.2 Office Locations
   getOfficeLocations: () => request('get', `/manager/office-locations`),

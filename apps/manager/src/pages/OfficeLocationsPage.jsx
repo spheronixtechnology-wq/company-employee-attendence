@@ -14,6 +14,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import api from '../lib/api';
+import { useSocket } from '../contexts/SocketContext';
 
 export default function OfficeLocationsPage() {
   const [locations, setLocations] = useState([]);
@@ -25,6 +26,7 @@ export default function OfficeLocationsPage() {
   const [detectingIp, setDetectingIp] = useState(false);
   const [detectedIpInfo, setDetectedIpInfo] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const { socket } = useSocket();
 
   const [form, setForm] = useState({
     officeName: '',
@@ -38,7 +40,7 @@ export default function OfficeLocationsPage() {
 
   const fetchLocations = async () => {
     try {
-      const res = await api.get('/manager/office-locations');
+      const res = await api.get(`/manager/office-locations?t=${Date.now()}`);
       setLocations(res.data?.data?.locations || []);
     } catch (err) {
       console.error('Failed to load office locations:', err);
@@ -50,6 +52,32 @@ export default function OfficeLocationsPage() {
   useEffect(() => {
     fetchLocations();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleUpdate = (data) => {
+      if (data && data.location) {
+        setLocations(prev => {
+          const index = prev.findIndex(loc => loc._id === data.location._id);
+          if (index > -1) {
+            const newLocations = [...prev];
+            newLocations[index] = data.location;
+            return newLocations;
+          }
+          return [data.location, ...prev];
+        });
+      }
+      // Always fetch to guarantee sync
+      fetchLocations();
+    };
+
+    socket.on('office-location:updated', handleUpdate);
+
+    return () => {
+      socket.off('office-location:updated', handleUpdate);
+    };
+  }, [socket]);
 
   const resetForm = () => {
     setForm({

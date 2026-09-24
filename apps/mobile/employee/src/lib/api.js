@@ -48,8 +48,7 @@ api.interceptors.request.use(async (config) => {
     config.data?._parts !== undefined ||
     (config.data && typeof config.data.append === 'function')
   ) {
-    delete config.headers['Content-Type'];
-    delete config.headers['content-type'];
+    config.headers['Content-Type'] = 'multipart/form-data';
   }
 
   // 1. Attach JWT Authorization

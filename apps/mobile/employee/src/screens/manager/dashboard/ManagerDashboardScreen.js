@@ -35,13 +35,15 @@ import {
   MapPin,
   Wifi,
   ChevronDown,
-  ShieldCheck
+  ShieldCheck,
+  Briefcase
 } from 'lucide-react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSocket } from '../../../contexts/SocketContext';
 import { managerApi } from '../../../services/api/managerApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Member360ProfileModal from '../../../components/Member360ProfileModal';
 
 const colors = {
   primary: '#8b5cf6', // Violet matching Web UI
@@ -113,6 +115,7 @@ export default function ManagerDashboardScreen({ onNavigate }) {
   const [refreshing, setRefreshing] = useState(false);
   const [actionProcessing, setActionProcessing] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [profileModal, setProfileModal] = useState(null); // Added for 360 profile
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -502,49 +505,56 @@ export default function ManagerDashboardScreen({ onNavigate }) {
                 else if (isOnBreak) { statusColor = colors.warning; statusBg = colors.warningLight; statusLabel = 'On Break'; }
 
                 return (
-                  <View key={m._id} style={styles.tableRow}>
-                    <View style={styles.tableRowUser}>
-                      <View style={styles.avatar}>
-                        {m.avatarUrl ? (
-                          <Image source={{ uri: m.avatarUrl }} style={styles.avatarImg} />
+                  <TouchableOpacity 
+                    key={m._id} 
+                    style={[styles.premiumCard, { borderLeftColor: statusColor }]}
+                    activeOpacity={0.8}
+                    onPress={() => setProfileModal(m)}
+                  >
+                    <View style={styles.premiumCardHeader}>
+                      <View style={styles.premiumAvatarContainer}>
+                        <View style={[styles.premiumAvatar, { backgroundColor: statusBg }]}>
+                          {m.avatarUrl ? (
+                            <Image source={{ uri: m.avatarUrl }} style={styles.premiumAvatarImg} />
+                          ) : (
+                            <Text style={[styles.premiumAvatarText, { color: statusColor }]}>{m.name?.[0]?.toUpperCase() || 'U'}</Text>
+                          )}
+                        </View>
+                        {isCheckedIn && <View style={styles.premiumActiveIndicator} />}
+                      </View>
+                      <View style={styles.premiumUserInfo}>
+                        <Text style={styles.premiumUserName}>{m.name}</Text>
+                        <Text style={[styles.premiumUserStatus, { color: statusColor }]}>{statusLabel}</Text>
+                      </View>
+                      <View style={styles.premiumLogBadge}>
+                        {m.dailyLogSubmitted ? (
+                          <View style={styles.logBadgeSuccess}><Text style={styles.logBadgeSuccessText}>Logged</Text></View>
+                        ) : isCheckedIn ? (
+                          <View style={styles.logBadgeWarning}><Text style={styles.logBadgeWarningText}>Pending</Text></View>
                         ) : (
-                          <Text style={styles.avatarText}>{m.name?.[0]?.toUpperCase() || 'U'}</Text>
+                          <View style={styles.logBadgeMuted}><Text style={styles.logBadgeMutedText}>No Log</Text></View>
                         )}
                       </View>
-                      <View>
-                        <Text style={styles.tableUserName}>{m.name}</Text>
-                        <View style={[styles.inlineBadge, { backgroundColor: statusBg }]}>
-                          <Text style={[styles.inlineBadgeText, { color: statusColor }]}>{statusLabel}</Text>
-                        </View>
-                      </View>
                     </View>
-                    
-                    <View style={styles.tableRowData}>
-                      <View style={styles.dataCol}>
-                        <Text style={styles.dataColValue}>
+
+                    <View style={styles.premiumStatsRow}>
+                      <View style={styles.premiumStatBox}>
+                        <Clock size={14} color="#64748b" style={{ marginBottom: 4 }} />
+                        <Text style={styles.premiumStatLabel}>Check-In</Text>
+                        <Text style={styles.premiumStatValue}>
                           {m.checkInTime ? new Date(m.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
                         </Text>
-                        <Text style={styles.dataColLabel}>Check-In</Text>
                       </View>
-                      
-                      <View style={[styles.dataCol, { alignItems: 'flex-end' }]}>
-                        <Text style={styles.dataColValue}>
+                      <View style={styles.premiumStatDivider} />
+                      <View style={styles.premiumStatBox}>
+                        <Briefcase size={14} color="#64748b" style={{ marginBottom: 4 }} />
+                        <Text style={styles.premiumStatLabel}>Work Hrs</Text>
+                        <Text style={[styles.premiumStatValue, isCheckedIn && { color: colors.primary }]}>
                           {m.totalWorkMinutes ? formatHrs(m.totalWorkMinutes * 60000) : (isCheckedIn ? 'Running' : '—')}
                         </Text>
-                        <Text style={styles.dataColLabel}>Work Hrs</Text>
                       </View>
                     </View>
-                    
-                    <View style={styles.logStatusContainer}>
-                      {m.dailyLogSubmitted ? (
-                        <Text style={styles.logStatusSuccess}>✅ Log Filed</Text>
-                      ) : isCheckedIn ? (
-                        <Text style={styles.logStatusWarning}>Pending EOD</Text>
-                      ) : (
-                        <Text style={styles.logStatusMuted}>— No Log</Text>
-                      )}
-                    </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -950,95 +960,114 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  // Table List
+  // Premium Cards for Table List
   tableList: {
     marginTop: 8,
+    paddingHorizontal: 2, // Allow shadows to not be clipped
   },
-  tableRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  premiumCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#64748b',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  tableRowUser: {
+  premiumCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
+  premiumAvatarContainer: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  premiumAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 16, // squircle look
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  avatarImg: {
-    width: 32,
-    height: 32,
+  premiumAvatarImg: {
+    width: 44,
+    height: 44,
     borderRadius: 16,
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+  premiumAvatarText: {
+    fontSize: 18,
+    fontWeight: '800',
   },
-  tableUserName: {
-    fontSize: 14,
+  premiumActiveIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.success,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  premiumUserInfo: {
+    flex: 1,
+  },
+  premiumUserName: {
+    fontSize: 15,
     fontWeight: '700',
     color: colors.textDark,
     marginBottom: 4,
   },
-  inlineBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  premiumUserStatus: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  inlineBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
+  premiumLogBadge: {
+    alignItems: 'flex-end',
   },
-  tableRowData: {
+  logBadgeSuccess: { backgroundColor: colors.successLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  logBadgeSuccessText: { color: colors.success, fontSize: 10, fontWeight: '700' },
+  logBadgeWarning: { backgroundColor: colors.warningLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  logBadgeWarningText: { color: colors.warning, fontSize: 10, fontWeight: '700' },
+  logBadgeMuted: { backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  logBadgeMutedText: { color: colors.textMuted, fontSize: 10, fontWeight: '600' },
+  
+  premiumStatsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     backgroundColor: '#f8fafc',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
   },
-  dataCol: {
+  premiumStatBox: {
     flex: 1,
+    alignItems: 'center',
   },
-  dataColValue: {
+  premiumStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#e2e8f0',
+  },
+  premiumStatLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  premiumStatValue: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textDark,
     fontVariant: ['tabular-nums'],
   },
-  dataColLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  logStatusContainer: {
-    alignItems: 'flex-end',
-  },
-  logStatusSuccess: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.success,
-  },
-  logStatusWarning: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.warning,
-  },
-  logStatusMuted: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
+  
   fabLogout: {
     position: 'absolute',
     bottom: 24,

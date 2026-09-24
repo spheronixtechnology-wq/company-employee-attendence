@@ -1953,7 +1953,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
             </div>
 
             {/* Document Submission Card */}
-            {(log.documentUrl || log.attachmentUrl) && (
+            {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype) && (
               <div className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -1995,7 +1995,25 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                   <button
                     type="button"
                     id="preview-document-btn"
-                    onClick={() => setShowPreviewModal(true)}
+                    onClick={async () => {
+                      if (!log.documentUrl && !log.attachmentUrl && log._id) {
+                        try {
+                          const res = await api.get(`/manager/team/daily-log/${log._id}/document`);
+                          if (res.data?.success && res.data?.data) {
+                            log.documentUrl = res.data.data.documentUrl;
+                            log.attachmentUrl = res.data.data.attachmentUrl;
+                          } else {
+                            alert('Could not load the document payload from the server.');
+                            return;
+                          }
+                        } catch (e) { 
+                          console.error('Failed to load document payload', e);
+                          alert('Failed to load document payload: ' + (e.response?.data?.message || e.message));
+                          return;
+                        }
+                      }
+                      setShowPreviewModal(true);
+                    }}
                     className="px-3.5 py-2 text-xs font-black text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Eye size={14} /> Preview Document
@@ -2004,13 +2022,28 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                   <button
                     type="button"
                     id="download-document-direct-btn"
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = log.documentUrl || log.attachmentUrl;
-                      link.download = log.documentName || `work-document.${log.doctype || 'dat'}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
+                    onClick={async () => {
+                      try {
+                        let finalUrl = log.documentUrl || log.attachmentUrl;
+                        if (!finalUrl && log._id) {
+                          const res = await api.get(`/manager/team/daily-log/${log._id}/document`);
+                          if (res.data?.success && res.data?.data) {
+                            finalUrl = res.data.data.documentUrl || res.data.data.attachmentUrl;
+                          }
+                        }
+                        if (finalUrl) {
+                          const link = document.createElement('a');
+                          link.href = finalUrl;
+                          link.download = log.documentName || `work-document.${log.doctype || 'dat'}`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        } else {
+                          alert('Document payload could not be loaded.');
+                        }
+                      } catch (e) {
+                        alert('Failed to download document: ' + e.message);
+                      }
                     }}
                     className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-2xs active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >

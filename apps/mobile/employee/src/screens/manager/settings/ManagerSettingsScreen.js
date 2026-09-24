@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   RefreshControl, ActivityIndicator, Alert, TextInput,
-  Modal, Switch, Platform, KeyboardAvoidingView
+  Modal, Switch, Platform, KeyboardAvoidingView, TouchableWithoutFeedback
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -11,6 +11,7 @@ import {
   ChevronLeft, Loader2, Check
 } from 'lucide-react-native';
 import { managerApi } from '../../../services/api/managerApi';
+import { useSocket } from '../../../contexts/SocketContext';
 
 const colors = {
   primary: '#8b5cf6', // Violet
@@ -31,6 +32,7 @@ const ATTENDANCE_METHODS = [
 export default function ManagerSettingsScreen({ navigation, initialTab }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'attendance');
   const [refreshing, setRefreshing] = useState(false);
+  const { socket } = useSocket();
 
   // --- Attendance Method State ---
   const [currentMethod, setCurrentMethod] = useState(null);
@@ -51,6 +53,9 @@ export default function ManagerSettingsScreen({ navigation, initialTab }) {
     officeName: '', latitude: '', longitude: '',
     radiusMeters: '200', wifiSsid: '', allowedIps: '', status: 'active'
   });
+
+  // --- Reason Modal state (cross-platform replacement for Alert.prompt) ---
+  const [reasonModal, setReasonModal] = useState({ visible: false, methodKey: '', methodLabel: '', reason: '' });
 
   const fetchActiveMethod = useCallback(async () => {
     try {
@@ -82,6 +87,42 @@ export default function ManagerSettingsScreen({ navigation, initialTab }) {
     fetchLocations();
   }, [fetchActiveMethod, fetchLocations]);
 
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleAttendanceUpdate = (data) => {
+      if (data && data.activeMethod) {
+        setCurrentMethod(data);
+      } else {
+        fetchActiveMethod();
+      }
+    };
+
+    const handleLocationUpdate = (data) => {
+      if (data && data.location) {
+        setLocations(prev => {
+          const index = prev.findIndex(loc => loc._id === data.location._id);
+          if (index > -1) {
+            const newLocations = [...prev];
+            newLocations[index] = data.location;
+            return newLocations;
+          }
+          return [data.location, ...prev];
+        });
+      } else {
+        fetchLocations();
+      }
+    };
+
+    socket.on('attendance-setting:updated', handleAttendanceUpdate);
+    socket.on('office-location:updated', handleLocationUpdate);
+
+    return () => {
+      socket.off('attendance-setting:updated', handleAttendanceUpdate);
+      socket.off('office-location:updated', handleLocationUpdate);
+    };
+  }, [socket, fetchActiveMethod, fetchLocations]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([fetchActiveMethod(), fetchLocations()]);
@@ -90,30 +131,25 @@ export default function ManagerSettingsScreen({ navigation, initialTab }) {
 
   // --- Handlers: Attendance Method ---
   const handleSwitchMethod = (methodKey, label) => {
-    Alert.prompt(
-      `Switch to ${label}`,
-      `Reason for switching attendance verification method to "${label}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Switch',
-          onPress: async (reason) => {
-            if (!reason) {
-              Alert.alert('Error', 'Reason is required to switch attendance methods.');
-              return;
-            }
-            try {
-              await managerApi.switchAttendanceMethod({ method: methodKey, reason: reason.trim() });
-              setCurrentMethod(methodKey);
-              Alert.alert('Success', `Method switched to ${label}`);
-            } catch (err) {
-              Alert.alert('Error', err.response?.data?.message || 'Failed to switch method.');
-            }
-          }
-        }
-      ]
-    );
+    setReasonModal({ visible: true, methodKey, methodLabel: label, reason: '' });
   };
+
+  const confirmSwitchMethod = async () => {
+    const { methodKey, methodLabel, reason } = reasonModal;
+    if (!reason.trim()) {
+      Alert.alert('Error', 'Reason is required to switch attendance methods.');
+      return;
+    }
+    setReasonModal(prev => ({ ...prev, visible: false }));
+    try {
+      await managerApi.switchAttendanceMethod({ method: methodKey, reason: reason.trim() });
+      setCurrentMethod(methodKey);
+      Alert.alert('Success', `Method switched to ${methodLabel}`);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to switch method.');
+    }
+  };
+
 
   const handleToggleHeartbeat = async (value) => {
     try {
@@ -322,7 +358,8 @@ export default function ManagerSettingsScreen({ navigation, initialTab }) {
                   </View>
                   
                   <View style={styles.locDetails}>
-                    <Text style={styles.locDetailText}>Coordinates: {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</Text>
+                    <Text style={styles.locDetailText}>Lat: {loc.latitude}</Text>
+                    <Text style={styles.locDetailText}>Lng: {loc.longitude}</Text>
                     <Text style={styles.locDetailText}>Radius: {loc.radiusMeters}m</Text>
                     {loc.wifiSsid ? <Text style={styles.locDetailText}>Wi-Fi SSID: {loc.wifiSsid}</Text> : null}
                     {loc.allowedIps?.length > 0 ? <Text style={styles.locDetailText}>Allowed IPs: {loc.allowedIps.join(', ')}</Text> : null}
@@ -401,6 +438,46 @@ export default function ManagerSettingsScreen({ navigation, initialTab }) {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Reason Input Modal for switching attendance method */}
+      <Modal
+        visible={reasonModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReasonModal(prev => ({ ...prev, visible: false }))}
+      >
+        <TouchableWithoutFeedback onPress={() => setReasonModal(prev => ({ ...prev, visible: false }))}>
+          <View style={styles.reasonOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.reasonCard}>
+                <Text style={styles.reasonTitle}>Switch to {reasonModal.methodLabel}</Text>
+                <Text style={styles.reasonSubtitle}>Provide a reason for switching the attendance verification method.</Text>
+                <TextInput
+                  style={styles.reasonInput}
+                  placeholder="Enter reason..."
+                  placeholderTextColor="#94a3b8"
+                  value={reasonModal.reason}
+                  onChangeText={text => setReasonModal(prev => ({ ...prev, reason: text }))}
+                  multiline
+                  numberOfLines={3}
+                  autoFocus
+                />
+                <View style={styles.reasonActions}>
+                  <TouchableOpacity
+                    style={styles.reasonCancelBtn}
+                    onPress={() => setReasonModal(prev => ({ ...prev, visible: false }))}
+                  >
+                    <Text style={styles.reasonCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.reasonConfirmBtn} onPress={confirmSwitchMethod}>
+                    <Text style={styles.reasonConfirmText}>Switch</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
     </SafeAreaView>
@@ -497,4 +574,16 @@ const styles = StyleSheet.create({
   modalBtnCancelText: { fontSize: 15, fontWeight: '600', color: colors.secondary },
   modalBtnConfirm: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8, backgroundColor: colors.primary },
   modalBtnConfirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Reason Modal styles
+  reasonOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  reasonCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 10 },
+  reasonTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', marginBottom: 6 },
+  reasonSubtitle: { fontSize: 13, color: '#64748b', marginBottom: 16, lineHeight: 18 },
+  reasonInput: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 14, color: '#0f172a', minHeight: 80, textAlignVertical: 'top', backgroundColor: '#f8fafc' },
+  reasonActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16, gap: 10 },
+  reasonCancelBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#f1f5f9' },
+  reasonCancelText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  reasonConfirmBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.primary },
+  reasonConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });

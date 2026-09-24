@@ -42,7 +42,7 @@ export default function AttendanceMethodPage() {
 
   const fetchActiveMethod = async () => {
     try {
-      const res = await api.get('/manager/attendance-method/active');
+      const res = await api.get(`/manager/attendance-method/active?t=${Date.now()}`);
       const data = res.data?.data;
       setCurrent(data?.activeMethod);
       setHeartbeatEnabled(data?.heartbeatMonitoringEnabled === true);
@@ -69,6 +69,7 @@ export default function AttendanceMethodPage() {
       if (typeof data?.heartbeatTimeoutMinutes === 'number') {
         setHeartbeatTimeout(data.heartbeatTimeoutMinutes);
       }
+      fetchActiveMethod();
     };
     socket.on('attendance-setting:updated', handleUpdate);
     return () => {

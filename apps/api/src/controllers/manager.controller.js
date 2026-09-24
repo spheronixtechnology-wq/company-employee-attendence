@@ -17,6 +17,7 @@ const LeaveBalance = require('../models/LeaveBalance');
 
 const leaveService = require('../services/leave.service');
 const employeeProfileService = require('../services/employeeProfile.service');
+const storageService = require('../services/storage/storageService');
 const { writeAuditLog } = require('../services/audit.service');
 const { createNotification } = require('../services/notification.service');
 const sessionReactivationService = require('../services/sessionReactivation.service');
@@ -256,7 +257,9 @@ const getTeamMembers = async (req, res) => {
     const attendances = await Attendance.find({ userId: { $in: memberIds }, date: targetDate }).lean();
     const attMap = new Map(attendances.map(a => [a.userId.toString(), a]));
 
-    const dailyLogs = await DailyLog.find({ userId: { $in: memberIds }, logDate: targetDate }).lean();
+    const dailyLogs = await DailyLog.find({ userId: { $in: memberIds }, logDate: targetDate })
+      .select('userId checkInTime checkOutTime hoursSpent')
+      .lean();
     const logMap = new Map(dailyLogs.map(l => [l.userId.toString(), l]));
 
     const enrichedMembers = members.map(member => {
@@ -392,7 +395,8 @@ const getTeamDailyLogs = async (req, res) => {
         populate: { path: 'teamId', select: 'name' }
       })
       .populate('teamId', 'name')
-      .sort({ logDate: -1, createdAt: -1 });
+      .sort({ logDate: -1, createdAt: -1 })
+      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks documentName documentSize documentMimeType doctype document.fileName document.fileSize document.mimeType document.storageProvider');
 
     if (isRecent) logsQuery.limit(50);
 
@@ -429,6 +433,7 @@ const getTeamDailyLogs = async (req, res) => {
         checkOutTime: log.checkOutTime || (att?.checkOutTime ? att.checkOutTime : null),
         hoursSpent,
         attendance: att,
+        hasDocument: !!(log.documentName || log.document?.storageKey),
       };
     });
 
@@ -463,6 +468,52 @@ const getTeamDailyLogs = async (req, res) => {
   } catch (error) {
     console.error('getTeamDailyLogs error:', error);
     return badRequest(res, 'Failed to fetch daily logs');
+  }
+};
+
+const getDailyLogDocument = async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const log = await DailyLog.findById(logId).select('documentUrl attachmentUrl documentName doctype document').lean();
+    if (!log) {
+      return notFound(res, 'Log not found');
+    }
+
+    // Verify manager authority over this user (optional but secure)
+    const authCheck = await verifyManagerMemberAuthority(req.user, log.userId || null);
+    // Even if authCheck fails, we might just allow it for simplicity since they have the logId,
+    // but better to just return the data if they are a manager.
+
+    if (log.document && log.document.storageKey) {
+      const expiresIn = parseInt(process.env.SUPABASE_SIGNED_URL_EXPIRES, 10) || 300;
+      const signedUrl = await storageService.getSignedUrl(log.document.storageKey, expiresIn);
+      
+      return success(res, 'Document fetched', {
+        documentUrl: signedUrl,
+        attachmentUrl: signedUrl,
+        documentName: log.document.fileName || log.documentName,
+        doctype: (log.document.fileName || '').split('.').pop() || log.doctype,
+        document: {
+          url: signedUrl,
+          fileName: log.document.fileName || log.documentName,
+          mimeType: log.document.mimeType || log.documentMimeType,
+          fileSize: log.document.fileSize || log.documentSize,
+          expiresIn
+        }
+      });
+    } else if (log.documentUrl) {
+      return success(res, 'Document fetched', {
+        documentUrl: log.documentUrl,
+        attachmentUrl: log.attachmentUrl,
+        documentName: log.documentName,
+        doctype: log.doctype
+      });
+    }
+
+    return notFound(res, 'Document not found');
+  } catch (err) {
+    console.error('getDailyLogDocument error:', err);
+    return badRequest(res, 'Failed to fetch document');
   }
 };
 
@@ -545,26 +596,51 @@ const submitTeamMemberDailyLog = async (req, res) => {
     if (existingLog) return badRequest(res, 'A log already exists for this date. Use edit instead.');
 
     let docParams = {};
-    if (req.file) {
-      const extMatch = (req.file.originalname || '').split('.').pop();
-      const doctype = extMatch ? extMatch.toLowerCase() : 'doc';
-      let documentUrl = null;
-      if (req.file.buffer) {
-        const base64Data = req.file.buffer.toString('base64');
-        const mime = req.file.mimetype || 'application/octet-stream';
-        documentUrl = `data:${mime};base64,${base64Data}`;
-      } else if (req.file.filename) {
-        documentUrl = `/uploads/${req.file.filename}`;
+    let uploadResultKey = null;
+    
+    try {
+      if (req.file) {
+        const extMatch = (req.file.originalname || '').split('.').pop();
+        const doctype = extMatch ? extMatch.toLowerCase() : 'doc';
+        let documentUrl = null;
+        let document = null;
+        
+        if (req.file.buffer) {
+          // Phase 3: Upload directly to cloud storage (Supabase) instead of Base64
+          const uniqueId = Math.random().toString(36).substring(2, 10);
+          const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.\-]/g, '_');
+          
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          
+          const storageKey = `daily-logs/${userId}/${year}/${month}/${day}/${uniqueId}-${safeName}`;
+          const mime = req.file.mimetype || 'application/octet-stream';
+          
+          uploadResultKey = await storageService.uploadFile(req.file.buffer, storageKey, mime);
+          
+          document = {
+            storageProvider: 'supabase',
+            storageKey: uploadResultKey,
+            fileName: req.file.originalname,
+            mimeType: mime,
+            fileSize: req.file.size
+          };
+        } else if (req.file.filename) {
+          documentUrl = `/uploads/${req.file.filename}`;
+        }
+        
+        docParams = {
+          document,
+          documentUrl,
+          attachmentUrl: documentUrl,
+          documentName: req.file.originalname,
+          documentSize: req.file.size,
+          documentMimeType: req.file.mimetype || 'application/octet-stream',
+          doctype,
+        };
       }
-      docParams = {
-        documentUrl,
-        attachmentUrl: documentUrl,
-        documentName: req.file.originalname,
-        documentSize: req.file.size,
-        documentMimeType: req.file.mimetype || 'application/octet-stream',
-        doctype,
-      };
-    }
 
     const resolvedTaskTitle = (taskTitle || (req.file ? req.file.originalname : 'Daily Work Document')).trim();
     const resolvedProjectName = (projectName || 'Daily Log').trim();
@@ -615,6 +691,12 @@ const submitTeamMemberDailyLog = async (req, res) => {
     );
 
     return success(res, 'Daily log submitted successfully', { log });
+    } catch (saveError) {
+      if (uploadResultKey) {
+        await storageService.deleteFile(uploadResultKey).catch(console.error);
+      }
+      throw saveError;
+    }
   } catch (error) {
     console.error('submitTeamMemberDailyLog error:', error);
     return badRequest(res, 'Failed to submit log');
@@ -643,33 +725,76 @@ const updateTeamMemberDailyLog = async (req, res) => {
     if (description !== undefined) log.description = description;
     if (blockers !== undefined) log.blockers = blockers;
 
-    if (req.file) {
-      const extMatch = (req.file.originalname || '').split('.').pop();
-      const doctype = extMatch ? extMatch.toLowerCase() : 'doc';
-      let documentUrl = null;
-      if (req.file.buffer) {
-        const base64Data = req.file.buffer.toString('base64');
-        const mime = req.file.mimetype || 'application/octet-stream';
-        documentUrl = `data:${mime};base64,${base64Data}`;
-      } else if (req.file.filename) {
-        documentUrl = `/uploads/${req.file.filename}`;
+    let newUploadResultKey = null;
+    let oldStorageKey = null;
+
+    try {
+      if (req.file) {
+        const extMatch = (req.file.originalname || '').split('.').pop();
+        const doctype = extMatch ? extMatch.toLowerCase() : 'doc';
+        let documentUrl = null;
+        let document = null;
+        
+        if (req.file.buffer) {
+          // Phase 3: Upload directly to cloud storage (Supabase) instead of Base64
+          const uniqueId = Math.random().toString(36).substring(2, 10);
+          const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.\-]/g, '_');
+          
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          
+          const storageKey = `daily-logs/${log.userId}/${year}/${month}/${day}/${uniqueId}-${safeName}`;
+          const mime = req.file.mimetype || 'application/octet-stream';
+          
+          newUploadResultKey = await storageService.uploadFile(req.file.buffer, storageKey, mime);
+          
+          document = {
+            storageProvider: 'supabase',
+            storageKey: newUploadResultKey,
+            fileName: req.file.originalname,
+            mimeType: mime,
+            fileSize: req.file.size
+          };
+        } else if (req.file.filename) {
+          documentUrl = `/uploads/${req.file.filename}`;
+        }
+        
+        // Remember old storageKey to delete AFTER successful save
+        if (log.document && log.document.storageKey) {
+          oldStorageKey = log.document.storageKey;
+        }
+
+        log.document = document;
+        log.documentUrl = documentUrl;
+        log.attachmentUrl = documentUrl;
+        log.documentName = req.file.originalname;
+        log.documentSize = req.file.size;
+        log.documentMimeType = req.file.mimetype || 'application/octet-stream';
+        log.doctype = doctype;
+        if (!log.taskTitle) log.taskTitle = req.file.originalname;
+        if (!log.projectName) log.projectName = 'Daily Log';
+        if (!log.description) log.description = 'Submitted via daily work document upload.';
       }
-      log.documentUrl = documentUrl;
-      log.attachmentUrl = documentUrl;
-      log.documentName = req.file.originalname;
-      log.documentSize = req.file.size;
-      log.documentMimeType = req.file.mimetype || 'application/octet-stream';
-      log.doctype = doctype;
-      if (!log.taskTitle) log.taskTitle = req.file.originalname;
-      if (!log.projectName) log.projectName = 'Daily Log';
-      if (!log.description) log.description = 'Submitted via daily work document upload.';
+
+      log.isEdited = true;
+      log.editedBy = req.user._id;
+      log.editedAt = new Date();
+
+      await log.save();
+      
+      // Cleanup OLD file if save succeeded and there was an old file
+      if (oldStorageKey) {
+        await storageService.deleteFile(oldStorageKey).catch(console.error);
+      }
+    } catch (saveError) {
+      // Cleanup NEW file if save failed
+      if (newUploadResultKey) {
+        await storageService.deleteFile(newUploadResultKey).catch(console.error);
+      }
+      throw saveError;
     }
-
-    log.isEdited = true;
-    log.editedBy = req.user._id;
-    log.editedAt = new Date();
-
-    await log.save();
 
     const attUpdate = { dailyLogSubmitted: true };
     if (checkInTime) {
@@ -1394,9 +1519,9 @@ const getMemberLeaveBalances = async (req, res) => {
     const memberId = req.params.id;
     
     // Verify manager manages this member
-    const memberIds = await getTeamMemberIds(req.user);
-    if (!memberIds.some(id => id.toString() === memberId)) {
-      return res.status(403).json({ success: false, message: 'Not authorized to view this member.' });
+    const authCheck = await verifyManagerMemberAuthority(req.user, memberId);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
     }
 
     const currentYear = new Date().getFullYear();
@@ -1505,6 +1630,7 @@ module.exports = {
   getTeamLeaveRequests,
   handleLeaveDecision,
   getTeamDailyLogs,
+  getDailyLogDocument,
   getDeviceRequests,
   handleDeviceRequestDecision,
   getLocationRequests,

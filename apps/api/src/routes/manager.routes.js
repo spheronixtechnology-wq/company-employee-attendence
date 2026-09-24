@@ -25,6 +25,7 @@ router.get('/team/daily-logs', isManager, managerController.getTeamDailyLogs);
 // Manager Log Management
 router.post('/team/daily-log', isManager, uploadDailyLogDoc, managerController.submitTeamMemberDailyLog);
 router.patch('/team/daily-log/:logId', isManager, uploadDailyLogDoc, managerController.updateTeamMemberDailyLog);
+router.get('/team/daily-log/:logId/document', isManager, managerController.getDailyLogDocument);
 
 // Team Members
 router.post('/team/members', isManager, managerController.createTeamMember);

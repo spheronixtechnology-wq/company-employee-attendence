@@ -53,6 +53,15 @@ const dailyLogSchema = new mongoose.Schema(
     documentMimeType: { type: String, default: null },
     doctype: { type: String, default: null }, // e.g. xlsx, docx, pdf, txt, csv
 
+    // ── Phase 3: New Cloud Storage Fields ──────────────
+    document: {
+      storageProvider: { type: String, default: null }, // e.g., 'supabase'
+      storageKey: { type: String, default: null },      // e.g., 'daily-logs/emp123/2026/09/24/doc.pdf'
+      fileName: { type: String, default: null },
+      mimeType: { type: String, default: null },
+      fileSize: { type: Number, default: null }
+    },
+
     // ── Common ────────────────────────────────────────
     attachmentUrl: { type: String, default: null },
 

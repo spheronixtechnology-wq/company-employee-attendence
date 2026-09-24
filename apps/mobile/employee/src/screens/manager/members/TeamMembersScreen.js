@@ -33,6 +33,7 @@ import {
 } from 'lucide-react-native';
 import { managerApi } from '../../../services/api/managerApi';
 import { useSocket } from '../../../contexts/SocketContext';
+import Member360ProfileModal from '../../../components/Member360ProfileModal';
 
 const colors = {
   primary: '#8b5cf6', // Violet matching Web UI
@@ -629,76 +630,12 @@ export default function TeamMembersScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* ── Member Profile Quick-View ─────────────────────────────────── */}
-      <Modal visible={!!profileModal} transparent animationType="slide" onRequestClose={() => setProfileModal(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Member Profile</Text>
-              <TouchableOpacity onPress={() => setProfileModal(null)} style={styles.modalCloseBtn}>
-                <X size={20} color={colors.secondary} />
-              </TouchableOpacity>
-            </View>
-            {profileModal && (() => {
-              const m = profileModal;
-              const statusColor =
-                m.currentStatus === 'checked_in' ? colors.success :
-                m.currentStatus === 'on_break' ? colors.warning :
-                m.currentStatus === 'checked_out' ? '#3b82f6' : colors.secondary;
-              const statusText =
-                m.currentStatus === 'checked_in' ? 'Currently Working' :
-                m.currentStatus === 'on_break' ? 'On Break' :
-                m.currentStatus === 'checked_out' ? 'Checked Out' : 'Offline';
-              return (
-                <View style={{ alignItems: 'center', paddingTop: 8 }}>
-                  {(m.avatarUrl || m.profileImage || m.user?.avatarUrl || m.user?.profileImage) ? (
-                    <Image source={{ uri: m.avatarUrl || m.profileImage || m.user?.avatarUrl || m.user?.profileImage }} style={styles.profileAvatar} />
-                  ) : (
-                    <View style={[styles.profileAvatar, styles.profileAvatarPlaceholder]}>
-                      <Text style={styles.profileAvatarText}>{m.name?.charAt(0).toUpperCase()}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.profileName}>{m.name}</Text>
-                  <Text style={styles.profileEmail}>{m.email}</Text>
-                  <View style={[styles.profileStatusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor }]}>
-                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                    <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
-                  </View>
-
-                  <View style={styles.profileDetailsGrid}>
-                    <View style={styles.profileDetailItem}>
-                      <Text style={styles.profileDetailLabel}>Team</Text>
-                      <Text style={styles.profileDetailValue}>{m.teamId?.name || 'Unassigned'}</Text>
-                    </View>
-                    <View style={styles.profileDetailItem}>
-                      <Text style={styles.profileDetailLabel}>Designation</Text>
-                      <Text style={styles.profileDetailValue}>{m.designation || '—'}</Text>
-                    </View>
-                    <View style={styles.profileDetailItem}>
-                      <Text style={styles.profileDetailLabel}>Department</Text>
-                      <Text style={styles.profileDetailValue}>{m.department || '—'}</Text>
-                    </View>
-                    <View style={styles.profileDetailItem}>
-                      <Text style={styles.profileDetailLabel}>Joined</Text>
-                      <Text style={styles.profileDetailValue}>
-                        {m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.archiveProfileBtn}
-                    onPress={() => { setProfileModal(null); setTimeout(() => handleArchiveMember(m), 300); }}
-                  >
-                    <Trash2 size={16} color={colors.danger} />
-                    <Text style={styles.archiveProfileText}>Archive Member</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
-          </View>
-        </View>
-      </Modal>
+      {/* ── Member Profile 360 Modal ─────────────────────────────────── */}
+      <Member360ProfileModal
+        visible={!!profileModal}
+        member={profileModal}
+        onClose={() => setProfileModal(null)}
+      />
     </View>
   );
 }
