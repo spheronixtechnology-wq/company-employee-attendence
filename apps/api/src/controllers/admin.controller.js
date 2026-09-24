@@ -227,7 +227,11 @@ const getEmployees = async (req, res) => {
     const onlineUsers = new Set(getOnlineUserIds());
 
     const enrichedEmployees = employees.map(e => {
-      const safe = e.toSafeObject();
+      const safe = { ...e };
+      delete safe.passwordHash;
+      delete safe.mfaSecret;
+      delete safe.mfaPendingSecret;
+
       const att = attMap.get(e._id.toString());
       const onLeave = leaveSet.has(e._id.toString());
       const isOnline = onlineUsers.has(e._id.toString());
