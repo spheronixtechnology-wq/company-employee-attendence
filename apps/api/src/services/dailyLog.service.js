@@ -43,25 +43,23 @@ const normalizeUrl = (url) => {
 const submitDailyLog = async ({ user, logData, file }) => {
   const today = getTodayDateString();
 
-  let documentUrl = null;
-  let documentName = null;
-  let documentSize = null;
-  let documentMimeType = null;
-  let doctype = null;
+
   let document = null;
   let uploadResultKey = null;
 
+  let fileName = null;
+  let fileSize = null;
+  let mimeType = null;
+
   if (file) {
-    documentName = file.originalname;
-    documentSize = file.size;
-    documentMimeType = file.mimetype || 'application/octet-stream';
-    const extMatch = (file.originalname || '').split('.').pop();
-    doctype = extMatch ? extMatch.toLowerCase() : 'doc';
+    fileName = file.originalname;
+    fileSize = file.size;
+    mimeType = file.mimetype || 'application/octet-stream';
 
     if (file.buffer) {
       // Phase 3: Upload directly to cloud storage (Supabase) instead of Base64
       const uniqueId = Math.random().toString(36).substring(2, 10);
-      const safeName = documentName.replace(/[^a-zA-Z0-9.\-]/g, '_');
+      const safeName = fileName.replace(/[^a-zA-Z0-9.\-]/g, '_');
       
       const now = new Date();
       const year = now.getFullYear();
@@ -71,41 +69,35 @@ const submitDailyLog = async ({ user, logData, file }) => {
       const storageKey = `daily-logs/${user._id}/${year}/${month}/${day}/${uniqueId}-${safeName}`;
       
       try {
-        uploadResultKey = await storageService.uploadFile(file.buffer, storageKey, documentMimeType);
+        uploadResultKey = await storageService.uploadFile(file.buffer, storageKey, mimeType);
         
         document = {
           storageProvider: 'supabase',
           storageKey: uploadResultKey,
-          fileName: documentName,
-          mimeType: documentMimeType,
-          fileSize: documentSize
+          fileName: fileName,
+          mimeType: mimeType,
+          fileSize: fileSize
         };
       } catch (err) {
         throw { statusCode: 500, message: 'Failed to upload document to storage provider.' };
       }
-    } else if (file.filename) {
-      documentUrl = getFileUrl(file.filename, 'daily-logs');
     }
   }
 
   // Check if an existing log for today already has a document
   const existingTodayLog = await DailyLog.findOne({ userId: user._id, logDate: today });
-  if (!documentUrl && existingTodayLog?.documentUrl) {
-    documentUrl = existingTodayLog.documentUrl;
-    documentName = existingTodayLog.documentName;
-    documentSize = existingTodayLog.documentSize;
-    documentMimeType = existingTodayLog.documentMimeType;
-    doctype = existingTodayLog.doctype;
+  if (!document && existingTodayLog?.document) {
+    document = existingTodayLog.document;
   }
 
   // Validate that either a document was uploaded, or previously uploaded
-  if (!documentUrl && !document && !file) {
+  if (!document && !file) {
     if (uploadResultKey) await storageService.deleteFile(uploadResultKey).catch(() => {});
     throw { statusCode: 400, message: 'Please upload a daily work document (within 1MB).' };
   }
 
   // Unified fields: provide friendly defaults if omitted
-  const taskTitle = (logData.taskTitle || documentName || 'Daily Work Document').trim();
+  const taskTitle = (logData.taskTitle || fileName || document?.fileName || 'Daily Work Document').trim();
   const projectName = (logData.projectName || 'Daily Log').trim();
   const description = (logData.description || 'Submitted via daily work document upload.').trim();
 
@@ -152,14 +144,6 @@ const submitDailyLog = async ({ user, logData, file }) => {
           hoursSpent: logData.hoursSpent,
           // Phase 3 Document upload metadata
           document: document || undefined,
-          // Base64 data link & metadata (Legacy fallback if existing)
-          documentUrl: documentUrl || undefined,
-          documentName: documentName || undefined,
-          documentSize: documentSize || undefined,
-          documentMimeType: documentMimeType || undefined,
-          doctype: doctype || undefined,
-          // Common / backward compatibility
-          attachmentUrl: documentUrl || undefined,
           // Unified fields
           taskTitle,
           projectName,

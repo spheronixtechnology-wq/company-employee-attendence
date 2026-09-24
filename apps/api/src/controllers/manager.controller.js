@@ -396,7 +396,7 @@ const getTeamDailyLogs = async (req, res) => {
       })
       .populate('teamId', 'name')
       .sort({ logDate: -1, createdAt: -1 })
-      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks documentName documentSize documentMimeType doctype document.fileName document.fileSize document.mimeType document.storageProvider');
+      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider');
 
     if (isRecent) logsQuery.limit(50);
 
@@ -433,7 +433,7 @@ const getTeamDailyLogs = async (req, res) => {
         checkOutTime: log.checkOutTime || (att?.checkOutTime ? att.checkOutTime : null),
         hoursSpent,
         attendance: att,
-        hasDocument: !!(log.documentName || log.document?.storageKey),
+        hasDocument: !!(log.document?.storageKey),
       };
     });
 
@@ -474,7 +474,7 @@ const getTeamDailyLogs = async (req, res) => {
 const getDailyLogDocument = async (req, res) => {
   try {
     const { logId } = req.params;
-    const log = await DailyLog.findById(logId).select('documentUrl attachmentUrl documentName doctype document').lean();
+    const log = await DailyLog.findById(logId).select('document').lean();
     if (!log) {
       return notFound(res, 'Log not found');
     }
@@ -491,22 +491,15 @@ const getDailyLogDocument = async (req, res) => {
       return success(res, 'Document fetched', {
         documentUrl: signedUrl,
         attachmentUrl: signedUrl,
-        documentName: log.document.fileName || log.documentName,
-        doctype: (log.document.fileName || '').split('.').pop() || log.doctype,
+        documentName: log.document.fileName,
+        doctype: (log.document.fileName || '').split('.').pop(),
         document: {
           url: signedUrl,
-          fileName: log.document.fileName || log.documentName,
-          mimeType: log.document.mimeType || log.documentMimeType,
-          fileSize: log.document.fileSize || log.documentSize,
+          fileName: log.document.fileName,
+          mimeType: log.document.mimeType,
+          fileSize: log.document.fileSize,
           expiresIn
         }
-      });
-    } else if (log.documentUrl) {
-      return success(res, 'Document fetched', {
-        documentUrl: log.documentUrl,
-        attachmentUrl: log.attachmentUrl,
-        documentName: log.documentName,
-        doctype: log.doctype
       });
     }
 
@@ -627,18 +620,10 @@ const submitTeamMemberDailyLog = async (req, res) => {
             mimeType: mime,
             fileSize: req.file.size
           };
-        } else if (req.file.filename) {
-          documentUrl = `/uploads/${req.file.filename}`;
         }
         
         docParams = {
           document,
-          documentUrl,
-          attachmentUrl: documentUrl,
-          documentName: req.file.originalname,
-          documentSize: req.file.size,
-          documentMimeType: req.file.mimetype || 'application/octet-stream',
-          doctype,
         };
       }
 
@@ -757,8 +742,6 @@ const updateTeamMemberDailyLog = async (req, res) => {
             mimeType: mime,
             fileSize: req.file.size
           };
-        } else if (req.file.filename) {
-          documentUrl = `/uploads/${req.file.filename}`;
         }
         
         // Remember old storageKey to delete AFTER successful save
@@ -767,12 +750,6 @@ const updateTeamMemberDailyLog = async (req, res) => {
         }
 
         log.document = document;
-        log.documentUrl = documentUrl;
-        log.attachmentUrl = documentUrl;
-        log.documentName = req.file.originalname;
-        log.documentSize = req.file.size;
-        log.documentMimeType = req.file.mimetype || 'application/octet-stream';
-        log.doctype = doctype;
         if (!log.taskTitle) log.taskTitle = req.file.originalname;
         if (!log.projectName) log.projectName = 'Daily Log';
         if (!log.description) log.description = 'Submitted via daily work document upload.';

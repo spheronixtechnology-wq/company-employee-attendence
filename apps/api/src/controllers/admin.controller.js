@@ -1058,7 +1058,7 @@ const getAttendance = async (req, res) => {
         .lean(),
       ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
       DailyLog.find({ userId: { $in: memberIds }, logDate: date })
-        .select('userId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks documentName documentSize documentMimeType doctype document.fileName document.fileSize document.mimeType document.storageProvider')
+        .select('userId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider')
         .lean(),
     ]);
 

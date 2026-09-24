@@ -47,11 +47,8 @@ const dailyLogSchema = new mongoose.Schema(
     outputSummary: { type: String, trim: true, default: null },
 
     // ── Document Upload Fields ───────────────────────
-    documentUrl: { type: String, default: null }, // Base64 data URL (data:mime;base64,...) or file path
-    documentName: { type: String, default: null },
-    documentSize: { type: Number, default: null }, // in bytes
-    documentMimeType: { type: String, default: null },
-    doctype: { type: String, default: null }, // e.g. xlsx, docx, pdf, txt, csv
+    // These legacy fields (documentUrl, documentName, documentSize, documentMimeType, doctype)
+    // were removed in favor of the single 'document' object below.
 
     // ── Phase 3: New Cloud Storage Fields ──────────────
     document: {
@@ -63,7 +60,6 @@ const dailyLogSchema = new mongoose.Schema(
     },
 
     // ── Common ────────────────────────────────────────
-    attachmentUrl: { type: String, default: null },
 
     status: {
       type: String,
