@@ -208,7 +208,7 @@ const getEmployees = async (req, res) => {
       ];
     }
     
-    const employees = await User.find(query).populate('teamId', 'name description').sort({ name: 1 });
+    const employees = await User.find(query).populate('teamId', 'name description').sort({ name: 1 }).lean();
     const today = getTodayDateString();
     const empIds = employees.map(e => e._id);
 
@@ -474,7 +474,7 @@ const deleteTeam = async (req, res) => {
 
 const getOfficeLocations = async (req, res) => {
   try {
-    const locations = await OfficeLocation.find().sort({ createdAt: -1 });
+    const locations = await OfficeLocation.find().sort({ createdAt: -1 }).lean();
     return success(res, 'Office locations fetched', { locations });
   } catch (error) {
     console.error('Error fetching office locations:', error);
@@ -1149,7 +1149,7 @@ const getLeaveRequests = async (req, res) => {
     const baseQuery = {};
 
     if (req.query.teamId && req.query.teamId !== 'all') {
-      const teamUsers = await User.find({ teamId: req.query.teamId }).select('_id');
+      const teamUsers = await User.find({ teamId: req.query.teamId }).select('_id').lean();
       baseQuery.userId = { $in: teamUsers.map((u) => u._id) };
     }
 
