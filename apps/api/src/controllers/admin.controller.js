@@ -1095,14 +1095,15 @@ const getAttendance = async (req, res) => {
       const isOnlineManager = member.role === 'manager' && date === todayStr && onlineUsers.has(member._id.toString());
 
       if (existing) {
+        const enrichedExisting = employeeProfileService.enrichAttendanceRecord(existing);
         return {
-          ...existing,
+          ...enrichedExisting,
           manualRequest: manualReq,
           dailyLogSubmitted,
           dailyLog,
           hoursSpent: dailyLog?.hoursSpent || 0,
-          status: isOnlineManager && existing.status !== 'present' ? 'present' : existing.status,
-          checkInTime: isOnlineManager && !existing.checkInTime ? new Date() : existing.checkInTime,
+          status: isOnlineManager && enrichedExisting.status !== 'present' ? 'present' : enrichedExisting.status,
+          checkInTime: isOnlineManager && !enrichedExisting.checkInTime ? new Date() : enrichedExisting.checkInTime,
         };
       }
       return {
