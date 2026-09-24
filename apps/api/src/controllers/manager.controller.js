@@ -40,7 +40,7 @@ const getManagedTeams = async (user) => {
   // Check if manager has permission to view all departments
   const perm = await ManagerPermission.findOne({ userId });
   if (perm && perm.permissions?.canViewAllDepartments) {
-    return await Team.find({ isActive: true });
+    return await Team.find({ isActive: true }).lean();
   }
 
   let teamId = user.teamId?._id || user.teamId;
@@ -52,7 +52,7 @@ const getManagedTeams = async (user) => {
   if (teamId) {
     conditions.push({ _id: teamId });
   }
-  return await Team.find({ $or: conditions, isActive: true });
+  return await Team.find({ $or: conditions, isActive: true }).lean();
 };
 
 /**
@@ -71,7 +71,7 @@ const getTeamMemberIds = async (teamIds, excludeUserId = null) => {
   if (!ids.length) return [];
   const query = { teamId: { $in: ids }, role: { $in: ['employee'] }, deletedAt: null };
   if (excludeUserId) query._id = { $ne: excludeUserId };
-  const members = await User.find(query).select('_id');
+  const members = await User.find(query).select('_id').lean();
   return members.map(m => m._id);
 };
 
@@ -144,7 +144,7 @@ const getDashboard = async (req, res) => {
     const pendingDeviceRequests = await DeviceRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
     const pendingLocationRequests = await LocationRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
 
-    const activeSetting = await AttendanceMethodSetting.findOne().sort({ createdAt: -1 });
+    const activeSetting = await AttendanceMethodSetting.findOne().sort({ createdAt: -1 }).lean();
     const activeAttendanceMethod = activeSetting?.method || 'qr_code';
 
     return success(res, 'Dashboard fetched', {
@@ -309,7 +309,8 @@ const getTeamLeaveRequests = async (req, res) => {
     const allRequests = await LeaveRequest.find({ userId: { $in: memberIds } })
       .populate('userId', 'name email designation teamId')
       .populate('leaveTypeId', 'name code')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     const counts = {
       total: allRequests.length,
@@ -1382,7 +1383,7 @@ const getTeamLeaveQuotas = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Team not found.' });
     }
 
-    const leaveTypes = await LeaveType.find({ isActive: true });
+    const leaveTypes = await LeaveType.find({ isActive: true }).lean();
     
     // Merge global defaults with team overrides
     const quotas = {};
@@ -1442,8 +1443,8 @@ const updateTeamLeaveQuotas = async (req, res) => {
     await team.save();
 
     // Now update all team members' allocated balances safely
-    const teamMembers = await User.find({ teamId, role: 'employee', isActive: true });
-    const leaveTypes = await LeaveType.find({ isActive: true });
+    const teamMembers = await User.find({ teamId, role: 'employee', isActive: true }).lean();
+    const leaveTypes = await LeaveType.find({ isActive: true }).lean();
     const currentYear = new Date().getFullYear(); // Using JS date as util might not be imported
 
     for (const member of teamMembers) {
