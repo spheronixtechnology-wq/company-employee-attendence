@@ -1100,12 +1100,19 @@ const getAttendance = async (req, res) => {
 
       if (existing) {
         const enrichedExisting = employeeProfileService.enrichAttendanceRecord(existing);
+        
+        let calculatedHoursSpent = dailyLog?.hoursSpent || 0;
+        const netMins = enrichedExisting.actualWorkMinutes ?? (enrichedExisting.totalDurationMinutes ? Math.max(0, enrichedExisting.totalDurationMinutes - (enrichedExisting.totalBreakMinutes || 0)) : null);
+        if (netMins !== null && netMins !== undefined && netMins > 0) {
+          calculatedHoursSpent = Math.round((netMins / 60) * 10) / 10;
+        }
+
         return {
           ...enrichedExisting,
           manualRequest: manualReq,
           dailyLogSubmitted,
           dailyLog,
-          hoursSpent: dailyLog?.hoursSpent || 0,
+          hoursSpent: calculatedHoursSpent,
           status: isOnlineManager && enrichedExisting.status !== 'present' ? 'present' : enrichedExisting.status,
           checkInTime: isOnlineManager && !enrichedExisting.checkInTime ? new Date() : enrichedExisting.checkInTime,
         };
