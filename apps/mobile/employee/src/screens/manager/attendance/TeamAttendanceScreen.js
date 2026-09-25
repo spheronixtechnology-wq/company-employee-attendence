@@ -206,6 +206,31 @@ export default function TeamAttendanceScreen({ navigation }) {
     const isPending = isManualPending(item);
     const isProcessing = processingId === manReqId + 'approve' || processingId === manReqId + 'reject';
 
+    let displayTotal = '—';
+    let displayBreak = '—';
+    let displayWork = '—';
+    
+    if (item.checkInTime) {
+      const checkInDate = new Date(item.checkInTime);
+      const checkOutDate = item.checkOutTime ? new Date(item.checkOutTime) : new Date();
+      
+      const totalTimeMs = checkOutDate - checkInDate;
+      const breakMs = 60 * 60 * 1000; // Exact 60 mins break
+      
+      let workTimeMs = totalTimeMs - breakMs;
+      if (workTimeMs < 0) workTimeMs = 0;
+      
+      const tHours = Math.floor(totalTimeMs / (1000 * 60 * 60));
+      const tMins = Math.floor((totalTimeMs % (1000 * 60 * 60)) / (1000 * 60));
+      displayTotal = `${tHours}h ${tMins}m`;
+      
+      displayBreak = `1h 0m`; // Exact 60 min
+      
+      const wHours = Math.floor(workTimeMs / (1000 * 60 * 60));
+      const wMins = Math.floor((workTimeMs % (1000 * 60 * 60)) / (1000 * 60));
+      displayWork = `${wHours}h ${wMins}m`;
+    }
+
     return (
       <View style={styles.recordCard}>
         <View style={styles.recordHeader}>
@@ -238,10 +263,22 @@ export default function TeamAttendanceScreen({ navigation }) {
             <Text style={styles.statLabel}>Check Out</Text>
             <Text style={styles.statValue}>{formatTime(item.checkOutTime)}</Text>
           </View>
+        </View>
+
+        <View style={[styles.recordStats, { marginTop: 12, backgroundColor: '#f1f5f9' }]}>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Total Time</Text>
+            <Text style={[styles.statValue, { color: colors.secondary }]}>{displayTotal}</Text>
+          </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Work Hours</Text>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{item.workHours || '—'}</Text>
+            <Text style={styles.statLabel}>Break</Text>
+            <Text style={[styles.statValue, { color: colors.warning }]}>{displayBreak}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Work Time</Text>
+            <Text style={[styles.statValue, { color: colors.success }]}>{displayWork}</Text>
           </View>
         </View>
 
@@ -627,6 +664,39 @@ const styles = StyleSheet.create({
     width: 1,
     height: 24,
     backgroundColor: colors.border,
+  },
+  breaksContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  breaksHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.secondary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  breakRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+  },
+  breakTimeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  breakDurationText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.danger,
   },
   emptyContainer: {
     alignItems: 'center',

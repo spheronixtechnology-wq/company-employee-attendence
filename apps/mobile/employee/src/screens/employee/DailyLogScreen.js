@@ -9,6 +9,7 @@ import {
   RefreshControl,
   StyleSheet,
   Alert,
+  Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { ArrowLeft, Home, ChevronLeft } from 'lucide-react-native';
@@ -22,6 +23,8 @@ export default function DailyLogScreen({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState(null);
+  const [viewerName, setViewerName] = useState(null);
   const [todayLog, setTodayLog] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showWorkDetails, setShowWorkDetails] = useState(false);
@@ -82,7 +85,7 @@ export default function DailyLogScreen({ onBack }) {
       if (file.size && file.size > MAX_FILE_SIZE) {
         Alert.alert(
           'File Too Large',
-          `The selected file is ${(file.size / (1024 * 1024)).toFixed(2)} MB. Please choose a file under 2 MB.`
+          `The selected file is ${(file.size / (1024 * 1024)).toFixed(2)} MB. Please choose a file under 1 MB.`
         );
         return;
       }
@@ -244,7 +247,18 @@ export default function DailyLogScreen({ onBack }) {
               </View>
             </View>
 
-            <View style={styles.docDetailsBox}>
+            <TouchableOpacity 
+              style={styles.docDetailsBox}
+              activeOpacity={0.7}
+              onPress={() => {
+                let url = todayLog.documentUrl || todayLog.attachmentUrl;
+                if (url) {
+                  setViewerUrl(url);
+                } else {
+                  Alert.alert('Not Available', 'The document is either unavailable or being processed.');
+                }
+              }}
+            >
               <Text style={styles.docIcon}>📄</Text>
               <View style={{ flex: 1, marginLeft: 8 }}>
                 <Text style={styles.docName} numberOfLines={1}>
@@ -255,7 +269,7 @@ export default function DailyLogScreen({ onBack }) {
                   Submitted {todayLog.submittedAt ? new Date(todayLog.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.uploadCard}>
@@ -390,7 +404,18 @@ export default function DailyLogScreen({ onBack }) {
             </View>
           ) : (
             logs.slice(0, 10).map((log) => (
-              <View key={log._id} style={styles.historyCard}>
+              <TouchableOpacity 
+                key={log._id} 
+                style={styles.historyCard}
+                onPress={() => {
+                  let url = log.documentUrl || log.attachmentUrl;
+                  if (url) {
+                    setViewerUrl(url);
+                  } else {
+                    Alert.alert('Not Available', 'The document is either unavailable or being processed.');
+                  }
+                }}
+              >
                 <View style={styles.historyCardDateCol}>
                   <Text style={styles.historyDay}>{log.logDate?.split('-')[2] || '·'}</Text>
                   <Text style={styles.historyMonth}>
@@ -410,7 +435,7 @@ export default function DailyLogScreen({ onBack }) {
                 <View style={styles.historyCheckBadge}>
                   <Text style={styles.historyCheckText}>✓</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>

@@ -415,8 +415,13 @@ export default function DocumentPreviewModal({
         </div>
 
         {/* Footer */}
-        <div className="p-3.5 px-5 border-t border-slate-200 bg-white flex items-center justify-between text-xs text-slate-600 shrink-0">
-          <span>Click Download at any time to save a local copy.</span>
+        <div className="p-3.5 px-5 border-t border-slate-200 bg-white flex items-center justify-end gap-3 text-xs text-slate-600 shrink-0">
+          <button
+            onClick={handleDownload}
+            className="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 font-semibold shadow-sm"
+          >
+            <Download size={14} /> Download
+          </button>
           <button
             onClick={onClose}
             className="btn bg-white text-xs py-1.5 px-3.5 border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"

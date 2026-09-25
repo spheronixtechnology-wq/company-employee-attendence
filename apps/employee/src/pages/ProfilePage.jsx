@@ -18,6 +18,7 @@ export default function ProfilePage() {
     designation: user?.designation || '',
   });
   const [avatarPreview, setAvatarPreview] = useState(user?.avatarUrl || null);
+  const [avatarFile, setAvatarFile] = useState(null);
   const [avatarError, setAvatarError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -42,6 +43,7 @@ export default function ProfilePage() {
       designation: user?.designation || '',
     });
     setAvatarPreview(user?.avatarUrl || null);
+    setAvatarFile(null);
     setAvatarError(null);
     setMessage(null);
     setIsEditing(true);
@@ -50,6 +52,7 @@ export default function ProfilePage() {
   const handleCancel = () => {
     setIsEditing(false);
     setAvatarPreview(user?.avatarUrl || null);
+    setAvatarFile(null);
     setAvatarError(null);
     setMessage(null);
   };
@@ -68,59 +71,14 @@ export default function ProfilePage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const rawBase64 = uploadEvent.target?.result;
-      if (!rawBase64) return;
-
-      // Compress and resize image using HTML5 canvas to keep Base64 payload lightweight (<150KB)
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const MAX_DIM = 400; // 400x400 max dimension for avatar
-          let { width, height } = img;
-
-          if (width > height) {
-            if (width > MAX_DIM) {
-              height = Math.round((height * MAX_DIM) / width);
-              width = MAX_DIM;
-            }
-          } else {
-            if (height > MAX_DIM) {
-              width = Math.round((width * MAX_DIM) / height);
-              height = MAX_DIM;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convert to Base64 JPEG data URL
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
-          setAvatarPreview(compressedBase64);
-          setAvatarError(null);
-        } catch {
-          setAvatarPreview(rawBase64);
-          setAvatarError(null);
-        }
-      };
-      img.onerror = () => {
-        setAvatarPreview(rawBase64);
-        setAvatarError(null);
-      };
-      img.src = rawBase64;
-    };
-    reader.onerror = () => {
-      setAvatarError('Failed to read image file.');
-    };
-    reader.readAsDataURL(file);
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarError(null);
   };
 
   const handleRemoveAvatar = () => {
     setAvatarPreview(null);
+    setAvatarFile(null);
     setAvatarError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -138,12 +96,25 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
-      const res = await api.put('/employee/profile', {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        designation: formData.designation.trim(),
-        avatarUrl: avatarPreview, // Base64 data URL or null
-      });
+      let res;
+      if (avatarFile) {
+        const data = new FormData();
+        data.append('name', formData.name.trim());
+        data.append('phone', formData.phone.trim());
+        data.append('designation', formData.designation.trim());
+        data.append('avatar', avatarFile);
+
+        res = await api.put('/employee/profile', data, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        res = await api.put('/employee/profile', {
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          designation: formData.designation.trim(),
+          avatarUrl: avatarPreview,
+        });
+      }
 
       const updatedUser = res.data?.data?.user;
       if (updatedUser) {

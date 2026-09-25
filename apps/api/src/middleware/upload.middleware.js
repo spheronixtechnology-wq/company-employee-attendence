@@ -90,8 +90,33 @@ const uploadDailyLogDoc = (req, res, next) => {
   });
 };
 
+const avatarFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowed = ['.png', '.jpg', '.jpeg', '.webp'];
+  if (!allowed.includes(ext)) {
+    return cb(new Error('Invalid image type.'), false);
+  }
+  cb(null, true);
+};
+
+const uploadAvatar = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: avatarFileFilter,
+}).single('avatar');
+
+const uploadAvatarImage = (req, res, next) => {
+  uploadAvatar(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    next();
+  });
+};
+
 module.exports = {
   uploadDailyLogDoc,
+  uploadAvatarImage,
   MAX_FILE_SIZE,
   ALLOWED_EXTENSIONS,
 };

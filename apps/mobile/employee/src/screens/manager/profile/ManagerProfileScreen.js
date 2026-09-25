@@ -64,7 +64,12 @@ export default function ManagerProfileScreen({ navigation }) {
     });
 
     if (!pickerResult.canceled && pickerResult.assets[0]) {
-      setAvatarUri(pickerResult.assets[0].uri);
+      const asset = pickerResult.assets[0];
+      if (asset.fileSize && asset.fileSize > 1 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Image must be under 1 MB.');
+        return;
+      }
+      setAvatarUri(asset.uri);
     }
   };
 

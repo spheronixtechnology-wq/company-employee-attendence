@@ -51,6 +51,7 @@ export const managerApi = {
   
   // Daily Logs
   getTeamDailyLogs: (dateStr) => request('get', `/manager/team/daily-logs?date=${dateStr}`),
+  getDailyLogDocument: (id) => request('get', `/manager/team/daily-log/${id}/document`),
   
   // --- Phase 7: Session Reactivation ---
   getSessionReactivations: (dateStr, search = '') => request('get', `/manager/session-reactivations?date=${dateStr}&search=${encodeURIComponent(search)}`),
@@ -77,5 +78,7 @@ export const managerApi = {
   getCurrentIp: () => request('get', `/manager/current-ip`),
 
   // --- Phase 12: Manager Profile ---
-  updateProfile: (payload) => request('put', '/manager/profile', payload),
+  updateProfile: (payload) => request('put', '/employee/profile', payload, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
 };

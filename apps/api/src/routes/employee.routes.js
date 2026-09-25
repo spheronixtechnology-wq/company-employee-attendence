@@ -5,7 +5,7 @@ const overtimeController = require('../controllers/overtime.controller');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 
-const { uploadDailyLogDoc } = require('../middleware/upload.middleware');
+const { uploadDailyLogDoc, uploadAvatarImage } = require('../middleware/upload.middleware');
 
 const isEmployee = [authenticate, authorize('employee')];
 const isPunchUser = [authenticate, authorize('employee', 'manager')];
@@ -32,8 +32,8 @@ router.get('/attendance/geofence/session', isEmployee, employeeController.getGeo
 router.post('/attendance/geofence/auto-checkout', isEmployee, employeeController.geofenceAutoCheckout);
 
 // Profile
-router.put('/profile', isAnyUser, employeeController.updateProfile);
-router.patch('/profile', isAnyUser, employeeController.updateProfile);
+router.put('/profile', isAnyUser, uploadAvatarImage, employeeController.updateProfile);
+router.patch('/profile', isAnyUser, uploadAvatarImage, employeeController.updateProfile);
 
 // Breaks
 router.post('/break/start', isPunchUser, employeeController.startBreak);

@@ -17,6 +17,7 @@ router.get('/employees', isAdmin, adminController.getEmployees);
 router.get('/employees/:id/profile', isAdmin, adminController.getEmployeeProfile);
 router.get('/employees/:id/attendance', isAdmin, adminController.getEmployeeAttendanceHistory);
 router.get('/employees/:id/daily-logs', isAdmin, adminController.getEmployeeDailyLogs);
+router.get('/daily-log/:logId/document', isAdmin, adminController.getDailyLogDocument);
 router.get('/employees/:id/overtime', isAdmin, adminController.getEmployeeOvertimeHistory);
 router.get('/teams', isAdmin, adminController.getTeams);
 router.post('/teams', isAdmin, adminController.createTeam);

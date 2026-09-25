@@ -1093,7 +1093,17 @@ const getAttendance = async (req, res) => {
     const fullAttendance = members.map((member) => {
       const existing = attendanceMap.get(member._id.toString());
       const manualReq = manualRequestMap.get(member._id.toString()) || null;
-      const dailyLog = dailyLogMap.get(member._id.toString()) || null;
+      let dailyLog = dailyLogMap.get(member._id.toString()) || null;
+      
+      if (dailyLog && dailyLog.document && !dailyLog.documentName) {
+        dailyLog = {
+          ...dailyLog,
+          documentName: dailyLog.document.fileName,
+          documentSize: dailyLog.document.fileSize,
+          documentMimeType: dailyLog.document.mimeType
+        };
+      }
+      
       const dailyLogSubmitted = Boolean(dailyLog);
       
       const isOnlineManager = member.role === 'manager' && date === todayStr && onlineUsers.has(member._id.toString());
@@ -1319,6 +1329,34 @@ const getEmployeeDailyLogs = async (req, res) => {
   }
 };
 
+const getDailyLogDocument = async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const log = await DailyLog.findById(logId).select('document').lean();
+    if (!log) {
+      return res.status(404).json({ success: false, message: 'Log not found' });
+    }
+
+    if (log.document && log.document.storageKey) {
+      const storageService = require('../services/storage/storageService');
+      const expiresIn = parseInt(process.env.SUPABASE_SIGNED_URL_EXPIRES, 10) || 300;
+      const signedUrl = await storageService.getSignedUrl(log.document.storageKey, expiresIn);
+      
+      return success(res, 'Document fetched', {
+        documentUrl: signedUrl,
+        attachmentUrl: signedUrl,
+        documentName: log.document.fileName,
+        doctype: (log.document.fileName || '').split('.').pop(),
+      });
+    }
+
+    return res.status(404).json({ success: false, message: 'Document not found' });
+  } catch (err) {
+    console.error('getDailyLogDocument error:', err);
+    return badRequest(res, 'Failed to fetch document');
+  }
+};
+
 /**
  * GET /api/admin/employees/:id/overtime
  */
@@ -1448,6 +1486,7 @@ module.exports = {
   getEmployeeProfile,
   getEmployeeAttendanceHistory,
   getEmployeeDailyLogs,
+  getDailyLogDocument,
   getEmployeeOvertimeHistory,
   getSessionReactivations,
   handleSessionReactivationDecision,

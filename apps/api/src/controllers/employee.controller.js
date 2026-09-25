@@ -18,9 +18,11 @@ const { isWithinGeofence } = require('../utils/haversine');
 const dailyLogService = require('../services/dailyLog.service');
 const leaveService = require('../services/leave.service');
 const authService = require('../services/auth.service');
+const storageService = require('../services/storage/storageService');
 const { createNotification } = require('../services/notification.service');
 const { enrichAttendanceRecord } = require('../services/employeeProfile.service');
 const { UAParser } = require('ua-parser-js');
+const path = require('path');
 const { getClientIp, isIpInAllowedList, maskIp } = require('../utils/ipUtils');
 const { buildDeviceLabel, formatDeviceLabel } = require('../utils/deviceUtils');
 const { emitToTeam, emitToManagers, emitToAdmins, emitToUser } = require('../socket');
@@ -1033,14 +1035,32 @@ const endBreak = async (req, res) => {
 const getDailyLog = async (req, res) => {
   try {
     const userId = req.user._id;
-    const today = getTodayDateString();
     
-    const log = await DailyLog.findOne({ userId, logDate: today })
-      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider');
-    return success(res, 'Daily log fetched', { log });
+    // Fetch the last 30 daily logs
+    const logs = await DailyLog.find({ userId })
+      .sort({ logDate: -1 })
+      .limit(30)
+      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider document.storageKey')
+      .lean();
+      
+    // Inject signed URLs for any logs with Supabase documents
+    const expiresIn = parseInt(process.env.SUPABASE_SIGNED_URL_EXPIRES, 10) || 300;
+    for (let log of logs) {
+      if (log.document && log.document.storageKey) {
+        const signedUrl = await storageService.getSignedUrl(log.document.storageKey, expiresIn);
+        log.documentUrl = signedUrl;
+        log.attachmentUrl = signedUrl; // for backwards compatibility
+      }
+    }
+
+    // Get the current streak
+    const dailyLogService = require('../services/dailyLog.service');
+    const streak = await dailyLogService.getDailyLogStreak(userId);
+
+    return success(res, 'Daily logs fetched', { logs, streak });
   } catch (error) {
-    console.error('Fetch daily log error:', error);
-    return badRequest(res, 'Failed to fetch daily log');
+    console.error('Fetch daily logs error:', error);
+    return badRequest(res, 'Failed to fetch daily logs');
   }
 };
 
@@ -1232,12 +1252,45 @@ const updateProfile = async (req, res) => {
     if (designation !== undefined) {
       updates.designation = designation ? designation.trim() : null;
     }
-    if (avatarUrl !== undefined) {
+    if (req.file) {
+      const ext = path.extname(req.file.originalname) || '.png';
+      const storageKey = `avatars/${userId}-${Date.now()}${ext}`;
+      
+      await storageService.uploadFile(req.file.buffer, storageKey, req.file.mimetype);
+      
+      const bucketName = (process.env.SUPABASE_BUCKET_NAME || 'Attendence System').replace(/^"|"$/g, '');
+      const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storageKey}`;
+      
+      updates.avatarUrl = publicUrl;
+    } else if (avatarUrl !== undefined) {
       if (avatarUrl && typeof avatarUrl === 'string') {
         if (avatarUrl.length > 7 * 1024 * 1024) {
           return badRequest(res, 'Avatar image is too large.');
         }
-        updates.avatarUrl = avatarUrl.trim();
+        
+        if (avatarUrl.startsWith('data:')) {
+          const parts = avatarUrl.split(',');
+          const header = parts[0];
+          const mimeMatch = header.match(/^data:([a-zA-Z0-9-+/.]+)(;[a-zA-Z0-9-]+=[a-zA-Z0-9-]+)*;base64$/);
+          
+          if (mimeMatch && parts.length === 2) {
+            const mimeType = mimeMatch[1];
+            const buffer = Buffer.from(parts[1], 'base64');
+            const ext = mimeType.split('/')[1] || 'png';
+            const storageKey = `avatars/${userId}-${Date.now()}.${ext}`;
+            
+            await storageService.uploadFile(buffer, storageKey, mimeType);
+            
+            const bucketName = (process.env.SUPABASE_BUCKET_NAME || 'Attendence System').replace(/^"|"$/g, '');
+            const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storageKey}`;
+            
+            updates.avatarUrl = publicUrl;
+          } else {
+            return badRequest(res, 'Invalid image format.');
+          }
+        } else {
+          updates.avatarUrl = avatarUrl.trim();
+        }
       } else {
         updates.avatarUrl = null;
       }

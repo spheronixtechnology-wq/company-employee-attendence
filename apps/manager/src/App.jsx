@@ -1953,7 +1953,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
             </div>
 
             {/* Document Submission Card */}
-            {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype) && (
+            {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype || log.hasDocument || log.document?.storageKey) && (
               <div className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -2945,6 +2945,7 @@ const ManagerProfilePage = () => {
     designation: user?.designation || '',
   });
   const [avatarPreview, setAvatarPreview] = useState(user?.avatarUrl || null);
+  const [avatarFile, setAvatarFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -2955,9 +2956,8 @@ const ManagerProfilePage = () => {
       setMessage({ type: 'error', text: 'Image must be under 5 MB.' });
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => setAvatarPreview(ev.target.result);
-    reader.readAsDataURL(file);
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
@@ -2967,8 +2967,21 @@ const ManagerProfilePage = () => {
     }
     setSaving(true);
     try {
-      const payload = { ...form, avatarUrl: avatarPreview };
-      const res = await api.patch('/employee/profile', payload);
+      let res;
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append('name', form.name.trim());
+        formData.append('phone', form.phone.trim());
+        formData.append('designation', form.designation.trim());
+        formData.append('avatar', avatarFile);
+
+        res = await api.patch('/employee/profile', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        const payload = { ...form, avatarUrl: avatarPreview };
+        res = await api.patch('/employee/profile', payload);
+      }
       const updatedUser = res.data?.data?.user;
       if (updatedUser) setUser(updatedUser);
       setMessage({ type: 'success', text: 'Profile updated successfully ✓' });

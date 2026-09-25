@@ -896,7 +896,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                           )}
 
                           {/* Document Attachment Action */}
-                          {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype) && (
+                          {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype || log.hasDocument || log.document?.storageKey) && (
                             <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                               <div className="flex items-center gap-2 text-xs text-slate-600">
                                 <FileText size={15} className="text-violet-600" />

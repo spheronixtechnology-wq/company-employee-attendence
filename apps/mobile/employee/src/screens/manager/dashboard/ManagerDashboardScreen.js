@@ -334,43 +334,43 @@ export default function ManagerDashboardScreen({ onNavigate }) {
         {/* ── 4. Secondary Horizontal Tab Strip Removed ── */}
         {/* ── 6 KPI Tiles Ribbon ── */}
         <View style={styles.kpiGrid}>
-          <View style={[styles.kpiTile, { borderTopColor: colors.primary }]}>
+          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.primary }]} onPress={() => onNavigate('team-members')} activeOpacity={0.7}>
             <View style={styles.kpiIconWrapper}><Users size={18} color={colors.primary} /></View>
             <Text style={styles.kpiValue}>{dashboardData?.teamTotal || 0}</Text>
             <Text style={styles.kpiLabel}>Team Total</Text>
-          </View>
-          <View style={[styles.kpiTile, { borderTopColor: colors.success }]}>
+            </TouchableOpacity>
+          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.success }]} onPress={() => onNavigate('team-attendance')} activeOpacity={0.7}>
             <View style={styles.kpiIconWrapper}><UserCheck size={18} color={colors.success} /></View>
             <Text style={styles.kpiValue}>{dashboardData?.checkedIn || 0}</Text>
             <Text style={styles.kpiLabel}>Checked In</Text>
-          </View>
-          <View style={[styles.kpiTile, { borderTopColor: colors.danger }]}>
-            <View style={styles.kpiIconWrapper}><AlertCircle size={18} color={colors.danger} /></View>
-            <Text style={styles.kpiValue}>{dashboardData?.notCheckedIn || 0}</Text>
-            <Text style={styles.kpiLabel}>Not Checked In</Text>
-          </View>
-          <View style={[styles.kpiTile, { borderTopColor: colors.warning }]}>
-            <View style={styles.kpiIconWrapper}><Calendar size={18} color={colors.warning} /></View>
-            <Text style={styles.kpiValue}>{dashboardData?.onLeave || 0}</Text>
-            <Text style={styles.kpiLabel}>On Leave</Text>
-          </View>
-          <View style={[styles.kpiTile, { borderTopColor: colors.danger }]}>
-            <View style={styles.kpiIconWrapper}><AlertCircle size={18} color={colors.danger} /></View>
-            <Text style={styles.kpiValue}>{dashboardData?.missingDailyLogs || 0}</Text>
-            <Text style={styles.kpiLabel}>Missing Logs</Text>
-          </View>
-          <View style={[styles.kpiTile, { borderTopColor: colors.warning }]}>
-            <View style={styles.kpiIconWrapper}><ClipboardList size={18} color={colors.warning} /></View>
-            <Text style={styles.kpiValue}>{dashboardData?.pendingLeaveRequests || 0}</Text>
-            <Text style={styles.kpiLabel}>Pending Leaves</Text>
-          </View>
+            </TouchableOpacity>
+          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.danger }]} onPress={() => onNavigate('team-attendance')} activeOpacity={0.7}>
+              <View style={styles.kpiIconWrapper}><AlertCircle size={18} color={colors.danger} /></View>
+              <Text style={styles.kpiValue}>{dashboardData?.notCheckedIn || 0}</Text>
+              <Text style={styles.kpiLabel}>Not Checked In</Text>
+            </TouchableOpacity>
+          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.warning }]} onPress={() => onNavigate('team-attendance')} activeOpacity={0.7}>
+              <View style={styles.kpiIconWrapper}><Calendar size={18} color={colors.warning} /></View>
+              <Text style={styles.kpiValue}>{dashboardData?.onLeave || 0}</Text>
+              <Text style={styles.kpiLabel}>On Leave</Text>
+            </TouchableOpacity>
+          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.danger }]} onPress={() => onNavigate('team-daily-logs')} activeOpacity={0.7}>
+              <View style={styles.kpiIconWrapper}><AlertCircle size={18} color={colors.danger} /></View>
+              <Text style={styles.kpiValue}>{dashboardData?.missingDailyLogs || 0}</Text>
+              <Text style={styles.kpiLabel}>Missing Logs</Text>
+            </TouchableOpacity>
+          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.warning }]} onPress={() => onNavigate('leave-requests')} activeOpacity={0.7}>
+              <View style={styles.kpiIconWrapper}><ClipboardList size={18} color={colors.warning} /></View>
+              <Text style={styles.kpiValue}>{dashboardData?.pendingLeaveRequests || 0}</Text>
+              <Text style={styles.kpiLabel}>Pending Leaves</Text>
+            </TouchableOpacity>
         </View>
 
 
         {/* ── Donut Chart Panel ── */}
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Team Attendance {isToday ? 'Today' : ''}</Text>
+        <TouchableOpacity style={styles.panel} onPress={() => onNavigate('team-attendance')} activeOpacity={0.9}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Team Attendance {isToday ? 'Today' : ''}</Text>
             <View style={styles.panelBadge}>
               <Text style={styles.panelBadgeText}>{isToday ? 'Live' : 'Archive'}</Text>
             </View>
@@ -391,9 +391,9 @@ export default function ManagerDashboardScreen({ onNavigate }) {
               </View>
             ))}
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* ── Pending Approvals Quick Resolution Panel ── */}
+        {/* 🚀 Pending Approvals Quick Resolution Panel ── */}
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
             <Text style={styles.panelTitle}>Pending Approvals</Text>

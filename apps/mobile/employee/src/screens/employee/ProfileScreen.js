@@ -24,11 +24,11 @@ export default function ProfileScreen({ onBack }) {
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [designation, setDesignation] = useState(user?.designation || '');
-  const [avatarBase64, setAvatarBase64] = useState(user?.avatarUrl || null);
+  const [avatarUri, setAvatarUri] = useState(user?.avatarUrl || null);
 
   // Keep local avatar state in sync when user context changes (e.g. from socket update on another device)
   useEffect(() => {
-    setAvatarBase64(user?.avatarUrl || null);
+    setAvatarUri(user?.avatarUrl || null);
   }, [user?.avatarUrl]);
 
   const handlePickImage = async () => {
@@ -44,7 +44,6 @@ export default function ProfileScreen({ onBack }) {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.6,
-        base64: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
@@ -52,8 +51,13 @@ export default function ProfileScreen({ onBack }) {
       }
 
       const asset = result.assets[0];
-      const dataUri = `data:image/jpeg;base64,${asset.base64}`;
-      setAvatarBase64(dataUri);
+      
+      if (asset.fileSize && asset.fileSize > 1 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Image must be under 1 MB.');
+        return;
+      }
+
+      setAvatarUri(asset.uri);
     } catch (err) {
       console.error('Image picker error:', err);
       Alert.alert('Error', 'Failed to pick image.');
@@ -68,12 +72,36 @@ export default function ProfileScreen({ onBack }) {
 
     setSubmitting(true);
     try {
-      const res = await api.put('/employee/profile', {
-        name: name.trim(),
-        phone: phone.trim(),
-        designation: designation.trim(),
-        avatarUrl: avatarBase64,
-      });
+      let res;
+      // If a new local image was picked (starts with file://), use FormData
+      if (avatarUri && avatarUri.startsWith('file://')) {
+        const formData = new FormData();
+        formData.append('name', name.trim());
+        formData.append('phone', phone.trim());
+        formData.append('designation', designation.trim());
+        
+        const filename = avatarUri.split('/').pop() || 'avatar.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        
+        formData.append('avatar', {
+          uri: avatarUri,
+          name: filename,
+          type,
+        });
+
+        res = await api.put('/employee/profile', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        // Otherwise, just send normal JSON (avatarUri is unchanged remote URL or null)
+        res = await api.put('/employee/profile', {
+          name: name.trim(),
+          phone: phone.trim(),
+          designation: designation.trim(),
+          avatarUrl: avatarUri,
+        });
+      }
 
       const updatedUser = res.data?.data?.user;
       if (updatedUser) {
@@ -161,8 +189,8 @@ export default function ProfileScreen({ onBack }) {
         {/* Avatar & Header Card */}
         <View style={styles.profileHeroCard}>
           <View style={styles.avatarWrapper}>
-            {avatarBase64 ? (
-              <Image source={{ uri: avatarBase64 }} style={styles.avatarImage} />
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarFallbackText}>
@@ -246,7 +274,7 @@ export default function ProfileScreen({ onBack }) {
                 setName(user?.name || '');
                 setPhone(user?.phone || '');
                 setDesignation(user?.designation || '');
-                setAvatarBase64(user?.avatarUrl || null);
+                setAvatarUri(user?.avatarUrl || null);
                 setIsEditing(false);
               }}
             >

@@ -835,7 +835,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                           )}
 
                           {/* Document Attachment Action */}
-                          {(log.documentUrl || log.attachmentUrl) && (
+                          {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype || log.hasDocument || log.document?.storageKey) && (
                             <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                               <div className="flex items-center gap-2 text-xs text-slate-600">
                                 <FileText size={15} className="text-violet-600" />
@@ -847,20 +847,53 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => setPreviewDoc(log)}
+                                  onClick={async () => {
+                                    if (!log.documentUrl && !log.attachmentUrl && log._id) {
+                                      try {
+                                        const res = await api.get(`/admin/daily-log/${log._id}/document`);
+                                        if (res.data?.success && res.data?.data) {
+                                          log.documentUrl = res.data.data.documentUrl;
+                                          log.attachmentUrl = res.data.data.attachmentUrl;
+                                        } else {
+                                          alert('Could not load the document payload from the server.');
+                                          return;
+                                        }
+                                      } catch (e) {
+                                        console.error('Failed to load document payload', e);
+                                        alert('Failed to load document payload: ' + (e.response?.data?.message || e.message));
+                                        return;
+                                      }
+                                    }
+                                    setPreviewDoc(log);
+                                  }}
                                   className="btn bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold rounded-lg shadow-xs"
                                 >
                                   <Eye size={12} /> Preview
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const link = document.createElement('a');
-                                    link.href = log.documentUrl || log.attachmentUrl;
-                                    link.download = log.documentName || 'work-document';
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
+                                  onClick={async () => {
+                                    try {
+                                      let finalUrl = log.documentUrl || log.attachmentUrl;
+                                      if (!finalUrl && log._id) {
+                                        const res = await api.get(`/admin/daily-log/${log._id}/document`);
+                                        if (res.data?.success && res.data?.data) {
+                                          finalUrl = res.data.data.documentUrl || res.data.data.attachmentUrl;
+                                        }
+                                      }
+                                      if (finalUrl) {
+                                        const link = document.createElement('a');
+                                        link.href = finalUrl;
+                                        link.download = log.documentName || 'work-document';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                      } else {
+                                        alert('Document payload could not be loaded.');
+                                      }
+                                    } catch (e) {
+                                      alert('Failed to download document: ' + e.message);
+                                    }
                                   }}
                                   className="btn bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold rounded-lg shadow-xs"
                                 >

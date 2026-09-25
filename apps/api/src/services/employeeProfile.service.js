@@ -181,6 +181,19 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
     .limit(10)
     .lean();
 
+  if (periodLogs && periodLogs.length > 0) {
+    for (let r of periodLogs) {
+      if (r.document) {
+        r.hasDocument = !!r.document.storageKey;
+        if (r.document.fileName) {
+          r.documentName = r.document.fileName;
+          r.documentSize = r.document.fileSize;
+          r.documentMimeType = r.document.mimeType;
+        }
+      }
+    }
+  }
+
   const periodOvertimes = await Overtime.find({
     userId: member._id,
     date: { $gte: period.from, $lte: period.to },
@@ -520,6 +533,11 @@ const getPaginatedDailyLogs = async (employeeId, { page = 1, limit = 10, from, t
       const att = attMap.get(r.logDate);
       if (att) {
         r.attendance = enrichAttendanceRecord(att);
+      }
+      if (r.document && !r.documentName) {
+        r.documentName = r.document.fileName;
+        r.documentSize = r.document.fileSize;
+        r.documentMimeType = r.document.mimeType;
       }
     }
   }

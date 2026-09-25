@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  ActivityIndicator, ScrollView, Image, FlatList, Linking
+  ActivityIndicator, ScrollView, Image, FlatList, Linking, Alert
 } from 'react-native';
 import {
   X, User, Calendar, FileText, Clock, MapPin, Smartphone, Mail, Phone, Shield, ExternalLink, Download
 } from 'lucide-react-native';
 import { managerApi } from '../services/api/managerApi';
+import DocumentViewerModal from './DocumentViewerModal';
 import { useSocket } from '../contexts/SocketContext';
 
 const colors = {
@@ -37,6 +38,9 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [leaveBalances, setLeaveBalances] = useState([]);
+  const [loadingDocId, setLoadingDocId] = useState(null);
+  const [viewerUrl, setViewerUrl] = useState(null);
+  const [viewerName, setViewerName] = useState(null);
 
   const fetchProfile = useCallback(async () => {
     if (!member?._id) return;
@@ -210,9 +214,33 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
             )}
 
             {/* Document Attachments */}
-            {(!!item.documentUrl || !!item.attachmentUrl) && (
-              <TouchableOpacity style={styles.docBtn} onPress={() => Linking.openURL(item.documentUrl || item.attachmentUrl)}>
-                <Download size={14} color="#475569" />
+            {(!!item.documentUrl || !!item.attachmentUrl || item.hasDocument) && (
+              <TouchableOpacity 
+                  style={styles.docBtn} 
+                  disabled={loadingDocId === item._id}
+                  onPress={async () => {
+                    if (loadingDocId) return;
+                    setLoadingDocId(item._id);
+                  let url = item.documentUrl || item.attachmentUrl;
+                  if (!url && item.hasDocument && item._id) {
+                    try {
+                      const res = await managerApi.getDailyLogDocument(item._id);
+                      if (res.data?.success && res.data?.data) {
+                        url = res.data.data.documentUrl || res.data.data.attachmentUrl;
+                      } else {
+                        Alert.alert('Error', 'Could not load the document payload from the server.');
+                        return;
+                      }
+                    } catch (e) {
+                      Alert.alert('Error', 'Failed to fetch the document. ' + (e.response?.data?.message || ''));
+                        setLoadingDocId(null);
+                        return;
+                      }
+                  }
+                  if (url) { setViewerUrl(url); setViewerName(item.documentName || 'Document'); setLoadingDocId(null); } else { setLoadingDocId(null); }
+                }}
+              >
+                {loadingDocId === item._id && <ActivityIndicator size="small" color={colors.primary} style={{marginRight: 6}} />}
                 <Text style={styles.docBtnText} numberOfLines={1}>{item.documentName || 'Attached Document'}</Text>
                 {!!item.documentSize && <Text style={styles.docSizeText}>({(item.documentSize / (1024 * 1024)).toFixed(2)} MB)</Text>}
               </TouchableOpacity>
@@ -387,6 +415,7 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
 
         </View>
       </View>
+      <DocumentViewerModal visible={!!viewerUrl} onClose={() => setViewerUrl(null)} documentUrl={viewerUrl} documentName={viewerName || 'Document'} />
     </Modal>
   );
 }
@@ -541,11 +570,15 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 13,
     color: colors.secondary,
+    flexShrink: 0,
+    marginRight: 16,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.textDark,
+    flex: 1,
+    textAlign: 'right',
   },
   listCard: {
     backgroundColor: colors.card,
@@ -607,22 +640,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    backgroundColor: '#f5f3ff', // Light violet background
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#ede9fe',
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   docBtnText: {
-    color: '#475569',
+    color: '#7c3aed', // Deep violet
     fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 6,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   docSizeText: {
-    color: '#94a3b8',
+    color: '#8b5cf6',
     fontSize: 11,
     marginLeft: 6,
+    fontWeight: '600',
+    opacity: 0.9,
   },
   statusBadge: {
     fontSize: 12,

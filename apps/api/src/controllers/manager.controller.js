@@ -397,7 +397,7 @@ const getTeamDailyLogs = async (req, res) => {
       })
       .populate('teamId', 'name')
       .sort({ logDate: -1, createdAt: -1 })
-      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider');
+      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider document.storageKey');
 
     if (isRecent) logsQuery.limit(50);
 
@@ -434,6 +434,9 @@ const getTeamDailyLogs = async (req, res) => {
         checkOutTime: log.checkOutTime || (att?.checkOutTime ? att.checkOutTime : null),
         hoursSpent,
         attendance: att,
+        documentName: log.documentName || log.document?.fileName,
+        documentSize: log.documentSize || log.document?.fileSize,
+        documentMimeType: log.documentMimeType || log.document?.mimeType,
         hasDocument: !!(log.document?.storageKey),
       };
     });
