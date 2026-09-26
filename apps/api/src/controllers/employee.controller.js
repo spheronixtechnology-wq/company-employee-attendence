@@ -1535,49 +1535,46 @@ const getGeofenceSession = async (req, res) => {
  */
 const geofenceAutoCheckout = async (req, res) => {
   try {
-    const userId     = req.user._id;
-    const { sessionId } = req.body;
-    const today      = getTodayDateString();
-
-    if (!sessionId) {
-      return badRequest(res, 'sessionId is required.');
-    }
+    const userId = req.user._id;
+    const { sessionId, checkoutEventId } = req.body;
+    const today = getTodayDateString();
 
     const attendance = await Attendance.findOne({
       userId,
       date: today,
-      checkInTime:  { $ne: null },
+      checkInTime: { $ne: null },
       checkOutTime: null,
     });
 
-    // Full backend revalidation — all conditions must hold
-    const check = await geofenceSessionService.validateAutoCheckout(
-      sessionId,
-      attendance?._id
-    );
-
-    if (!check.ok) {
-      // Condition not met (employee returned, already checked out, etc.) — safe no-op
-      console.log(`[geofenceAutoCheckout] Rejected for ${userId}: ${check.reason}`);
-      return success(res, 'Auto-checkout condition not met', {
-        autoCheckedOut: false,
-        reason: check.reason,
+    if (!attendance) {
+      // If attendance is already closed or missing, it's safe to tell the mobile app we're done.
+      // This provides idempotency if the mobile app retried due to network drops.
+      return success(res, 'Attendance is already checked out.', {
+        autoCheckedOut: true,
+        alreadyClosed: true,
       });
     }
 
+    // STRICT MODE: We blindly trust the mobile app's assertion that the user crossed the boundary.
+    // No more grace periods or level validations.
+    
     // Execute checkout
-    const { attendance: att } = check;
     const checkOutTime = new Date();
-    const metrics = finalizeAttendanceCheckout(att, checkOutTime);
-    att.status             = 'incomplete';
-    att.checkOutTime       = checkOutTime;
-    att.autoCheckedOut     = true;
-    att.autoCheckoutAt     = checkOutTime;
-    att.autoCheckoutReason = 'GEOFENCE_GRACE_EXPIRED';
-    await att.save();
+    const metrics = finalizeAttendanceCheckout(attendance, checkOutTime);
+    attendance.status = 'incomplete';
+    attendance.checkOutTime = checkOutTime;
+    attendance.autoCheckedOut = true;
+    attendance.autoCheckoutAt = checkOutTime;
+    attendance.autoCheckoutReason = 'STRICT_GEOFENCE_EXIT';
+    // optionally save checkoutEventId if we added it to schema, but for now we just rely on attendance checkoutTime
+    await attendance.save();
 
-    // Mark geofence session terminal
-    await geofenceSessionService.markAutoCheckedOut(sessionId);
+    // Mark geofence session terminal if a session was active
+    if (sessionId) {
+      await geofenceSessionService.markAutoCheckedOut(sessionId).catch(e => 
+        console.error('Failed to mark geofence session terminal:', e)
+      );
+    }
 
     // Notify managers
     const teamId = req.user.teamId?._id || req.user.teamId;
@@ -1585,18 +1582,18 @@ const geofenceAutoCheckout = async (req, res) => {
       userId,
       userName: req.user.name,
       teamId,
-      reason: 'GEOFENCE_GRACE_EXPIRED',
+      reason: 'STRICT_GEOFENCE_EXIT',
     });
     if (teamId) {
       emitToTeam(teamId, 'attendance:update', {
         type: 'auto_checkout',
         userId,
         userName: req.user.name,
-        reason: 'GEOFENCE_GRACE_EXPIRED',
+        reason: 'STRICT_GEOFENCE_EXIT',
       });
     }
 
-    return success(res, 'Auto-checkout completed', {
+    return success(res, 'Strict auto-checkout completed', {
       autoCheckedOut: true,
       checkOutTime: checkOutTime.toISOString(),
     });

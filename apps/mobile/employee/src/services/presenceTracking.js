@@ -78,64 +78,73 @@ TaskManager.defineTask(PRESENCE_TASK_NAME, async ({ data, error }) => {
 });
 
 let foregroundSubscription = null;
+let isStarting = false;
 
 /**
  * Start Foreground Service with persistent sticky ongoing notification
  */
 export async function startPresenceTracking() {
-  if (!isAndroidExpoGo) {
-    const hasStarted = await Location.hasStartedLocationUpdatesAsync(PRESENCE_TASK_NAME).catch(() => false);
-    if (!hasStarted) {
-      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-      if (fgStatus === 'granted') {
-        // Try to request background permissions, but don't strictly require it to start the foreground service.
-        // Android foreground services with a sticky notification can continue tracking without 'Allow all the time'.
-        await Location.requestBackgroundPermissionsAsync().catch(() => {});
-        
-        try {
-          await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 3000, // Target 3 seconds
-            distanceInterval: 0, 
-            deferredUpdatesInterval: 3000,
-            foregroundService: {
-              notificationTitle: 'Spheronix Active Shift Tracking',
-              notificationBody: 'Attendance geofence monitoring is active.',
-              notificationColor: '#6366f1',
-            },
-          });
-          console.log('✅ Android Foreground Service location updates started.');
-        } catch (e) {
-          console.log('Location.startLocationUpdatesAsync notice:', e.message);
-        }
-      }
-    }
-  } else {
-    // In Expo Go, ensure foreground permission is requested without invoking background location APIs
-    await Location.requestForegroundPermissionsAsync().catch(() => {});
-  }
+  if (foregroundSubscription || isStarting) return;
+  isStarting = true;
 
-  // Use watchPositionAsync for highly reliable foreground tracking (works perfectly in Expo Go)
-  if (!foregroundSubscription) {
-    try {
-      foregroundSubscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Highest,
-          timeInterval: 3000, // Target 3 seconds
-          distanceInterval: 0, // Removed distance interval so it emits every 15s even when stationary
-        },
-        async (loc) => {
-          if (isLocationValid(loc)) {
-            console.log('[watchPositionAsync] Got fresh coords:', loc.coords.latitude, loc.coords.longitude);
-            await geofenceEngine.processValidLocation(loc.coords.latitude, loc.coords.longitude);
-            await sendPresencePing(loc.coords);
+  try {
+    if (!isAndroidExpoGo) {
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(PRESENCE_TASK_NAME).catch(() => false);
+      if (!hasStarted) {
+        // Only request permissions if we haven't already got them to prevent prompt spam
+        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus === 'granted') {
+          // Try to request background permissions, but don't strictly require it to start the foreground service.
+          // Android foreground services with a sticky notification can continue tracking without 'Allow all the time'.
+          await Location.requestBackgroundPermissionsAsync().catch(() => {});
+          
+          try {
+            await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
+              accuracy: Location.Accuracy.Highest,
+              timeInterval: 3000, // Target 3 seconds
+              distanceInterval: 0, 
+              deferredUpdatesInterval: 3000,
+              foregroundService: {
+                notificationTitle: 'Spheronix Active Shift Tracking',
+                notificationBody: 'Attendance geofence monitoring is active.',
+                notificationColor: '#6366f1',
+              },
+            });
+            console.log('✅ Android Foreground Service location updates started.');
+          } catch (e) {
+            console.log('Location.startLocationUpdatesAsync notice:', e.message);
           }
         }
-      );
-      console.log('✅ Foreground watchPositionAsync started.');
-    } catch (err) {
-      console.error('[watchPositionAsync] failed to start:', err.message);
+      }
+    } else {
+      // In Expo Go, ensure foreground permission is requested without invoking background location APIs
+      await Location.requestForegroundPermissionsAsync().catch(() => {});
     }
+
+    // Use watchPositionAsync for highly reliable foreground tracking (works perfectly in Expo Go)
+    if (!foregroundSubscription) {
+      try {
+        foregroundSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Highest,
+            timeInterval: 3000, // Target 3 seconds
+            distanceInterval: 0, // Removed distance interval so it emits every 15s even when stationary
+          },
+          async (loc) => {
+            if (isLocationValid(loc)) {
+              console.log('[watchPositionAsync] Got fresh coords:', loc.coords.latitude, loc.coords.longitude);
+              await geofenceEngine.processValidLocation(loc.coords.latitude, loc.coords.longitude);
+              await sendPresencePing(loc.coords);
+            }
+          }
+        );
+        console.log('✅ Foreground watchPositionAsync started.');
+      } catch (err) {
+        console.error('[watchPositionAsync] failed to start:', err.message);
+      }
+    }
+  } finally {
+    isStarting = false;
   }
 }
 
