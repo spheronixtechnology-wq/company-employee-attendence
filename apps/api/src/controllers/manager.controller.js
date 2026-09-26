@@ -478,13 +478,16 @@ const getTeamDailyLogs = async (req, res) => {
 const getDailyLogDocument = async (req, res) => {
   try {
     const { logId } = req.params;
-    const log = await DailyLog.findById(logId).select('document').lean();
+    const log = await DailyLog.findById(logId).select('document userId').lean();
     if (!log) {
       return notFound(res, 'Log not found');
     }
 
     // Verify manager authority over this user (optional but secure)
     const authCheck = await verifyManagerMemberAuthority(req.user, log.userId || null);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
+    }
     // Even if authCheck fails, we might just allow it for simplicity since they have the logId,
     // but better to just return the data if they are a manager.
 
@@ -700,10 +703,9 @@ const updateTeamMemberDailyLog = async (req, res) => {
     const log = await DailyLog.findById(logId);
     if (!log) return badRequest(res, 'Log not found');
 
-    const targetUser = await User.findById(log.userId);
-    const teams = await getManagedTeams(req.user);
-    if (!teams.some(t => t._id.toString() === targetUser.teamId.toString())) {
-      return forbidden(res, 'Not authorized to edit logs for this employee');
+    const authCheck = await verifyManagerMemberAuthority(req.user, log.userId || null);
+    if (!authCheck.authorized) {
+      return res.status(authCheck.status).json({ success: false, message: authCheck.message });
     }
 
     if (hoursSpent) log.hoursSpent = parseFloat(hoursSpent);
@@ -1120,6 +1122,9 @@ const handleManualAttendanceDecision = async (req, res) => {
     if (!request) {
       return notFound(res, 'Manual attendance request not found');
     }
+    if (!request.userId) {
+      return badRequest(res, 'Employee not found (may have been deleted)');
+    }
 
     if (request.status !== 'pending') {
       return badRequest(res, `Request has already been ${request.status}`);
@@ -1236,6 +1241,9 @@ const handleManualAttendanceDecision = async (req, res) => {
  * Helper to verify that manager has authority over an employee.
  */
 const verifyManagerMemberAuthority = async (managerUser, memberId) => {
+  if (!memberId) {
+    return { authorized: false, status: 400, message: 'Invalid employee ID.' };
+  }
   const member = await User.findById(memberId).select('teamId role name').lean();
   if (!member) {
     return { authorized: false, status: 404, message: 'Employee not found.' };

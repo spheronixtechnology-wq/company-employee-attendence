@@ -98,7 +98,17 @@ export default function DocumentViewerModal({
           const base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
           const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, mimeType);
           await FileSystem.writeAsStringAsync(newFileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
-          Alert.alert('Success', 'Document successfully downloaded to your device!');
+          
+          // Attempt to open the saved file natively using an Intent
+          try {
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+              data: newFileUri,
+              flags: 1,
+              type: mimeType
+            });
+          } catch (e) {
+            Alert.alert('Success', 'Document successfully downloaded to your device! Check your files app to open it.');
+          }
         }
       } else {
         await Sharing.shareAsync(fileUri, { 
@@ -270,5 +280,24 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  androidDocContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.slate50,
+  },
+  androidDocTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.slate900,
+    marginBottom: 8,
+  },
+  androidDocDesc: {
+    fontSize: 14,
+    color: colors.slate600,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

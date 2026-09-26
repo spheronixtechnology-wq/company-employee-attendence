@@ -540,26 +540,28 @@ const handleWorkVerificationDecision = async (req, res) => {
     await session.save();
 
     // Notify employee
-    try {
-      emitToUser(session.userId._id.toString(), 'overtime:work_resolved', {
-        overtimeId: session._id,
-        action,
-        status: session.status,
-        approvedMinutes: session.approvedMinutes,
-        note: session.workVerificationNote,
-      });
+    if (session.userId) {
+      try {
+        emitToUser(session.userId._id.toString(), 'overtime:work_resolved', {
+          overtimeId: session._id,
+          action,
+          status: session.status,
+          approvedMinutes: session.approvedMinutes,
+          note: session.workVerificationNote,
+        });
 
-      await createNotification({
-        userId: session.userId._id,
-        type: 'overtime_work_decision',
-        title: action === 'approve' ? 'Overtime Work Approved ✅' : 'Overtime Work Rejected ❌',
-        message: action === 'approve'
-          ? `Your manager approved ${formatMinutesToHours(session.approvedMinutes)} of Overtime for ${session.date}. Time has been added to your approved OT total.`
-          : `Your manager rejected the submitted OT work for ${session.date}. This time has NOT been added to your approved total.${session.workVerificationNote ? ` Reason: ${session.workVerificationNote}` : ''}`,
-        relatedId: session._id,
-      });
-    } catch (notifErr) {
-      console.warn('Silent notification error on work decision:', notifErr.message);
+        await createNotification({
+          userId: session.userId._id,
+          type: 'overtime_work_decision',
+          title: action === 'approve' ? 'Overtime Work Approved ✅' : 'Overtime Work Rejected ❌',
+          message: action === 'approve'
+            ? `Your manager approved ${formatMinutesToHours(session.approvedMinutes)} of Overtime for ${session.date}. Time has been added to your approved OT total.`
+            : `Your manager rejected the submitted OT work for ${session.date}. This time has NOT been added to your approved total.${session.workVerificationNote ? ` Reason: ${session.workVerificationNote}` : ''}`,
+          relatedId: session._id,
+        });
+      } catch (notifErr) {
+        console.warn('Silent notification error on work decision:', notifErr.message);
+      }
     }
 
     return success(
