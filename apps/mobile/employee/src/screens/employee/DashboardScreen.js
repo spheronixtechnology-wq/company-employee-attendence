@@ -62,8 +62,7 @@ import CheckoutQrScanner from '../../components/CheckoutQrScanner';
 import AttendanceReportModal from '../../components/AttendanceReportModal';
 import DailyLogModal from '../../components/DailyLogModal';
 import { GeofenceProvider, useGeofence } from '../../contexts/GeofenceContext';
-import GeofenceAlertModal from '../../components/GeofenceAlertModal';
-
+// GeofenceAlertModal removed as per Phase 4 strict geofence design
 export default function DashboardScreen({
   onNavigateHistory,
   onStartCheckIn,
@@ -402,6 +401,7 @@ export default function DashboardScreen({
       hasActiveBreak={hasActiveBreak}
       heartbeatMonitoringEnabled={dashboard?.heartbeatMonitoringEnabled === true}
       initialOfficeRadius={dashboard?.officeRadius}
+      officeLocation={dashboard?.officeLocation}
       onAttendanceClosed={() => fetchDashboard()}
     >
       <DashboardInner
@@ -528,11 +528,10 @@ function DashboardInner(props) {
   } = props;
 
   const {
-    alertLevel,
-    geofenceStatus,
+    mobileState,
+    syncState,
     distance,
     officeRadius,
-    lastPingAt,
   } = useGeofence();
 
   // Selected attendance modality tab in action panel (Office QR default)
@@ -548,16 +547,6 @@ function DashboardInner(props) {
   // Date view mode & navigation
   const [viewMode, setViewMode] = useState('Day');
   const [dayOffset, setDayOffset] = useState(0);
-  const [presenceDismissed, setPresenceDismissed] = useState(false);
-
-  useEffect(() => {
-    // Show banner on initial check-in or when a new ping confirms we are inside
-    if (isCheckedIn && alertLevel === 0) {
-      setPresenceDismissed(false);
-      const t = setTimeout(() => setPresenceDismissed(true), 8000);
-      return () => clearTimeout(t);
-    }
-  }, [isCheckedIn, lastPingAt, alertLevel]);
 
   const selectedDate = useMemo(() => {
     const d = new Date();
@@ -1063,42 +1052,45 @@ function DashboardInner(props) {
           </View>
         )}
 
-        {/* ── Presence Verified / In Perimeter Radar Banner (Dismissible + 8s Auto-hide) ── */}
-        {isCheckedIn && !isCheckedOut && !todayAtt?.autoCheckedOut && alertLevel === 0 && !presenceDismissed && (
+        {/* ── Strict Local Geofence Live Radar Banner ── */}
+        {isCheckedIn && !isCheckedOut && !todayAtt?.autoCheckedOut && dashboard?.heartbeatMonitoringEnabled && (
           <View style={styles.presenceVerifiedCard}>
-            <View style={styles.presenceCheckCircle}>
+            <View style={[styles.presenceCheckCircle, mobileState === 'CHECKOUT_PENDING' ? { backgroundColor: '#ef4444' } : {}]}>
               <Check size={18} color="#ffffff" strokeWidth={3} />
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.presenceHeaderRow}>
                 <Text style={styles.presenceTitle}>
-                  {geofenceStatus === 'RETURNING' ? 'Back in Office Premises' : 'Presence Verified'}
+                  {mobileState === 'CHECKOUT_PENDING' ? 'Auto-Checked Out: Geofence Crossed' : 'Tracking Active (Safely Inside)'}
                 </Text>
-                <View style={styles.inPerimeterPill}>
-                  <View style={styles.greenPulseDot} />
-                  <Text style={styles.inPerimeterText}>In Perimeter</Text>
-                </View>
+                {mobileState === 'ACTIVE' && (
+                  <View style={styles.inPerimeterPill}>
+                    <View style={styles.greenPulseDot} />
+                    <Text style={styles.inPerimeterText}>In Perimeter</Text>
+                  </View>
+                )}
+                {mobileState === 'CHECKOUT_PENDING' && (
+                  <View style={[styles.inPerimeterPill, { backgroundColor: '#fee2e2', borderColor: '#f87171' }]}>
+                    <Text style={[styles.inPerimeterText, { color: '#b91c1c' }]}>
+                      {syncState === 'RETRYING' ? 'Syncing...' : 'Checked Out'}
+                    </Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.presenceSub}>
-                {geofenceStatus === 'RETURNING'
-                  ? 'You are safely back within the office boundary. Warning alerts have stopped.'
+                {mobileState === 'CHECKOUT_PENDING' 
+                  ? 'You mathematically crossed the configured radius boundary.' 
                   : 'You are safely within the authorized office boundary.'}
               </Text>
               <View style={styles.distanceRow}>
                 <Text style={styles.distanceText}>
-                  {distance !== null ? `${distance}m` : 'Inside'} / {officeRadius || dashboard?.officeRadius || 100}m allowed
+                  {distance !== null ? `Distance: ${distance} m` : 'Calculating...'}
                 </Text>
-                <Text style={styles.secureBadgeText}>SECURE • VERIFIED • ON PREMISES</Text>
+                <Text style={styles.secureBadgeText}>
+                  Radius: {officeRadius || dashboard?.officeRadius || 50} m
+                </Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.closePresenceBtn}
-              onPress={() => setPresenceDismissed(true)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Dismiss message"
-            >
-              <X size={16} color="#15803d" />
-            </TouchableOpacity>
           </View>
         )}
 
@@ -2437,9 +2429,7 @@ function DashboardInner(props) {
         }}
       />
 
-      {/* Geofence Out-of-Bounds Escalation Alert Modal (Levels 1-5) */}
-      <GeofenceAlertModal />
-
+      {/* Strict Mobile Geofence: Alert Modals Removed */}
       {/* Post-Checkout Shift Attendance Report Modal */}
       <AttendanceReportModal
         visible={reportModalVisible}

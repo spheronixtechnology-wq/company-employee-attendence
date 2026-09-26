@@ -3,7 +3,8 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import api from '../lib/api';
-
+import { isLocationValid } from '../location/LocationValidator';
+import { geofenceEngine } from '../geofence/GeofenceEngine';
 export const PRESENCE_TASK_NAME = 'SPHERONIX_PRESENCE_PING_TASK';
 
 const isExpoGo =
@@ -66,7 +67,11 @@ TaskManager.defineTask(PRESENCE_TASK_NAME, async ({ data, error }) => {
 
   if (data && data.locations && data.locations.length > 0) {
     const latest = data.locations[data.locations.length - 1];
-    if (latest && latest.coords) {
+    if (isLocationValid(latest)) {
+      // 1. Process Strict Local Geofence
+      await geofenceEngine.processValidLocation(latest.coords.latitude, latest.coords.longitude);
+      
+      // 2. Send generic presence ping to backend (for path logging)
       await sendPresencePing(latest.coords);
     }
   }
@@ -89,10 +94,10 @@ export async function startPresenceTracking() {
         
         try {
           await Location.startLocationUpdatesAsync(PRESENCE_TASK_NAME, {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 30000, // 30 seconds
-            distanceInterval: 0, // removed distance interval so it always pings on time
-            deferredUpdatesInterval: 30000,
+            accuracy: Location.Accuracy.Highest,
+            timeInterval: 3000, // Target 3 seconds
+            distanceInterval: 0, 
+            deferredUpdatesInterval: 3000,
             foregroundService: {
               notificationTitle: 'Spheronix Active Shift Tracking',
               notificationBody: 'Attendance geofence monitoring is active.',
@@ -115,13 +120,14 @@ export async function startPresenceTracking() {
     try {
       foregroundSubscription = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 15000, // Emit every 15 seconds
+          accuracy: Location.Accuracy.Highest,
+          timeInterval: 3000, // Target 3 seconds
           distanceInterval: 0, // Removed distance interval so it emits every 15s even when stationary
         },
         async (loc) => {
-          if (loc && loc.coords) {
+          if (isLocationValid(loc)) {
             console.log('[watchPositionAsync] Got fresh coords:', loc.coords.latitude, loc.coords.longitude);
+            await geofenceEngine.processValidLocation(loc.coords.latitude, loc.coords.longitude);
             await sendPresencePing(loc.coords);
           }
         }
