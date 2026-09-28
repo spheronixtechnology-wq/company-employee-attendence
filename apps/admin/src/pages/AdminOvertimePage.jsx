@@ -73,7 +73,7 @@ export default function AdminOvertimePage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in text-slate-900">
+    <div className="p-6 space-y-6 animate-fade-in text-slate-900">
       {/* ── Page Header ── */}
       <PageHeader
         title="Company Overtime Oversight"

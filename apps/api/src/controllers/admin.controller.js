@@ -81,6 +81,16 @@ const getDashboard = async (req, res) => {
         DailyLog.distinct('userId', { logDate: targetDate }),
       ]);
 
+      const checkedInSet = new Set(checkedInUsers.map(id => id.toString()));
+      if (targetDate === todayStr) {
+        const onlineUserIds = getOnlineUserIds();
+        if (onlineUserIds.length > 0) {
+          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: 'manager' }).select('_id').lean();
+          onlineManagers.forEach(m => checkedInSet.add(m._id.toString()));
+        }
+      }
+      const combinedCheckedInUsers = Array.from(checkedInSet);
+
       const attendanceOnLeave = await Attendance.distinct('userId', {
         date: targetDate,
         status: 'on_leave',
@@ -90,11 +100,11 @@ const getDashboard = async (req, res) => {
         ...attendanceOnLeave.map((id) => id.toString()),
       ]);
 
-      checkedInCount = checkedInUsers.length;
+      checkedInCount = combinedCheckedInUsers.length;
       onLeaveCount = combinedOnLeaveSet.size;
 
       const loggedSet = new Set(loggedUserIds.map((id) => id.toString()));
-      missingDailyLogs = checkedInUsers.filter((id) => !loggedSet.has(id.toString())).length;
+      missingDailyLogs = combinedCheckedInUsers.filter((id) => !loggedSet.has(id.toString())).length;
     } else {
       // Range analysis (Week or Month)
       const [distinctCheckedIn, distinctOnLeave, distinctLogged] = await Promise.all([
@@ -112,11 +122,21 @@ const getDashboard = async (req, res) => {
         }),
       ]);
 
-      checkedInCount = distinctCheckedIn.length;
+      const distinctCheckedInSet = new Set(distinctCheckedIn.map(id => id.toString()));
+      if (todayStr >= rangeStart && todayStr <= rangeEnd) {
+        const onlineUserIds = getOnlineUserIds();
+        if (onlineUserIds.length > 0) {
+          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: 'manager' }).select('_id').lean();
+          onlineManagers.forEach(m => distinctCheckedInSet.add(m._id.toString()));
+        }
+      }
+      const combinedDistinctCheckedIn = Array.from(distinctCheckedInSet);
+
+      checkedInCount = combinedDistinctCheckedIn.length;
       onLeaveCount = distinctOnLeave.length;
 
       const loggedSet = new Set(distinctLogged.map((id) => id.toString()));
-      missingDailyLogs = distinctCheckedIn.filter((id) => !loggedSet.has(id.toString())).length;
+      missingDailyLogs = combinedDistinctCheckedIn.filter((id) => !loggedSet.has(id.toString())).length;
     }
 
     const absentCount = Math.max(0, totalStaff - checkedInCount - onLeaveCount);

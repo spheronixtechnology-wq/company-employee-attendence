@@ -120,7 +120,7 @@ const isIpInAllowedList = (clientIp, allowedIps) => {
 const maskIp = (ip) => {
   if (!ip || typeof ip !== 'string') return 'Unknown';
   const clean = ip.replace('::ffff:', '').trim();
-  if (clean === '127.0.0.1' || clean === 'localhost') return '127.0.0.1 (Localhost)';
+  if (clean === '127.0.0.1' || clean === 'localhost' || clean === '::1') return '127.0.0.1 (Localhost)';
 
   if (clean.includes('.')) {
     const parts = clean.split('.');

@@ -282,7 +282,7 @@ const rejectSessionReactivation = async ({ attendanceId, reviewerUser, notes = '
   if (!attendance.checkOutTime) {
     finalizeAttendanceCheckout(attendance, decisionAt);
   }
-  attendance.status = 'incomplete';
+  attendance.status = 'present'; // User mandate: rejected reactivations still leave session as present
   attendance.autoCheckedOut = true;
   attendance.reactivationStatus = 'rejected';
   attendance.reactivationDecisionBy = reviewerUser._id;

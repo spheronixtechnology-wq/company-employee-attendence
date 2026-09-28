@@ -57,12 +57,8 @@ const runShiftEndAutoCheckout = async (referenceDate = new Date()) => {
       const hasLog = await DailyLog.exists({ userId: user._id, logDate: today });
       att.dailyLogSubmitted = !!hasLog;
 
-      // 3. Status determination: if log submitted -> present/half_day; if not -> incomplete
-      if (hasLog) {
-        att.status = calcAttendanceStatus(metrics.actualWorkMinutes);
-      } else {
-        att.status = 'incomplete';
-      }
+      // 3. Status determination: User requested ALL auto-checkouts to just be 'present'
+      att.status = 'present';
 
       att.autoCheckedOut = true;
       att.autoCheckoutReason = 'SHIFT_END_AUTO_CHECKOUT';
@@ -233,7 +229,7 @@ const runMidnightAutoCheckout = async (referenceDate = new Date()) => {
 
       // 2. Reuse single-source checkout duration & break calculation
       finalizeAttendanceCheckout(att, autoCheckOutTime);
-      att.status = 'incomplete';
+      att.status = 'present';
       att.autoCheckedOut = true;
       att.autoCheckoutReason = 'MIDNIGHT_AUTO_CHECKOUT';
       await att.save();
@@ -293,6 +289,9 @@ const startAutoCheckoutJob = () => {
       console.error('[CRON] Scheduled auto-checkout failed:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
+
+  // Also run immediately on startup to catch any missed days (e.g. server sleeping on weekends)
+  runMidnightAutoCheckout().catch(err => console.error('[startup] Midnight auto-checkout run error:', err.message));
 
   console.log('✅ Auto-checkout job scheduled (daily at 12:00 AM IST)');
 };
@@ -440,7 +439,7 @@ const startPresenceMonitoringJob = () => {
         if (minutesSinceBaseline >= timeoutMinutes) {
           const autoCheckOutTime = new Date();
           finalizeAttendanceCheckout(att, autoCheckOutTime);
-          att.status = 'incomplete';
+          att.status = 'present';
           att.autoCheckedOut = true;
           att.autoCheckoutReason = 'HEARTBEAT_TIMEOUT';
           att.autoCheckoutAt = autoCheckOutTime;

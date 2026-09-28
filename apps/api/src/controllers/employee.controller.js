@@ -723,14 +723,14 @@ const checkOut = async (req, res) => {
 
     const checkOutTime = new Date();
     const metrics = finalizeAttendanceCheckout(attendance, checkOutTime);
-    attendance.status = calcAttendanceStatus(metrics.actualWorkMinutes);
+    attendance.status = 'present'; // User requested manual checkout always be present
     attendance.checkOutTime = checkOutTime;
 
     if (req.body.autoCheckOut) {
       attendance.autoCheckedOut = true;
       attendance.autoCheckoutAt = checkOutTime;
       attendance.autoCheckoutReason = req.body.autoCheckoutReason || 'PRESENCE_VALIDATION_FAILED';
-      attendance.status = 'incomplete';
+      attendance.status = 'present'; // User requested auto-checkout always be present
     }
     
     if (lat !== undefined && lng !== undefined) {
@@ -1561,7 +1561,7 @@ const geofenceAutoCheckout = async (req, res) => {
     // Execute checkout
     const checkOutTime = new Date();
     const metrics = finalizeAttendanceCheckout(attendance, checkOutTime);
-    attendance.status = 'incomplete';
+    attendance.status = 'present'; // User mandate: auto checkouts must be present
     attendance.checkOutTime = checkOutTime;
     attendance.autoCheckedOut = true;
     attendance.autoCheckoutAt = checkOutTime;
