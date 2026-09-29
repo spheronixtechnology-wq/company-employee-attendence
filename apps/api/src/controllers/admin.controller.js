@@ -38,7 +38,11 @@ const getDashboard = async (req, res) => {
     const targetDate = date || todayStr;
 
     const validUserIds = await User.distinct('_id', { deletedAt: null });
-    const totalStaff = await User.countDocuments({ role: { $in: ['employee', 'manager'] }, isActive: true, deletedAt: null });
+    // Chairman sees all staff: faculty, hod, manager, principal (not admin/chairman themselves)
+    const staffRoles = ['employee', 'manager', 'faculty', 'hod', 'principal'];
+    const staffUsers = await User.find({ role: { $in: staffRoles }, isActive: true, deletedAt: null }).select('_id').lean();
+    const staffUserIds = staffUsers.map(u => u._id);
+    const totalStaff = staffUserIds.length;
 
     let isRange = false;
     let rangeStart = targetDate;
@@ -70,22 +74,24 @@ const getDashboard = async (req, res) => {
       // Single day analysis
       const [checkedInUsers, onLeaveUsers, loggedUserIds] = await Promise.all([
         Attendance.distinct('userId', {
+          userId: { $in: staffUserIds },
           date: targetDate,
           checkInTime: { $ne: null },
         }),
         LeaveRequest.distinct('userId', {
+          userId: { $in: staffUserIds },
           status: 'approved',
           startDate: { $lte: targetDate },
           endDate: { $gte: targetDate },
         }),
-        DailyLog.distinct('userId', { logDate: targetDate }),
+        DailyLog.distinct('userId', { userId: { $in: staffUserIds }, logDate: targetDate }),
       ]);
 
       const checkedInSet = new Set(checkedInUsers.map(id => id.toString()));
       if (targetDate === todayStr) {
         const onlineUserIds = getOnlineUserIds();
         if (onlineUserIds.length > 0) {
-          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: 'manager' }).select('_id').lean();
+          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: { $in: ['manager', 'hod', 'principal'] } }).select('_id').lean();
           onlineManagers.forEach(m => checkedInSet.add(m._id.toString()));
         }
       }
@@ -109,15 +115,18 @@ const getDashboard = async (req, res) => {
       // Range analysis (Week or Month)
       const [distinctCheckedIn, distinctOnLeave, distinctLogged] = await Promise.all([
         Attendance.distinct('userId', {
+          userId: { $in: staffUserIds },
           date: { $gte: rangeStart, $lte: rangeEnd },
           checkInTime: { $ne: null },
         }),
         LeaveRequest.distinct('userId', {
+          userId: { $in: staffUserIds },
           status: 'approved',
           startDate: { $lte: rangeEnd },
           endDate: { $gte: rangeStart },
         }),
         DailyLog.distinct('userId', {
+          userId: { $in: staffUserIds },
           logDate: { $gte: rangeStart, $lte: rangeEnd },
         }),
       ]);
@@ -126,7 +135,7 @@ const getDashboard = async (req, res) => {
       if (todayStr >= rangeStart && todayStr <= rangeEnd) {
         const onlineUserIds = getOnlineUserIds();
         if (onlineUserIds.length > 0) {
-          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: 'manager' }).select('_id').lean();
+          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: { $in: ['manager', 'hod', 'principal'] } }).select('_id').lean();
           onlineManagers.forEach(m => distinctCheckedInSet.add(m._id.toString()));
         }
       }
@@ -212,9 +221,13 @@ const getEmployees = async (req, res) => {
     
     // Filter by role if specified, otherwise return all employees and managers
     if (role && role !== 'all') {
-      query.role = role;
+      if (role.includes(',')) {
+        query.role = { $in: role.split(',').map(r => r.trim()) };
+      } else {
+        query.role = role;
+      }
     } else {
-      query.role = { $in: ['employee', 'manager'] };
+      query.role = { $in: ['employee', 'manager', 'faculty', 'hod', 'principal', 'chairman'] };
     }
 
     if (teamId && teamId !== 'all') {
@@ -976,7 +989,7 @@ const toggleHeartbeatMonitoring = async (req, res) => {
 
 const getManagerPermissions = async (req, res) => {
   try {
-    const managers = await User.find({ role: 'manager' }).select('name email role teamId mfaEnabled').lean();
+    const managers = await User.find({ role: { $in: ['manager', 'hod', 'principal'] } }).select('name email role teamId mfaEnabled').lean();
     const permissions = await ManagerPermission.find({
       userId: { $in: managers.map(m => m._id) },
     }).lean();
@@ -1023,8 +1036,8 @@ const updateManagerPermission = async (req, res) => {
     }
 
     const manager = await User.findById(userId);
-    if (!manager || manager.role !== 'manager') {
-      return badRequest(res, 'Manager not found');
+    if (!manager || !['manager', 'hod', 'principal'].includes(manager.role)) {
+      return badRequest(res, `Manager not found. DB Role was: ${manager ? manager.role : 'null'}`);
     }
 
     const updated = await ManagerPermission.findOneAndUpdate(
@@ -1047,7 +1060,7 @@ const updateManagerPermission = async (req, res) => {
     });
   } catch (error) {
     console.error('updateManagerPermission error:', error);
-    return badRequest(res, 'Failed to update manager permissions');
+    return res.status(400).json({ success: false, message: 'Failed to update manager permissions: ' + error.message });
   }
 };
 
@@ -1058,7 +1071,7 @@ const updateManagerPermission = async (req, res) => {
 const getAttendance = async (req, res) => {
   try {
     const date = req.query.date || getTodayDateString();
-    const query = { role: { $in: ['employee', 'manager'] }, isActive: true };
+    const query = { role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true };
     if (req.query.role && req.query.role !== 'all') {
       query.role = req.query.role;
     }
@@ -1285,7 +1298,7 @@ const resetManagerMfa = async (req, res) => {
   try {
     const { id } = req.params;
     const manager = await User.findById(id).select('+mfaSecret +mfaPendingSecret');
-    if (!manager || manager.role !== 'manager') {
+    if (!manager || !['manager', 'hod', 'principal'].includes(manager.role)) {
       return badRequest(res, 'Manager not found.');
     }
 

@@ -8,7 +8,7 @@ const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 const { uploadDailyLogDoc } = require('../middleware/upload.middleware');
 
-const isManager = [authenticate, authorize('manager')];
+const isManager = [authenticate, authorize('manager', 'principal', 'hod')];
 
 router.get('/status', managerController.getStatus);
 

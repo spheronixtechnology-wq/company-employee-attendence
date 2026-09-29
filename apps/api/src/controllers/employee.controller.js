@@ -28,7 +28,7 @@ const { buildDeviceLabel, formatDeviceLabel } = require('../utils/deviceUtils');
 const { emitToTeam, emitToManagers, emitToAdmins, emitToUser } = require('../socket');
 const crypto = require('crypto');
 const webauthnService = require('../services/webauthn.service');
-const { getActiveOfficeQr, verifyOfficeQrPayload } = require('../utils/qrUtils');
+const { getActiveCollegeQr, verifyCollegeQrPayload } = require('../utils/qrUtils');
 const geofenceSessionService = require('../services/geofenceSession.service');
 
 // In-memory active checkout sessions: Map<userIdStr, { token: string, expiresAt: number }>
@@ -445,9 +445,9 @@ const checkIn = async (req, res) => {
         if (!qrCodeValue) {
           return badRequest(res, 'Invalid QR Code — please scan today\'s office QR code.');
         }
-        const verification = verifyOfficeQrPayload(qrCodeValue);
+        const verification = verifyCollegeQrPayload(qrCodeValue);
         if (!verification.valid) {
-          return badRequest(res, verification.reason || 'Invalid or expired Office QR code. Please scan the current code on the office screen.');
+          return badRequest(res, verification.reason || 'Invalid or expired College QR code. Please scan the current code on the office screen.');
         }
         break;
       }
@@ -818,7 +818,7 @@ const getCurrentQrCode = async (req, res) => {
       office = await OfficeLocation.findOne({}).lean();
     }
     const officeId = office?._id ? office._id.toString() : 'default_office';
-    const activeQr = getActiveOfficeQr(officeId, 5); // 5-minute rotating window
+    const activeQr = getActiveCollegeQr(officeId, 5); // 5-minute rotating window
     
     return success(res, 'QR code fetched successfully', {
       qr: {

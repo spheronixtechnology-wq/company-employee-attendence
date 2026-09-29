@@ -8,24 +8,25 @@ const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 
 const isAdmin = [authenticate, authorize('admin')];
-const isAdminOrManager = [authenticate, authorize('admin', 'manager')];
+const isChairmanOrPrincipal = [authenticate, authorize('admin', 'principal', 'chairman')];
+const isAdminOrManager = [authenticate, authorize('admin', 'manager', 'principal', 'chairman')];
 
 router.get('/status', adminController.getStatus);
 router.get('/dashboard', isAdmin, adminController.getDashboard);
 
-router.get('/employees', isAdmin, adminController.getEmployees);
-router.get('/employees/:id/profile', isAdmin, adminController.getEmployeeProfile);
-router.get('/employees/:id/attendance', isAdmin, adminController.getEmployeeAttendanceHistory);
-router.get('/employees/:id/daily-logs', isAdmin, adminController.getEmployeeDailyLogs);
-router.get('/daily-log/:logId/document', isAdmin, adminController.getDailyLogDocument);
-router.get('/employees/:id/overtime', isAdmin, adminController.getEmployeeOvertimeHistory);
-router.get('/teams', isAdmin, adminController.getTeams);
-router.post('/teams', isAdmin, adminController.createTeam);
-router.patch('/teams/:id', isAdmin, adminController.updateTeam);
-router.delete('/teams/:id', isAdmin, adminController.deleteTeam);
-router.post('/users', isAdmin, adminController.createUser);
-router.patch('/users/:id', isAdmin, adminController.updateUser);
-router.delete('/users/:id', isAdmin, adminController.deleteUser);
+router.get('/employees', isChairmanOrPrincipal, adminController.getEmployees);
+router.get('/employees/:id/profile', isChairmanOrPrincipal, adminController.getEmployeeProfile);
+router.get('/employees/:id/attendance', isChairmanOrPrincipal, adminController.getEmployeeAttendanceHistory);
+router.get('/employees/:id/daily-logs', isChairmanOrPrincipal, adminController.getEmployeeDailyLogs);
+router.get('/daily-log/:logId/document', isChairmanOrPrincipal, adminController.getDailyLogDocument);
+router.get('/employees/:id/overtime', isChairmanOrPrincipal, adminController.getEmployeeOvertimeHistory);
+router.get('/teams', isChairmanOrPrincipal, adminController.getTeams);
+router.post('/teams', isChairmanOrPrincipal, adminController.createTeam);
+router.patch('/teams/:id', isChairmanOrPrincipal, adminController.updateTeam);
+router.delete('/teams/:id', isChairmanOrPrincipal, adminController.deleteTeam);
+router.post('/users', isChairmanOrPrincipal, adminController.createUser);
+router.patch('/users/:id', isChairmanOrPrincipal, adminController.updateUser);
+router.delete('/users/:id', isChairmanOrPrincipal, adminController.deleteUser);
 
 // Office Locations
 router.get('/office-locations', isAdminOrManager, adminController.getOfficeLocations);

@@ -29,11 +29,11 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['admin', 'manager', 'employee'],
-        message: 'Role must be admin, manager, or employee',
+        values: ['admin', 'manager', 'employee', 'chairman', 'principal', 'hod', 'faculty'],
+        message: 'Role must be a valid college role',
       },
       required: true,
-      default: 'employee',
+      default: 'faculty',
     },
     teamId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -37,6 +37,11 @@ const { formatDeviceLabel } = require('../utils/deviceUtils');
 const getManagedTeams = async (user) => {
   const userId = user._id || user;
   
+  // Principals and Chairman inherently have the right to view all departments
+  if (user.role === 'principal' || user.role === 'chairman' || user.role === 'admin') {
+    return await Team.find({ isActive: true }).lean();
+  }
+
   // Check if manager has permission to view all departments
   const perm = await ManagerPermission.findOne({ userId });
   if (perm && perm.permissions?.canViewAllDepartments) {
@@ -69,7 +74,7 @@ const getManagedTeam = async (userId) => {
 const getTeamMemberIds = async (teamIds, excludeUserId = null) => {
   const ids = Array.isArray(teamIds) ? teamIds : (teamIds ? [teamIds] : []);
   if (!ids.length) return [];
-  const query = { teamId: { $in: ids }, role: { $in: ['employee'] }, deletedAt: null };
+  const query = { teamId: { $in: ids }, role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
   if (excludeUserId) query._id = { $ne: excludeUserId };
   const members = await User.find(query).select('_id').lean();
   return members.map(m => m._id);
@@ -106,7 +111,22 @@ const getDashboard = async (req, res) => {
     }
 
     const teamIds = teams.map(t => t._id);
-    const memberIds = await getTeamMemberIds(teamIds);
+
+    // Role-aware member resolution:
+    // Chairman/Admin: all staff including Principal
+    // Principal: all staff except Principal and Chairman
+    // HOD/Manager: their team members only
+    let memberIds;
+    if (req.user.role === 'admin' || req.user.role === 'chairman') {
+      const staffUsers = await User.find({ role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true, deletedAt: null }).select('_id').lean();
+      memberIds = staffUsers.map(u => u._id);
+    } else if (req.user.role === 'principal') {
+      const staffUsers = await User.find({ role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null }).select('_id').lean();
+      memberIds = staffUsers.map(u => u._id);
+    } else {
+      memberIds = await getTeamMemberIds(teamIds);
+    }
+
     if (memberIds.length === 0) {
       return success(res, 'Team is empty', {
         teamTotal: 0,
@@ -173,7 +193,7 @@ const getTeamAttendance = async (req, res) => {
     if (!teams || teams.length === 0) return success(res, 'Fetched attendance', { attendance: [] });
 
     const teamIds = teams.map(t => t._id);
-    const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true, deletedAt: null })
+    const members = await User.find({ teamId: { $in: teamIds }, role: { $in: ['employee', 'faculty'] }, isActive: true, deletedAt: null })
       .select('name designation email avatarUrl phone teamId')
       .populate('teamId', 'name')
       .sort({ name: 1 });
@@ -245,8 +265,21 @@ const getTeamMembers = async (req, res) => {
     }
 
     const teamIds = teams.map(t => t._id);
-    const members = await User.find({ teamId: { $in: teamIds }, role: 'employee', isActive: true, deletedAt: null })
-      .select('name email phone designation avatarUrl teamId createdAt')
+    
+    // Chairman/Admin sees ALL staff including Principal
+    // Principal sees all staff EXCEPT Principal and Chairman
+    // HODs/Managers see only their team
+    let memberQuery;
+    if (req.user.role === 'admin' || req.user.role === 'chairman') {
+      memberQuery = { role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true, deletedAt: null };
+    } else if (req.user.role === 'principal') {
+      memberQuery = { role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
+    } else {
+      memberQuery = { teamId: { $in: teamIds }, role: { $in: ['employee', 'faculty'] }, isActive: true, deletedAt: null };
+    }
+
+    const members = await User.find(memberQuery)
+      .select('name email phone designation avatarUrl teamId role createdAt')
       .populate('teamId', 'name')
       .sort({ name: 1 })
       .lean();
@@ -262,6 +295,15 @@ const getTeamMembers = async (req, res) => {
       .lean();
     const logMap = new Map(dailyLogs.map(l => [l.userId.toString(), l]));
 
+    // For HODs, always resolve their team from leadUserId relationship (this is the source of truth)
+    // This prevents stale teamId values from showing the wrong department
+    const hodMembers = members.filter(m => m.role === 'hod').map(m => m._id);
+    const ledTeamMap = new Map();
+    if (hodMembers.length > 0) {
+      const ledTeams = await Team.find({ leadUserId: { $in: hodMembers }, isActive: true }).lean();
+      ledTeams.forEach(t => ledTeamMap.set(t.leadUserId.toString(), { _id: t._id, name: t.name }));
+    }
+
     const enrichedMembers = members.map(member => {
       const att = attMap.get(member._id.toString());
       const dLog = logMap.get(member._id.toString());
@@ -275,8 +317,12 @@ const getTeamMembers = async (req, res) => {
           currentStatus = 'checked_in';
         }
       }
+      // For HODs: always use the team they LEAD (source of truth), fallback to stored teamId
+      const resolvedTeamId = (member.role === 'hod' ? ledTeamMap.get(member._id.toString()) : null) || member.teamId || null;
+
       return {
         ...member,
+        teamId: resolvedTeamId,
         currentStatus,
         checkInTime: att?.checkInTime || (dLog?.checkInTime ? `${targetDate}T${dLog.checkInTime}:00` : null),
         checkOutTime: att?.checkOutTime || (dLog?.checkOutTime ? `${targetDate}T${dLog.checkOutTime}:00` : null),
@@ -525,35 +571,47 @@ const createTeamMember = async (req, res) => {
       email, companyEmail, mobileNumber, currentAddress, 
       emergencyContactName, emergencyContactNumber, emergencyContactRelation,
       department, designation, jobType, dateOfJoining, workLocation, 
-      country, officeBranch, teamShift, teamId, password
+      country, officeBranch, teamShift, teamId, password, role
     } = req.body;
 
-    if (!name || !lastName || !email || !mobileNumber || !currentAddress || 
-        !emergencyContactName || !emergencyContactNumber || !emergencyContactRelation ||
-        !department || !designation || !jobType || !dateOfJoining || 
-        !workLocation || !country || !officeBranch || !teamShift || !password) {
-      return badRequest(res, 'Missing required fields.');
+    const requiredFields = {
+      name, lastName, email, mobileNumber, currentAddress,
+      emergencyContactName, emergencyContactNumber, emergencyContactRelation,
+      department, designation, jobType, dateOfJoining,
+      workLocation, country, officeBranch, password
+    };
+    
+    const missingFields = Object.entries(requiredFields)
+      .filter(([_, value]) => !value)
+      .map(([key]) => key);
+
+    if (missingFields.length > 0) {
+      return badRequest(res, `Missing required fields: ${missingFields.join(', ')}`);
     }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) return badRequest(res, 'User with this email already exists.');
 
     const teams = await getManagedTeams(req.user);
-    if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any teams.');
-    
-    const validTeamIds = teams.map(t => t._id.toString());
-    
+
+    // Principals and Admins can create staff in any department (even without a matching team)
     let assignedTeamId = null;
-    if (validTeamIds.length === 1) {
-      assignedTeamId = validTeamIds[0];
+    if (req.user.role === 'principal' || req.user.role === 'admin' || req.user.role === 'chairman') {
+      assignedTeamId = teamId || null; // use provided teamId or leave unassigned
     } else {
-      if (Array.isArray(teamId)) {
-        const filtered = teamId.filter(id => validTeamIds.includes(id));
-        if (filtered.length === 0) return forbidden(res, 'You are not authorized to add members to these teams.');
-        assignedTeamId = filtered[0]; // employees can only be assigned to one primary team
+      if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any teams.');
+      const validTeamIds = teams.map(t => t._id.toString());
+      if (validTeamIds.length === 1) {
+        assignedTeamId = validTeamIds[0];
       } else {
-        if (!validTeamIds.includes(teamId)) return forbidden(res, 'You are not authorized to add members to this team.');
-        assignedTeamId = teamId;
+        if (Array.isArray(teamId)) {
+          const filtered = teamId.filter(id => validTeamIds.includes(id));
+          if (filtered.length === 0) return forbidden(res, 'You are not authorized to add members to these teams.');
+          assignedTeamId = filtered[0];
+        } else {
+          if (!validTeamIds.includes(teamId)) return forbidden(res, 'You are not authorized to add members to this team.');
+          assignedTeamId = teamId;
+        }
       }
     }
 
@@ -564,7 +622,7 @@ const createTeamMember = async (req, res) => {
       department, designation, jobType, joinedDate: dateOfJoining,
       workLocation, country, officeBranch, teamShift,
       passwordHash: password,
-      role: 'employee',
+      role: (role === 'hod' && req.user.role !== 'hod') ? 'hod' : 'faculty',
       teamId: assignedTeamId,
       reportingManager: req.user._id,
       forcePasswordChange: true
@@ -1454,7 +1512,7 @@ const updateTeamLeaveQuotas = async (req, res) => {
     await team.save();
 
     // Now update all team members' allocated balances safely
-    const teamMembers = await User.find({ teamId, role: 'employee', isActive: true }).lean();
+    const teamMembers = await User.find({ teamId, role: { $in: ['employee', 'faculty'] }, isActive: true }).lean();
     const leaveTypes = await LeaveType.find({ isActive: true }).lean();
     const currentYear = new Date().getFullYear(); // Using JS date as util might not be imported
 

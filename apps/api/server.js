@@ -13,7 +13,7 @@ const server = http.createServer(app);
 initSocket(server);
 
 connectDB().then(() => {
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`╔══════════════════════════════════════════════════════════╗`);
     console.log(`║   Attendance & Performance Tracking System — API         ║`);
     console.log(`║   Mode: ${process.env.NODE_ENV?.padEnd(42) || 'development'.padEnd(42)} ║`);

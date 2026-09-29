@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 /**
- * Builds the canonical JSON string for Office QR signing.
+ * Builds the canonical JSON string for College QR signing.
  * Strictly maintains consistent property keys and ordering.
  */
 const buildCanonicalString = ({ type, officeId, issuedAt, expiresAt, nonce }) => {
@@ -15,32 +15,32 @@ const buildCanonicalString = ({ type, officeId, issuedAt, expiresAt, nonce }) =>
 };
 
 /**
- * Retrieves the dedicated Office QR secret key.
+ * Retrieves the dedicated College QR secret key.
  */
-const getOfficeQrSecret = () => {
-  const secret = process.env.OFFICE_QR_SECRET || process.env.JWT_SECRET;
+const getCollegeQrSecret = () => {
+  const secret = process.env.COLLEGE_QR_SECRET || process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error('OFFICE_QR_SECRET is not configured.');
+    throw new Error('COLLEGE_QR_SECRET is not configured.');
   }
   return secret;
 };
 
 /**
- * Generates an HMAC-SHA256 signed Office QR payload.
+ * Generates an HMAC-SHA256 signed College QR payload.
  *
  * @param {Object} options
  * @param {string|ObjectId} options.officeId - The ID of the authorized office
  * @param {number} [options.validityMinutes=5] - Validity duration in minutes
  * @returns {{ qrString: string, payload: Object }}
  */
-const generateOfficeQrPayload = ({ officeId, validityMinutes = 5 }) => {
+const generateCollegeQrPayload = ({ officeId, validityMinutes = 5 }) => {
   const issuedAt = Date.now();
   const expiresAt = issuedAt + validityMinutes * 60 * 1000;
   const nonce = crypto.randomBytes(8).toString('hex');
   const officeIdStr = String(officeId);
 
   const canonical = buildCanonicalString({
-    type: 'OFFICE_QR',
+    type: 'COLLEGE_QR',
     officeId: officeIdStr,
     issuedAt,
     expiresAt,
@@ -48,12 +48,12 @@ const generateOfficeQrPayload = ({ officeId, validityMinutes = 5 }) => {
   });
 
   const sig = crypto
-    .createHmac('sha256', getOfficeQrSecret())
+    .createHmac('sha256', getCollegeQrSecret())
     .update(canonical)
     .digest('hex');
 
   const qrPayload = {
-    type: 'OFFICE_QR',
+    type: 'COLLEGE_QR',
     officeId: officeIdStr,
     issuedAt,
     expiresAt,
@@ -68,11 +68,11 @@ const generateOfficeQrPayload = ({ officeId, validityMinutes = 5 }) => {
 };
 
 /**
- * Authoritatively verifies an incoming Office QR string.
+ * Authoritatively verifies an incoming College QR string.
  *
  * Checks:
  * 1. Valid JSON format
- * 2. type === 'OFFICE_QR'
+ * 2. type === 'COLLEGE_QR'
  * 3. Required officeId, issuedAt, expiresAt, and nonce
  * 4. Numeric expiration and validity window (not expired)
  * 5. Signature format and exact 64-hex length guard
@@ -81,7 +81,7 @@ const generateOfficeQrPayload = ({ officeId, validityMinutes = 5 }) => {
  * @param {string} qrString - The decoded QR text from the client
  * @returns {{ valid: boolean, payload?: Object, reason?: string }}
  */
-const verifyOfficeQrPayload = (qrString) => {
+const verifyCollegeQrPayload = (qrString) => {
   if (!qrString || typeof qrString !== 'string') {
     return { valid: false, reason: 'Missing or invalid QR data.' };
   }
@@ -97,8 +97,8 @@ const verifyOfficeQrPayload = (qrString) => {
     return { valid: false, reason: 'Malformed QR code format.' };
   }
 
-  if (parsed.type !== 'OFFICE_QR') {
-    return { valid: false, reason: 'Not an authorized Office QR code.' };
+  if (parsed.type !== 'COLLEGE_QR') {
+    return { valid: false, reason: 'Not an authorized College QR code.' };
   }
 
   if (!parsed.officeId || typeof parsed.officeId !== 'string') {
@@ -110,7 +110,7 @@ const verifyOfficeQrPayload = (qrString) => {
   }
 
   if (Date.now() > parsed.expiresAt) {
-    return { valid: false, reason: 'Office QR code has expired. Please scan the current code.' };
+    return { valid: false, reason: 'College QR code has expired. Please scan the current code.' };
   }
 
   if (typeof parsed.issuedAt !== 'number' || !Number.isFinite(parsed.issuedAt)) {
@@ -138,7 +138,7 @@ const verifyOfficeQrPayload = (qrString) => {
   let expectedSig;
   try {
     expectedSig = crypto
-      .createHmac('sha256', getOfficeQrSecret())
+      .createHmac('sha256', getCollegeQrSecret())
       .update(canonical)
       .digest('hex');
   } catch (err) {
@@ -174,11 +174,11 @@ const verifyOfficeQrPayload = (qrString) => {
  *
  * Cache Map: officeIdStr -> { qrString, payload, expiresAt }
  */
-const activeOfficeQrCache = new Map();
+const activeCollegeQrCache = new Map();
 
-const getActiveOfficeQr = (officeId, validityMinutes = 5) => {
+const getActiveCollegeQr = (officeId, validityMinutes = 5) => {
   const officeIdStr = String(officeId);
-  const existing = activeOfficeQrCache.get(officeIdStr);
+  const existing = activeCollegeQrCache.get(officeIdStr);
 
   const now = Date.now();
   // Reuse existing if active and more than 30 seconds remaining
@@ -186,20 +186,20 @@ const getActiveOfficeQr = (officeId, validityMinutes = 5) => {
     return existing;
   }
 
-  const generated = generateOfficeQrPayload({ officeId: officeIdStr, validityMinutes });
+  const generated = generateCollegeQrPayload({ officeId: officeIdStr, validityMinutes });
   const tokenRecord = {
     qrString: generated.qrString,
     payload: generated.payload,
     expiresAt: generated.payload.expiresAt,
   };
 
-  activeOfficeQrCache.set(officeIdStr, tokenRecord);
+  activeCollegeQrCache.set(officeIdStr, tokenRecord);
   return tokenRecord;
 };
 
 module.exports = {
   buildCanonicalString,
-  generateOfficeQrPayload,
-  verifyOfficeQrPayload,
-  getActiveOfficeQr,
+  generateCollegeQrPayload,
+  verifyCollegeQrPayload,
+  getActiveCollegeQr,
 };

@@ -132,7 +132,7 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
           <Text style={styles.sectionTitle}>Contact Details</Text>
           <View style={styles.infoRow}><Text style={styles.infoLabel}>Mobile Number</Text><Text style={styles.infoValue}>{fullMember.phone || fullMember.mobileNumber || '—'}</Text></View>
           <View style={styles.infoRow}><Text style={styles.infoLabel}>Personal Email</Text><Text style={styles.infoValue}>{fullMember.email || '—'}</Text></View>
-          <View style={styles.infoRow}><Text style={styles.infoLabel}>Company Email</Text><Text style={styles.infoValue}>{fullMember.companyEmail || '—'}</Text></View>
+          <View style={styles.infoRow}><Text style={styles.infoLabel}>College Email</Text><Text style={styles.infoValue}>{fullMember.companyEmail || '—'}</Text></View>
         </View>
 
         {/* Emergency Contact */}

@@ -1,21 +1,21 @@
 require('dotenv').config();
 const {
-  generateOfficeQrPayload,
-  verifyOfficeQrPayload,
-  getActiveOfficeQr,
+  generateCollegeQrPayload,
+  verifyCollegeQrPayload,
+  getActiveCollegeQr,
   buildCanonicalString,
 } = require('../utils/qrUtils');
 const assert = require('assert');
 
 async function runTests() {
-  console.log('🧪 Starting Office QR Cryptographic & Validation Test Suite...\n');
+  console.log('🧪 Starting College QR Cryptographic & Validation Test Suite...\n');
 
   // Test 1: Canonical Signing & Structure
   console.log('Test 1: Canonical Signing & Structure');
   const testOfficeId = '6a96bff127f5fdcb4633fc52';
-  const { qrString, payload } = generateOfficeQrPayload({ officeId: testOfficeId, validityMinutes: 5 });
+  const { qrString, payload } = generateCollegeQrPayload({ officeId: testOfficeId, validityMinutes: 5 });
   
-  assert.strictEqual(payload.type, 'OFFICE_QR');
+  assert.strictEqual(payload.type, 'COLLEGE_QR');
   assert.strictEqual(payload.officeId, testOfficeId);
   assert.strictEqual(typeof payload.issuedAt, 'number');
   assert.strictEqual(typeof payload.expiresAt, 'number');
@@ -25,30 +25,30 @@ async function runTests() {
   console.log('✅ Generated QR is valid JSON with 64-char hex HMAC signature.');
 
   // Test 2: Successful Verification
-  console.log('\nTest 2: Verification of Unaltered Office QR');
-  const resultValid = verifyOfficeQrPayload(qrString);
+  console.log('\nTest 2: Verification of Unaltered College QR');
+  const resultValid = verifyCollegeQrPayload(qrString);
   assert.strictEqual(resultValid.valid, true);
   assert.strictEqual(resultValid.payload.officeId, testOfficeId);
-  console.log('✅ Unaltered Office QR successfully verified.');
+  console.log('✅ Unaltered College QR successfully verified.');
 
   // Test 3: Tampering - Modified officeId
   console.log('\nTest 3: Tampering - Modified officeId');
   const tamperedPayload1 = { ...payload, officeId: 'evil_office_id' };
-  const resultTampered1 = verifyOfficeQrPayload(JSON.stringify(tamperedPayload1));
+  const resultTampered1 = verifyCollegeQrPayload(JSON.stringify(tamperedPayload1));
   assert.strictEqual(resultTampered1.valid, false);
   console.log('✅ Tampered officeId rejected as expected.');
 
   // Test 4: Tampering - Modified expiresAt
   console.log('\nTest 4: Tampering - Modified expiresAt');
   const tamperedPayload2 = { ...payload, expiresAt: payload.expiresAt + 100000 };
-  const resultTampered2 = verifyOfficeQrPayload(JSON.stringify(tamperedPayload2));
+  const resultTampered2 = verifyCollegeQrPayload(JSON.stringify(tamperedPayload2));
   assert.strictEqual(resultTampered2.valid, false);
   console.log('✅ Tampered expiration timestamp rejected as expected.');
 
   // Test 5: Expiration
   console.log('\nTest 5: Expired Token Rejection');
   const expiredPayload = {
-    type: 'OFFICE_QR',
+    type: 'COLLEGE_QR',
     officeId: testOfficeId,
     issuedAt: Date.now() - 600000,
     expiresAt: Date.now() - 1000, // Expired 1 second ago
@@ -56,9 +56,9 @@ async function runTests() {
   };
   const canonicalExpired = buildCanonicalString(expiredPayload);
   const crypto = require('crypto');
-  const secret = process.env.OFFICE_QR_SECRET || process.env.JWT_SECRET;
+  const secret = process.env.COLLEGE_QR_SECRET || process.env.JWT_SECRET;
   expiredPayload.sig = crypto.createHmac('sha256', secret).update(canonicalExpired).digest('hex');
-  const resultExpired = verifyOfficeQrPayload(JSON.stringify(expiredPayload));
+  const resultExpired = verifyCollegeQrPayload(JSON.stringify(expiredPayload));
   assert.strictEqual(resultExpired.valid, false);
   assert(resultExpired.reason.includes('expired'), 'Reason should mention expiration');
   console.log('✅ Expired token rejected:', resultExpired.reason);
@@ -68,15 +68,15 @@ async function runTests() {
   const badSigs = ['', 'abc', '123', null, undefined, 'f'.repeat(63), 'f'.repeat(65)];
   for (const badSig of badSigs) {
     const badSigPayload = { ...payload, sig: badSig };
-    const res = verifyOfficeQrPayload(JSON.stringify(badSigPayload));
+    const res = verifyCollegeQrPayload(JSON.stringify(badSigPayload));
     assert.strictEqual(res.valid, false);
   }
   console.log('✅ All non-64-length signatures safely rejected without throwing exceptions.');
 
   // Test 7: Foreign QR code rejection
-  console.log('\nTest 7: Foreign Barcode & Non-Office QR Rejection');
+  console.log('\nTest 7: Foreign Barcode & Non-College QR Rejection');
   const foreignInputs = [
-    'OFFICE_QR_DEFAULT',
+    'COLLEGE_QR_DEFAULT',
     'https://example.com/login',
     'WIFI:T:WPA;S:MyNetwork;P:MyPassword;;',
     JSON.stringify({ type: 'CHECKOUT_QR', token: 'abcd1234efgh5678' }),
@@ -86,15 +86,15 @@ async function runTests() {
     '',
   ];
   for (const input of foreignInputs) {
-    const res = verifyOfficeQrPayload(input);
+    const res = verifyCollegeQrPayload(input);
     assert.strictEqual(res.valid, false);
   }
   console.log('✅ All foreign inputs (legacy string, URLs, WiFi, Checkout tokens) rejected.');
 
   // Test 8: Active Token Cache (Option B consistency)
   console.log('\nTest 8: Server-side Active Token Cache');
-  const token1 = getActiveOfficeQr(testOfficeId, 5);
-  const token2 = getActiveOfficeQr(testOfficeId, 5);
+  const token1 = getActiveCollegeQr(testOfficeId, 5);
+  const token2 = getActiveCollegeQr(testOfficeId, 5);
   assert.strictEqual(token1.qrString, token2.qrString, 'Consecutive calls within 5m must return same token');
   assert.strictEqual(token1.expiresAt, token2.expiresAt);
   console.log('✅ Consecutive calls within validity window returned identical active token.');

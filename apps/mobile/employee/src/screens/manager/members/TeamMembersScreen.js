@@ -431,7 +431,7 @@ export default function TeamMembersScreen({ navigation }) {
                       <TextInput style={styles.formInput} placeholder="employee@spheronixtechnology.in" keyboardType="email-address" autoCapitalize="none" value={createForm.email} onChangeText={(v) => setCreateForm(f => ({ ...f, email: v }))} />
                     </View>
                     <View style={styles.formGroup}>
-                      <Text style={styles.formLabelText}>Company Email</Text>
+                      <Text style={styles.formLabelText}>College Email</Text>
                       <TextInput style={styles.formInput} placeholder="employee@spheronixtechnology.in" keyboardType="email-address" autoCapitalize="none" value={createForm.companyEmail} onChangeText={(v) => setCreateForm(f => ({ ...f, companyEmail: v }))} />
                     </View>
                     <View style={styles.formGroup}>

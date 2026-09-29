@@ -7,9 +7,9 @@ const authorize = require('../middleware/authorize');
 
 const { uploadDailyLogDoc, uploadAvatarImage } = require('../middleware/upload.middleware');
 
-const isEmployee = [authenticate, authorize('employee')];
-const isPunchUser = [authenticate, authorize('employee', 'manager')];
-const isAnyUser = [authenticate, authorize('employee', 'manager', 'admin')];
+const isEmployee = [authenticate, authorize('employee', 'faculty')];
+const isPunchUser = [authenticate, authorize('employee', 'manager', 'faculty', 'hod', 'principal')];
+const isAnyUser = [authenticate, authorize('employee', 'manager', 'admin', 'faculty', 'hod', 'principal', 'chairman')];
 
 router.get('/status', employeeController.getStatus);
 router.get('/notifications', isEmployee, employeeController.getMyNotifications);

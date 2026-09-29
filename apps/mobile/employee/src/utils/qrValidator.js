@@ -1,15 +1,15 @@
 /**
  * Structural QR Validator for Spheronix Attendance System
- * 100% parity with web isValidOfficeQr and isValidCheckoutQr in DashboardPage.jsx
+ * 100% parity with web isValidCollegeQr and isValidCheckoutQr in DashboardPage.jsx
  */
 
-export const isValidOfficeQr = (text) => {
+export const isValidCollegeQr = (text) => {
   if (!text || typeof text !== 'string') return false;
   try {
     const parsed = JSON.parse(text);
     return Boolean(
       parsed &&
-      parsed.type === 'OFFICE_QR' &&
+      parsed.type === 'COLLEGE_QR' &&
       typeof parsed.officeId === 'string' &&
       typeof parsed.sig === 'string' &&
       parsed.sig.length === 64 &&
@@ -33,6 +33,6 @@ export const isValidCheckoutQr = (text) => {
 };
 
 export default {
-  isValidOfficeQr,
+  isValidCollegeQr,
   isValidCheckoutQr,
 };
