@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Globe } from 'lucide-react';
 
 export default function PageHeader({
@@ -10,8 +10,6 @@ export default function PageHeader({
   date,
   onPrevDate,
   onNextDate,
-  onDateChange,
-  onTodayJump,
   viewMode = 'Day',
   onViewModeChange,
   badgeText,
@@ -19,45 +17,38 @@ export default function PageHeader({
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const formattedDate = date instanceof Date
-    ? date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
-    : (date || new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }));
-
-  const getIsoDateString = (d) => {
-    if (!d) return '';
-    const dateObj = d instanceof Date ? d : new Date(d);
-    if (isNaN(dateObj.getTime())) return '';
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const isoDateVal = getIsoDateString(date);
-
-  const handleDateInputChange = (e) => {
-    if (!e.target.value) return;
-    const parts = e.target.value.split('-');
-    if (parts.length === 3) {
-      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      if (onDateChange) onDateChange(d);
+  const formattedDate = useMemo(() => {
+    if (!(date instanceof Date)) return date || '';
+    if (viewMode === 'Week') {
+      const start = new Date(date);
+      const day = (start.getDay() + 6) % 7; // Monday = 0
+      start.setDate(start.getDate() - day);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const startStr = start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+      const endStr = end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+      return `${startStr} – ${endStr}`;
     }
-  };
+    if (viewMode === 'Month') {
+      return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    }
+    return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+  }, [date, viewMode]);
 
   return (
     <div className="space-y-4 pb-2">
       {/* Top Entity Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-[26px] leading-tight font-extrabold text-slate-800 tracking-tight flex flex-wrap items-center gap-2.5">
             {title}
             {badgeText && (
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-100/80 text-violet-600 shadow-[inset_0_1px_2px_rgba(139,92,246,0.15)]">
                 {badgeText}
               </span>
             )}
           </h1>
-          {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
         </div>
 
         {/* Date & Filter Controls */}
@@ -67,13 +58,13 @@ export default function PageHeader({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-2xl bg-white/80 border border-white/90 text-xs font-semibold text-slate-600 hover:text-violet-600 hover:shadow-[0_6px_16px_-8px_rgba(139,92,246,0.5)] shadow-[0_4px_14px_-8px_rgba(148,163,184,0.5)] flex items-center gap-1.5 transition-all"
               >
                 <span>{viewMode}</span>
                 <span className="text-[10px] text-slate-400">▼</span>
               </button>
               {dropdownOpen && (
-                <div className="absolute right-0 mt-1 w-24 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1 text-xs">
+                <div className="absolute right-0 mt-1 w-28 bg-white border border-violet-100 rounded-2xl shadow-[0_14px_34px_-14px_rgba(139,92,246,0.45)] z-20 py-1.5 text-xs overflow-hidden">
                   {['Day', 'Week', 'Month'].map((mode) => (
                     <button
                       key={mode}
@@ -81,8 +72,8 @@ export default function PageHeader({
                         onViewModeChange(mode);
                         setDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 cursor-pointer ${
-                        viewMode === mode ? 'text-sky-600 font-bold bg-sky-50/50' : 'text-slate-700'
+                      className={`w-full text-left px-3.5 py-2 transition-colors ${
+                        viewMode === mode ? 'text-violet-600 font-bold bg-violet-50/70' : 'text-slate-600 hover:bg-violet-50/40'
                       }`}
                     >
                       {mode}
@@ -93,56 +84,35 @@ export default function PageHeader({
             </div>
           )}
 
-          {/* Date Navigator with interactive Picker & Steppers */}
-          <div className="flex items-center bg-white border border-slate-200/90 rounded-xl overflow-hidden p-0.5 shadow-sm hover:border-slate-300 transition-all">
+          {/* Date Navigator */}
+          <div className="flex items-center bg-white/80 border border-white/90 rounded-2xl p-1 shadow-[0_4px_14px_-8px_rgba(148,163,184,0.5)] backdrop-blur-sm">
             {onPrevDate && (
               <button
                 type="button"
                 onClick={onPrevDate}
-                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50/60 rounded-xl transition-colors"
                 title="Previous Day"
               >
                 <ChevronLeft size={15} />
               </button>
             )}
-
-            {/* Interactive Date Indicator & Hidden Native Picker */}
-            <div className="relative flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 cursor-pointer group hover:bg-slate-50 rounded-lg transition-colors">
-              <Calendar size={13} className="text-violet-600 shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="select-none tracking-tight">{formattedDate}</span>
-              <input
-                type="date"
-                value={isoDateVal}
-                onChange={handleDateInputChange}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                title="Click to choose a date from calendar"
-              />
+            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <Calendar size={13} className="text-violet-500" />
+              <span>{formattedDate}</span>
             </div>
-
             {onNextDate && (
               <button
                 type="button"
                 onClick={onNextDate}
-                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50/60 rounded-xl transition-colors"
                 title="Next Day"
               >
                 <ChevronRight size={15} />
               </button>
             )}
-
-            {onTodayJump && (
-              <button
-                type="button"
-                onClick={onTodayJump}
-                className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200/60 ml-1 transition-all cursor-pointer shadow-2xs"
-                title="Jump to Today"
-              >
-                Today
-              </button>
-            )}
           </div>
 
-          <div className="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-600 shadow-sm">
+          <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/80 border border-white/90 text-xs font-medium text-slate-500 shadow-[0_4px_14px_-8px_rgba(148,163,184,0.5)]">
             <Globe size={13} className="text-slate-400" />
             <span>IST (UTC+5:30)</span>
           </div>
@@ -151,9 +121,9 @@ export default function PageHeader({
         </div>
       </div>
 
-      {/* Horizontal Sub-Tabs */}
+      {/* Horizontal Sub-Tabs — pastel style: pill row, pink active underline */}
       {tabs.length > 0 && (
-        <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto scrollbar-thin">
+        <div className="flex items-center gap-1 border-b border-violet-100/80 overflow-x-auto scrollbar-thin">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -161,18 +131,23 @@ export default function PageHeader({
                 key={tab.id}
                 type="button"
                 onClick={() => onTabChange && onTabChange(tab.id)}
-                className={`relative px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                className={`relative px-4 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   isActive
-                    ? 'text-sky-600 border-b-2 border-sky-600 font-bold'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'text-pink-600 font-bold'
+                    : 'font-medium text-slate-400 hover:text-slate-700'
                 }`}
               >
                 {tab.icon && <tab.icon size={14} />}
                 <span>{tab.label}</span>
                 {tab.badge && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${tab.badgeClass || 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    isActive ? 'bg-pink-100 text-pink-600' : 'bg-slate-100 text-slate-500'
+                  }`}>
                     {tab.badge}
                   </span>
+                )}
+                {isActive && (
+                  <span className="absolute bottom-0 left-3 right-3 h-[3px] rounded-t-full bg-gradient-to-r from-pink-400 via-fuchsia-500 to-violet-500" />
                 )}
               </button>
             );

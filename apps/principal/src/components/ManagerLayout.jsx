@@ -7,17 +7,19 @@ import companyLogo from '../images/company logo.png';
 import {
   LayoutDashboard, ClipboardList, Calendar, FileText,
   LogOut, Menu, X, Smartphone, MapPin, Users,
-  Settings, Wifi, Building2, Clock, UserCircle2, ShieldAlert, GitBranch
+  Settings, Wifi, Building2, Clock, UserCircle2, ShieldAlert, GitBranch, GraduationCap
 } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, id: 'nav-dashboard' },
   { path: '/departments', label: 'Departments', icon: GitBranch, id: 'nav-departments' },
   { path: '/team/members', label: 'Team Members', icon: Users, id: 'nav-members' },
+  { path: '/my-attendance', label: 'My Attendance', icon: ClipboardList, id: 'nav-my-attendance' },
   { path: '/team/attendance', label: 'Team Attendance', icon: ClipboardList, id: 'nav-attendance' },
   { path: '/session-reactivations', label: 'Session Reactivations', icon: ShieldAlert, id: 'nav-session-reactivations' },
-  { path: '/team/overtime', label: 'Overtime', icon: Clock, id: 'nav-overtime' },
-  { path: '/team/daily-logs', label: 'Daily Logs', icon: FileText, id: 'nav-logs' },
+  
+  { path: '/exam-duties', label: 'Exam Duties', icon: GraduationCap, id: 'nav-exam-duties' },
+
   { path: '/team/leave-requests', label: 'Leave Requests', icon: Calendar, id: 'nav-leaves' },
   { path: '/device-requests', label: 'Device Requests', icon: Smartphone, id: 'nav-device-requests' },
   { path: '/attendance-method', label: 'Attendance Method', icon: Settings, id: 'nav-method' },
@@ -135,7 +137,7 @@ export default function ManagerLayout({ children }) {
               className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
             />
             <span className="hidden shrink-0 items-center rounded-full bg-violet-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-violet-700 ring-1 ring-violet-200/70 sm:inline-flex">
-              Manager
+              {user?.role || 'Manager'}
             </span>
           </Link>
 
@@ -242,7 +244,7 @@ export default function ManagerLayout({ children }) {
               </div>
               <div className="leading-tight">
                 <p className="text-[11.5px] font-semibold text-slate-800">{user?.name}</p>
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-violet-500">{user?.teamId?.name || 'Manager'}</p>
+                <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-violet-500">{user?.role || 'Manager'}</p>
               </div>
             </Link>
 
@@ -267,7 +269,7 @@ export default function ManagerLayout({ children }) {
               <div className="flex items-center gap-2.5">
                 <img src={companyLogo} alt="Spheronix" className="h-14 w-auto max-h-14 object-contain" />
                 <span className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-200">
-                  Manager
+                  {user?.role || 'Manager'}
                 </span>
               </div>
               <button onClick={() => setMenuOpen(false)} className="p-1 text-slate-400 hover:text-slate-700">

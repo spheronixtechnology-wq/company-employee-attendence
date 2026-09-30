@@ -157,7 +157,7 @@ Every authenticated request sent from the mobile client must provide:
         "breaks": []
       },
       "teamName": "Mobile Development",
-      "dailyLogSubmitted": false,
+
       "activeMethod": "biometric",
       "managerDefaultMethod": "biometric",
       "allowedMethods": ["biometric", "wifi_ip", "qr_code"],
@@ -244,7 +244,7 @@ Every authenticated request sent from the mobile client must provide:
         "totalBreakMinutes": 60,
         "actualWorkMinutes": 477,
         "breaks": [ ... ],
-        "dailyLog": { ... }
+
       }
     }
   }

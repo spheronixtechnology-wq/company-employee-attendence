@@ -12,7 +12,7 @@ import PageHeader from '../components/timechamp/PageHeader';
 import KpiTile from '../components/timechamp/KpiTile';
 import Panel from '../components/timechamp/Panel';
 import DonutChart from '../components/timechamp/DonutChart';
-import ManagerPunchCard from '../components/ManagerPunchCard';
+
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -187,7 +187,7 @@ export default function DashboardPage() {
       { name: 'Checked In / Active', value: data.checkedIn || 0, color: '#10b981', key: 'present' },
       { name: 'Not Checked In', value: data.notCheckedIn || 0, color: '#f43f5e', key: 'not_checked_in' },
       { name: 'On Approved Leave', value: data.onLeave || 0, color: '#f59e0b', key: 'leave' },
-      { name: 'Missing Daily Logs', value: data.missingDailyLogs || 0, color: '#8b5cf6', key: 'missing' },
+
     ];
   }, [data]);
 
@@ -226,7 +226,7 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 animate-fade-in">
       {/* ── Sub-Header & Navigation ── */}
       <PageHeader
-        title="Team Dashboard"
+        title={data?.teams?.[0] ? `${data.teams[0].name} Dashboard` : "Team Dashboard"}
         subtitle="Live team presence, shift progression, and quick management actions"
         tabs={tabs}
         activeTab={activeTab}
@@ -254,13 +254,7 @@ export default function DashboardPage() {
         }
       />
 
-      {/* ── Manager Personal Shift Tracking Card ── */}
-      <ManagerPunchCard
-        onAttendanceChanged={() => {
-          fetchDashboard();
-          fetchMembers();
-        }}
-      />
+
 
       {/* ── 6 KPI Tiles Ribbon (TimeChamp style) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -296,14 +290,7 @@ export default function DashboardPage() {
           subtext="Approved"
           onClick={() => navigate('/team/leave-requests?status=approved')}
         />
-        <KpiTile
-          icon={AlertCircle}
-          label="Missing Daily Logs"
-          value={data?.missingDailyLogs}
-          variant="red"
-          subtext="No Log"
-          onClick={() => navigate(`/team/daily-logs?date=${dateStr}&filter=missing`)}
-        />
+
         <KpiTile
           icon={ClipboardList}
           label="Pending Leaves"

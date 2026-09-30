@@ -302,14 +302,6 @@ export default function AdminDashboard() {
           subtext="Hardware"
           onClick={() => navigate('/device-requests')}
         />
-        <KpiTile
-          icon={AlertCircle}
-          label="Missing Daily Logs"
-          value={data?.missingDailyLogs}
-          variant="red"
-          subtext="Incomplete"
-          onClick={() => navigate(`/attendance?date=${rangeInfo.date}&filter=missing_logs`)}
-        />
       </div>
 
       {/* ── Two-Column Analytics Area ── */}

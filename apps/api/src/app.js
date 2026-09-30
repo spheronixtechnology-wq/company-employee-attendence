@@ -14,6 +14,7 @@ const authRoutes = require('./routes/auth.routes');
 const employeeRoutes = require('./routes/employee.routes');
 const managerRoutes = require('./routes/manager.routes');
 const adminRoutes = require('./routes/admin.routes');
+const examDutyRoutes = require('./routes/examDuty.routes');
 
 // Validate required env vars before anything else
 validateEnv();
@@ -79,6 +80,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/exam-duties', examDutyRoutes);
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {

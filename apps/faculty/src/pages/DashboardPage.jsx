@@ -20,7 +20,7 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import QRCode from 'qrcode';
 import { useSocket } from '../contexts/SocketContext';
-import DailyLogModal from '../components/checkout/DailyLogModal';
+
 import CheckoutQrModal from '../components/checkout/CheckoutQrModal';
 import AttendanceReportModal from '../components/checkout/AttendanceReportModal';
 import CheckInPermissionsModal, { checkCameraAndLocationPermissions } from '../components/CheckInPermissionsModal';
@@ -911,12 +911,12 @@ export default function EmployeeDashboard() {
   const buzzerAudio = useRef(new Audio(alertTune));
 
   const { socket } = useSocket();
-  const [showDailyLogModal, setShowDailyLogModal] = useState(false);
+
   const [showCheckoutQrModal, setShowCheckoutQrModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showCheckoutScanner, setShowCheckoutScanner] = useState(false);
   const [reportData, setReportData] = useState(null);
-  const [todayDailyLog, setTodayDailyLog] = useState(null);
+
   const [showPermissionsGate, setShowPermissionsGate] = useState(false);
   const [biometricStatus, setBiometricStatus] = useState(null);
   const [biometricSupported, setBiometricSupported] = useState(false);
@@ -1419,7 +1419,7 @@ export default function EmployeeDashboard() {
   };
 
   const handleCheckOutClick = () => {
-    const isLogSubmitted = Boolean(dashboard?.dailyLogSubmitted || todayDailyLog);
+    const isLogSubmitted = true;
 
     if (!isLogSubmitted) {
       showMessage('error', '⚠️ Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
@@ -1435,13 +1435,6 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const handleDailyLogSuccess = (savedLog) => {
-    setTodayDailyLog(savedLog);
-    setDashboard((prev) => prev ? { ...prev, dailyLogSubmitted: true } : prev);
-    setShowDailyLogModal(false);
-    showMessage('success', '✅ Daily Log Sheet submitted! Check-out is now unlocked.');
-    fetchDashboard();
-  };
 
   const executeCheckout = async (extraPayload = {}) => {
     setActionLoading('checkout');
@@ -1565,7 +1558,7 @@ export default function EmployeeDashboard() {
   const isCheckedIn = !!(todayAtt?.checkInTime);
   const isCheckedOut = !!(todayAtt?.checkOutTime);
   const hasActiveBreak = !!(att?.activeBreak);
-  const isLogSubmitted = Boolean(dashboard?.dailyLogSubmitted || todayDailyLog);
+  const isLogSubmitted = true;
   const dailyLogMissing = isCheckedIn && !isCheckedOut && !isLogSubmitted;
   const deviceStatus = dashboard?.deviceStatus;
   // Derived from dashboard so React tracks changes when manager toggles heartbeat
@@ -3406,13 +3399,7 @@ export default function EmployeeDashboard() {
         </div>
       )}
 
-      {/* ── Daily Log Modal ── */}
-      <DailyLogModal
-        isOpen={showDailyLogModal}
-        onClose={() => setShowDailyLogModal(false)}
-        onSuccess={handleDailyLogSuccess}
-        teamName={dashboard?.teamName || user?.teamName || user?.teamId?.name || (typeof user?.teamId === 'object' ? user?.teamId?.name : '') || ''}
-      />
+
 
       {/* ── Desktop Checkout QR Modal ── */}
       <CheckoutQrModal

@@ -22,7 +22,7 @@ export default function Panel({
   const iconCls = iconStyles[iconVariant] || iconStyles.violet;
 
   return (
-    <div className={`bg-white/80 backdrop-blur-sm rounded-3xl border border-white/90 overflow-hidden flex flex-col shadow-[0_12px_32px_-14px_rgba(148,163,184,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] ${className}`}>
+    <div className={`bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow ${className}`}>
       <div className="flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-3 min-w-0">
           {Icon && (

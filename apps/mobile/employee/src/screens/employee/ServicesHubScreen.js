@@ -26,14 +26,7 @@ export default function ServicesHubScreen({ onNavigate, onBack }) {
       color: '#ea580c',
       bg: '#fff7ed',
     },
-    {
-      id: 'dailylog',
-      title: 'Daily Work Log',
-      subtitle: 'Shift compliance, streak milestones & document upload',
-      icon: '📝',
-      color: '#059669',
-      bg: '#ecfdf5',
-    },
+
     {
       id: 'leave',
       title: 'Leave Management',

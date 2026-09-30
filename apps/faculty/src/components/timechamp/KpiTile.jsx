@@ -51,7 +51,7 @@ export default function KpiTile({
   return (
     <div
       onClick={onClick}
-      className={`relative rounded-3xl p-4 bg-white/80 backdrop-blur-sm border border-white/90 shadow-[0_10px_28px_-12px_rgba(148,163,184,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:shadow-[0_16px_36px_-12px_rgba(148,163,184,0.6)] hover:-translate-y-0.5 ${
+      className={`relative rounded-3xl p-4 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ${
         onClick ? 'cursor-pointer active:scale-[0.97]' : ''
       } ${className}`}
     >

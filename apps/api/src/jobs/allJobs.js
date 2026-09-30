@@ -2,7 +2,6 @@ const cron = require('node-cron');
 const { cleanupExpiredTemporaryAccess } = require('../services/cleanup.service');
 const Attendance = require('../models/Attendance');
 const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
-const DailyLog = require('../models/DailyLog');
 const User = require('../models/User');
 const { createBulkNotifications } = require('../services/notification.service');
 const {
@@ -13,7 +12,7 @@ const {
   finalizeAttendanceCheckout,
   calcAttendanceStatus,
 } = require('../utils/dateUtils');
-const { autoSubmitMissingDailyLog } = require('../services/dailyLog.service');
+
 const { writeAuditLog } = require('../services/audit.service');
 const { emitToUser, emitToManagers, emitToTeam } = require('../socket');
 
@@ -53,9 +52,7 @@ const runShiftEndAutoCheckout = async (referenceDate = new Date()) => {
       // 1. Auto-close any unended breaks & finalize metrics
       const metrics = finalizeAttendanceCheckout(att, checkoutTimestamp);
 
-      // 2. Check if daily log was submitted for today
-      const hasLog = await DailyLog.exists({ userId: user._id, logDate: today });
-      att.dailyLogSubmitted = !!hasLog;
+      att.dailyLogSubmitted = false;
 
       // 3. Status determination: User requested ALL auto-checkouts to just be 'present'
       att.status = 'present';
@@ -136,58 +133,7 @@ const startShiftEndAutoCheckoutJob = () => {
   console.log('✅ Shift-end auto-checkout job scheduled (daily at 6:00 PM IST)');
 };
 
-/**
- * Job 1: Daily Log Reminder
- * Runs at 6:00 PM IST every day.
- * Notifies all checked-in employees who haven't submitted a daily log.
- */
-const startDailyLogReminderJob = () => {
-  cron.schedule('0 18 * * *', async () => {
-    console.log('[CRON] Running daily log reminder check...');
-    try {
-      const today = getTodayDateString('Asia/Kolkata');
 
-      // Find all employees who checked in today
-      const checkedInAttendance = await Attendance.find({
-        date: today,
-        checkInTime: { $ne: null },
-      }).select('userId');
-
-      const checkedInUserIds = checkedInAttendance.map((a) => a.userId);
-
-      // Find users who already submitted
-      const submittedUserIds = await DailyLog.find({ logDate: today }).distinct('userId');
-      const submittedSet = new Set(submittedUserIds.map((id) => id.toString()));
-
-      // Filter those missing logs
-      const missingLogUserIds = checkedInUserIds.filter(
-        (uid) => !submittedSet.has(uid.toString())
-      );
-
-      if (missingLogUserIds.length === 0) {
-        console.log('[CRON] All checked-in employees have submitted daily logs.');
-        return;
-      }
-
-      // Send notifications
-      const notifications = missingLogUserIds.map((userId) => ({
-        userId,
-        type: 'daily_log_reminder',
-        title: 'Daily Log Reminder',
-        message: "Don't forget to submit your daily log before checking out today.",
-        createdAt: new Date(),
-        isRead: false,
-      }));
-
-      await createBulkNotifications(notifications);
-      console.log(`[CRON] Sent daily log reminders to ${missingLogUserIds.length} employees.`);
-    } catch (err) {
-      console.error('[CRON] Daily log reminder failed:', err.message);
-    }
-  }, { timezone: 'Asia/Kolkata' });
-
-  console.log('✅ Daily log reminder job scheduled (daily at 6:00 PM IST)');
-};
 
 /**
  * Executes midnight auto-checkout and log completion for abandoned / incomplete sessions.
@@ -234,12 +180,7 @@ const runMidnightAutoCheckout = async (referenceDate = new Date()) => {
       att.autoCheckoutReason = 'MIDNIGHT_AUTO_CHECKOUT';
       await att.save();
 
-      // 3. Auto-complete missing daily log with "N/A"
-      await autoSubmitMissingDailyLog({
-        user,
-        attendance: att,
-        logDate: att.date,
-      });
+
 
       // 4. Invalidate user active session (forces clean login on next workday)
       await User.updateOne(
@@ -482,7 +423,7 @@ const startPresenceMonitoringJob = () => {
  * Start all cron jobs.
  */
 const initCronJobs = () => {
-  startDailyLogReminderJob();
+
   startShiftEndAutoCheckoutJob();
   startAutoCheckoutJob();
   startTemporaryAccessCleanupJob();
@@ -492,7 +433,7 @@ const initCronJobs = () => {
 
 module.exports = {
   initCronJobs,
-  startDailyLogReminderJob,
+
   startShiftEndAutoCheckoutJob,
   runShiftEndAutoCheckout,
   startAutoCheckoutJob,

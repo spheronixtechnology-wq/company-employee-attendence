@@ -48,10 +48,7 @@ export const managerApi = {
   // Manual Attendance
   getTeamAttendanceRoster: (dateStr) => request('get', `/manager/team/attendance?date=${dateStr}`),
   decideManualAttendance: (id, payload) => request('post', `/manager/team/manual-attendance/${id}/decision`, payload),
-  
-  // Daily Logs
-  getTeamDailyLogs: (dateStr) => request('get', `/manager/team/daily-logs?date=${dateStr}`),
-  getDailyLogDocument: (id) => request('get', `/manager/team/daily-log/${id}/document`),
+
   
   // --- Phase 7: Session Reactivation ---
   getSessionReactivations: (dateStr, search = '') => request('get', `/manager/session-reactivations?date=${dateStr}&search=${encodeURIComponent(search)}`),

@@ -4,19 +4,24 @@ import { SocketProvider, useSocket } from './contexts/SocketContext';
 import ManagerLayout from './components/ManagerLayout';
 import { ManagerDeviceRequestsPage } from './pages/ManagerRequestsPages';
 import DashboardPage from './pages/DashboardPage';
+import MyAttendancePage from './pages/MyAttendancePage';
+import DeviceOnboardingPage from './pages/DeviceOnboardingPage';
+import DeviceStatusPage from './pages/DeviceStatusPage';
 import AttendanceMethodPage from './pages/AttendanceMethodPage';
 import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
-import TeamOvertimePage from './pages/TeamOvertimePage';
+
 import SessionReactivationsPage from './pages/SessionReactivationsPage';
 import TeamsPage from './pages/TeamsPage';
-import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3, Trash2 } from 'lucide-react';
+import ExamDutiesPage from './pages/ExamDutiesPage';
+import ExamDutyDetailsPage from './pages/ExamDutyDetailsPage';
+import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3, Trash2, GraduationCap } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from './lib/api';
 import DocumentPreviewModal from './components/DocumentPreviewModal';
 import EmployeeProfileModal from './components/EmployeeProfileModal';
 import EmployeeCreationModal from './components/EmployeeCreationModal';
-import UploadDailyLogModal from './components/UploadDailyLogModal';
+
 
 import { EyeOff, LogIn, ShieldCheck, Copy, Check, ArrowLeft, KeyRound, QrCode } from 'lucide-react';
 import companyLogo from './images/company logo.png';
@@ -3188,12 +3193,16 @@ function AppRoutes() {
           <ManagerLayout>
             <Routes location={location} key={location.pathname}>
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/my-attendance" element={<MyAttendancePage />} />
+              <Route path="/device-onboarding" element={<DeviceOnboardingPage />} />
+              <Route path="/device-status" element={<DeviceStatusPage />} />
               <Route path="/departments" element={<TeamsPage />} />
               <Route path="/team/members" element={<TeamMembersPage />} />
               <Route path="/team/attendance" element={<TeamAttendancePage />} />
               <Route path="/session-reactivations" element={<SessionReactivationsPage />} />
-              <Route path="/team/overtime" element={<TeamOvertimePage />} />
-              <Route path="/team/daily-logs" element={<TeamDailyLogsPage />} />
+              <Route path="/exam-duties" element={<ExamDutiesPage />} />
+              <Route path="/exam-duties/:id" element={<ExamDutyDetailsPage />} />
+
               <Route path="/team/leave-requests" element={<TeamLeaveRequestsPage />} />
               <Route path="/device-requests" element={<ManagerDeviceRequestsPage />} />
               <Route path="/attendance-method" element={<AttendanceMethodPage />} />

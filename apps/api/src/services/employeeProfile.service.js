@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
-const DailyLog = require('../models/DailyLog');
+
 const Overtime = require('../models/Overtime');
 const LeaveRequest = require('../models/LeaveRequest');
 const RegisteredDevice = require('../models/RegisteredDevice');
@@ -173,26 +173,7 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
     .sort({ date: -1 })
     .lean();
 
-  const periodLogs = await DailyLog.find({
-    userId: member._id,
-    logDate: { $gte: period.from, $lte: period.to },
-  })
-    .sort({ logDate: -1, createdAt: -1 })
-    .limit(10)
-    .lean();
-
-  if (periodLogs && periodLogs.length > 0) {
-    for (let r of periodLogs) {
-      if (r.document) {
-        r.hasDocument = !!r.document.storageKey;
-        if (r.document.fileName) {
-          r.documentName = r.document.fileName;
-          r.documentSize = r.document.fileSize;
-          r.documentMimeType = r.document.mimeType;
-        }
-      }
-    }
-  }
+  const periodLogs = [];
 
   const periodOvertimes = await Overtime.find({
     userId: member._id,
@@ -256,7 +237,7 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
   const avgDailyWorkMinutes = presentDays > 0 ? Math.round(totalWorkMinutes / presentDays) : 0;
 
   // --- Compute Daily Logs Summary ---
-  const totalDailyLogs = periodLogs.length;
+  const totalDailyLogs = 0;
   const totalLogHours = periodLogs.reduce((sum, l) => sum + Number(l.hoursSpent || 0), 0);
 
   // --- Compute Overtime Summary (STRICT: Approved OT only counts Stage 2 approvedMinutes) ---
@@ -389,11 +370,11 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
   };
 
   const paginatedDailyLogs = {
-    records: periodLogs.slice(0, pageSize),
-    totalCount: periodLogs.length,
+    records: [],
+    totalCount: 0,
     page: 1,
     pageSize,
-    totalPages: Math.ceil(periodLogs.length / pageSize) || 1,
+    totalPages: 1,
   };
 
   const paginatedOvertime = {
@@ -511,43 +492,12 @@ const getPaginatedAttendance = async (employeeId, { page = 1, limit = 10, from, 
  * Paginated daily logs fetch for member with date range.
  */
 const getPaginatedDailyLogs = async (employeeId, { page = 1, limit = 10, from, to }) => {
-  const p = Math.max(1, parseInt(page, 10));
-  const l = Math.max(1, parseInt(limit, 10));
-  const query = { userId: employeeId };
-  if (from && to) {
-    query.logDate = { $gte: from, $lte: to };
-  }
-  const [records, totalCount] = await Promise.all([
-    DailyLog.find(query).sort({ logDate: -1, createdAt: -1 }).skip((p - 1) * l).limit(l).lean(),
-    DailyLog.countDocuments(query),
-  ]);
-
-  if (records.length > 0) {
-    const dates = records.map(r => r.logDate);
-    const attendances = await Attendance.find({ userId: employeeId, date: { $in: dates } }).lean();
-    const attMap = new Map();
-    for (const a of attendances) {
-      attMap.set(a.date, a);
-    }
-    for (const r of records) {
-      const att = attMap.get(r.logDate);
-      if (att) {
-        r.attendance = enrichAttendanceRecord(att);
-      }
-      if (r.document && !r.documentName) {
-        r.documentName = r.document.fileName;
-        r.documentSize = r.document.fileSize;
-        r.documentMimeType = r.document.mimeType;
-      }
-    }
-  }
-
   return {
-    records,
-    totalCount,
-    page: p,
-    pageSize: l,
-    totalPages: Math.ceil(totalCount / l) || 1,
+    records: [],
+    totalCount: 0,
+    page: Math.max(1, parseInt(page, 10)),
+    pageSize: Math.max(1, parseInt(limit, 10)),
+    totalPages: 1,
   };
 };
 

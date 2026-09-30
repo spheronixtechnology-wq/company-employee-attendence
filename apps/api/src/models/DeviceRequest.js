@@ -11,6 +11,30 @@ const deviceRequestSchema = new mongoose.Schema({
   deviceFingerprint: { type: String, default: null },
   ipAddress: { type: String, default: null },
   userAgent: { type: String, default: null },
+  
+  // State Machine pointers
+  currentApproverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  currentApproverRole: { type: String, default: null },
+  currentSequence: { type: Number, default: 0 },
+
+  // The Frozen Snapshot
+  approvalChain: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    role: { type: String },
+    sequence: { type: Number }
+  }],
+
+  // Append-Only Audit Log
+  approvalHistory: [{
+    approverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    role: { type: String },
+    action: { type: String, enum: ['APPROVED', 'REJECTED'] },
+    reason: { type: String },
+    timestamp: { type: Date, default: Date.now }
+  }],
+
+  submittedAt: { type: Date, default: Date.now },
+  completedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('DeviceRequest', deviceRequestSchema);

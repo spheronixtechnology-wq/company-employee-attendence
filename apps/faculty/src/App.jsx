@@ -4,14 +4,14 @@ import { SocketProvider } from './contexts/SocketContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import DailyLogPage from './pages/DailyLogPage';
 import LeavePage from './pages/LeavePage';
 import DeviceOnboardingPage from './pages/DeviceOnboardingPage';
 import DeviceStatusPage from './pages/DeviceStatusPage';
 import OfficeDisplayPage from './pages/OfficeDisplayPage';
 import AttendanceHistoryPage from './pages/AttendanceHistoryPage';
 import ProfilePage from './pages/ProfilePage';
-import OvertimePage from './pages/OvertimePage';
+import MyExamDutiesPage from './pages/MyExamDutiesPage';
+
 import { Loader2, ClipboardList, CheckCircle, XCircle, Clock, Send } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from './lib/api';
@@ -265,8 +265,9 @@ function AppRoutes() {
             <Layout>
               <Routes>
                 <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/overtime" element={<OvertimePage />} />
-                <Route path="/daily-log" element={<DailyLogPage />} />
+
+
+                <Route path="/exam-duties" element={<MyExamDutiesPage />} />
                 <Route path="/leave" element={<LeavePage />} />
                 <Route path="/notifications" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/devices" element={<DeviceStatusPage />} />

@@ -1,5 +1,4 @@
 const Attendance = require('../models/Attendance');
-const DailyLog = require('../models/DailyLog');
 const LeaveRequest = require('../models/LeaveRequest');
 const Notification = require('../models/Notification');
 const LeaveBalance = require('../models/LeaveBalance');
@@ -15,7 +14,7 @@ const OfficeLocation = require('../models/OfficeLocation');
 const { success, badRequest, forbidden } = require('../utils/response');
 const { getTodayDateString, getCurrentYear, calcNetWorkMinutes, calcAttendanceStatus, calcAttendanceMetrics, finalizeAttendanceCheckout } = require('../utils/dateUtils');
 const { isWithinGeofence } = require('../utils/haversine');
-const dailyLogService = require('../services/dailyLog.service');
+
 const leaveService = require('../services/leave.service');
 const authService = require('../services/auth.service');
 const storageService = require('../services/storage/storageService');
@@ -30,6 +29,7 @@ const crypto = require('crypto');
 const webauthnService = require('../services/webauthn.service');
 const { getActiveCollegeQr, verifyCollegeQrPayload } = require('../utils/qrUtils');
 const geofenceSessionService = require('../services/geofenceSession.service');
+const ApprovalWorkflowService = require('../services/ApprovalWorkflowService');
 
 // In-memory active checkout sessions: Map<userIdStr, { token: string, expiresAt: number }>
 const activeCheckoutSessions = new Map();
@@ -173,8 +173,7 @@ const getDashboard = async (req, res) => {
       checkInMethod: attendanceRecord.checkInMethod || 'qr_code',
     } : null;
 
-    const dailyLogCount = await DailyLog.countDocuments({ userId, logDate: today });
-    const dailyLogSubmitted = dailyLogCount > 0;
+    const dailyLogSubmitted = false;
 
     const pendingLeaves = await LeaveRequest.countDocuments({ userId, status: 'pending' });
     const unreadNotifications = await Notification.countDocuments({ userId, isRead: false });
@@ -576,13 +575,7 @@ const initiateCheckout = async (req, res) => {
       return badRequest(res, 'Already checked out today.');
     }
 
-    // Daily log check (mandatory before check-out for employees)
-    if (req.user.role === 'employee') {
-      const dailyLog = await DailyLog.findOne({ userId, logDate: today });
-      if (!dailyLog) {
-        return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
-      }
-    }
+
 
     // Generate short-lived token (90 seconds)
     const token = crypto.randomBytes(16).toString('hex');
@@ -625,16 +618,7 @@ const checkOut = async (req, res) => {
       return badRequest(res, 'Already checked out today.');
     }
 
-    // Daily Log Verification (mandatory before check-out for employees)
     let dailyLog = null;
-    if (req.user.role === 'employee') {
-      dailyLog = await DailyLog.findOne({ userId, logDate: today });
-      if (!dailyLog && !req.body.autoCheckOut) {
-        return badRequest(res, 'Log sheet is mandatory before check-out. Please submit your daily log sheet first.');
-      }
-    } else {
-      dailyLog = await DailyLog.findOne({ userId, logDate: today });
-    }
 
     const clientIp = getClientIp(req);
     attendance.checkOutIp = clientIp;
@@ -750,11 +734,7 @@ const checkOut = async (req, res) => {
       console.error('[checkOut] cancelSession failed (non-fatal):', err.message)
     );
 
-    // Synchronize daily log hours with finalized actual work duration
-    if (dailyLog && metrics.actualWorkMinutes > 0) {
-      dailyLog.hoursSpent = Math.round((metrics.actualWorkMinutes / 60) * 10) / 10;
-      await dailyLog.save();
-    }
+
 
     const populatedAttendance = await Attendance.findById(attendance._id)
       .populate('userId', 'name designation email');
@@ -872,35 +852,7 @@ const requestDeviceApproval = async (req, res) => {
       userAgent: rawUA,
     });
 
-    await newRequest.save();
-
-    const populatedRequest = await DeviceRequest.findById(newRequest._id).populate('userId', 'name email');
-    const teamId = req.user.teamId?._id || req.user.teamId;
-    if (teamId) {
-      emitToTeam(teamId, 'device:request_created', {
-        request: populatedRequest || newRequest,
-        userName: req.user.name,
-        teamId,
-      });
-    }
-    emitToManagers('device:request_created', {
-      request: populatedRequest || newRequest,
-      userName: req.user.name,
-      teamId,
-    });
-    emitToAdmins('device:request_created', {
-      request: populatedRequest || newRequest,
-      userName: req.user.name,
-      teamId,
-    });
-
-    // Auto-reflect to all managers (or admins if none) so any manager can act
-    await notifyRequestSubmitted({
-      type: 'device_request_submitted',
-      title: 'New Device Request',
-      message: `${req.user.name} submitted a ${newRequest.requestType} request for ${finalLabel}.${reason ? ' Reason: ' + reason : ''}`,
-      relatedId: newRequest._id,
-    });
+    await ApprovalWorkflowService.startApprovalWorkflow(req.user, 'device_registration', newRequest);
 
     return success(res, 'Device approval requested successfully', { request: newRequest });
   } catch (error) {
@@ -1032,81 +984,7 @@ const endBreak = async (req, res) => {
   }
 };
 
-const getDailyLog = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    
-    // Fetch the last 30 daily logs
-    const logs = await DailyLog.find({ userId })
-      .sort({ logDate: -1 })
-      .limit(30)
-      .select('userId teamId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider document.storageKey')
-      .lean();
-      
-    // Inject signed URLs for any logs with Supabase documents
-    const expiresIn = parseInt(process.env.SUPABASE_SIGNED_URL_EXPIRES, 10) || 300;
-    for (let log of logs) {
-      if (log.document && log.document.storageKey) {
-        const signedUrl = await storageService.getSignedUrl(log.document.storageKey, expiresIn);
-        log.documentUrl = signedUrl;
-        log.attachmentUrl = signedUrl; // for backwards compatibility
-      }
-    }
 
-    // Get the current streak
-    const dailyLogService = require('../services/dailyLog.service');
-    const streak = await dailyLogService.getDailyLogStreak(userId);
-
-    return success(res, 'Daily logs fetched', { logs, streak });
-  } catch (error) {
-    console.error('Fetch daily logs error:', error);
-    return badRequest(res, 'Failed to fetch daily logs');
-  }
-};
-
-const submitDailyLog = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const today = getTodayDateString();
-    const logData = { ...(req.body || {}) };
-
-    // Auto-compute hoursSpent if omitted, falsy, or not a number
-    if (!logData.hoursSpent || isNaN(Number(logData.hoursSpent))) {
-      const attendance = await Attendance.findOne({ userId, date: today });
-      let computedHours = 1;
-      if (attendance && attendance.checkInTime) {
-        const completedBreaks = attendance.completedBreakMinutes || 0;
-        const grossMinutes = Math.max(0, Math.floor((Date.now() - new Date(attendance.checkInTime).getTime()) / 60000));
-        const netMinutes = Math.max(0, grossMinutes - completedBreaks);
-        computedHours = Math.max(0.5, +(netMinutes / 60).toFixed(1));
-      }
-      logData.hoursSpent = computedHours;
-    } else {
-      logData.hoursSpent = Math.max(0.5, Number(logData.hoursSpent));
-    }
-
-    const log = await dailyLogService.submitDailyLog({
-      user: req.user,
-      logData,
-      file: req.file,
-    });
-
-    // Real-time synchronization across web & mobile portals
-    try {
-      emitToUser(userId, 'attendance:update', {
-        dailyLogSubmitted: true,
-        todayLog: log,
-      });
-    } catch (socketErr) {
-      console.warn('Socket notification error on submitDailyLog:', socketErr.message);
-    }
-
-    return success(res, 'Daily log submitted successfully', { log });
-  } catch (error) {
-    console.error('Submit daily log error:', error);
-    return badRequest(res, error.message || 'Failed to submit daily log');
-  }
-};
 
 const sendDailyReport = async (req, res) => {
   try {
@@ -1114,7 +992,6 @@ const sendDailyReport = async (req, res) => {
     const today = getTodayDateString();
 
     const attendance = await Attendance.findOne({ userId, date: today });
-    const log = await DailyLog.findOne({ userId, logDate: today });
 
     const teamId = req.user.teamId?._id || req.user.teamId;
     const reportData = {
@@ -1698,8 +1575,6 @@ module.exports = {
   getMyDeviceRequests,
   startBreak,
   endBreak,
-  getDailyLog,
-  submitDailyLog,
   getLeaveTypes,
   getLeaveBalance,
   getMyLeaveRequests,

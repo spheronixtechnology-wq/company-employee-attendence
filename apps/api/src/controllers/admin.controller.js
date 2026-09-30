@@ -13,7 +13,7 @@ const AttendanceMethodSetting = require('../models/AttendanceMethodSetting');
 const BiometricCredential = require('../models/BiometricCredential');
 const ManagerPermission = require('../models/ManagerPermission');
 const Attendance = require('../models/Attendance');
-const DailyLog = require('../models/DailyLog');
+
 const LeaveRequest = require('../models/LeaveRequest');
 const LocationRequest = require('../models/LocationRequest');
 const ManualAttendanceRequest = require('../models/ManualAttendanceRequest');
@@ -72,7 +72,7 @@ const getDashboard = async (req, res) => {
 
     if (!isRange) {
       // Single day analysis
-      const [checkedInUsers, onLeaveUsers, loggedUserIds] = await Promise.all([
+      const [checkedInUsers, onLeaveUsers] = await Promise.all([
         Attendance.distinct('userId', {
           userId: { $in: staffUserIds },
           date: targetDate,
@@ -84,17 +84,9 @@ const getDashboard = async (req, res) => {
           startDate: { $lte: targetDate },
           endDate: { $gte: targetDate },
         }),
-        DailyLog.distinct('userId', { userId: { $in: staffUserIds }, logDate: targetDate }),
       ]);
 
       const checkedInSet = new Set(checkedInUsers.map(id => id.toString()));
-      if (targetDate === todayStr) {
-        const onlineUserIds = getOnlineUserIds();
-        if (onlineUserIds.length > 0) {
-          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: { $in: ['manager', 'hod', 'principal'] } }).select('_id').lean();
-          onlineManagers.forEach(m => checkedInSet.add(m._id.toString()));
-        }
-      }
       const combinedCheckedInUsers = Array.from(checkedInSet);
 
       const attendanceOnLeave = await Attendance.distinct('userId', {
@@ -108,12 +100,10 @@ const getDashboard = async (req, res) => {
 
       checkedInCount = combinedCheckedInUsers.length;
       onLeaveCount = combinedOnLeaveSet.size;
-
-      const loggedSet = new Set(loggedUserIds.map((id) => id.toString()));
-      missingDailyLogs = combinedCheckedInUsers.filter((id) => !loggedSet.has(id.toString())).length;
+      missingDailyLogs = 0;
     } else {
       // Range analysis (Week or Month)
-      const [distinctCheckedIn, distinctOnLeave, distinctLogged] = await Promise.all([
+      const [distinctCheckedIn, distinctOnLeave] = await Promise.all([
         Attendance.distinct('userId', {
           userId: { $in: staffUserIds },
           date: { $gte: rangeStart, $lte: rangeEnd },
@@ -125,27 +115,14 @@ const getDashboard = async (req, res) => {
           startDate: { $lte: rangeEnd },
           endDate: { $gte: rangeStart },
         }),
-        DailyLog.distinct('userId', {
-          userId: { $in: staffUserIds },
-          logDate: { $gte: rangeStart, $lte: rangeEnd },
-        }),
       ]);
 
       const distinctCheckedInSet = new Set(distinctCheckedIn.map(id => id.toString()));
-      if (todayStr >= rangeStart && todayStr <= rangeEnd) {
-        const onlineUserIds = getOnlineUserIds();
-        if (onlineUserIds.length > 0) {
-          const onlineManagers = await User.find({ _id: { $in: onlineUserIds }, role: { $in: ['manager', 'hod', 'principal'] } }).select('_id').lean();
-          onlineManagers.forEach(m => distinctCheckedInSet.add(m._id.toString()));
-        }
-      }
       const combinedDistinctCheckedIn = Array.from(distinctCheckedInSet);
 
       checkedInCount = combinedDistinctCheckedIn.length;
       onLeaveCount = distinctOnLeave.length;
-
-      const loggedSet = new Set(distinctLogged.map((id) => id.toString()));
-      missingDailyLogs = combinedDistinctCheckedIn.filter((id) => !loggedSet.has(id.toString())).length;
+      missingDailyLogs = 0;
     }
 
     const absentCount = Math.max(0, totalStaff - checkedInCount - onLeaveCount);
@@ -1089,14 +1066,11 @@ const getAttendance = async (req, res) => {
     ]);
 
     const memberIds = members.map((m) => m._id);
-    const [attendanceRecords, manualRequests, dailyLogs] = await Promise.all([
+    const [attendanceRecords, manualRequests] = await Promise.all([
       Attendance.find({ userId: { $in: memberIds }, date })
         .populate('userId', 'name designation email avatarUrl phone teamId role')
         .lean(),
       ManualAttendanceRequest.find({ userId: { $in: memberIds }, requestDate: date }).lean(),
-      DailyLog.find({ userId: { $in: memberIds }, logDate: date })
-        .select('userId logDate hoursSpent taskTitle projectName description blockers checkInTime checkOutTime isEdited editedBy editedAt status submittedAt createdBy createdByRole submissionType ticketId campaignName platform outputSummary githubLink researchLinks document.fileName document.fileSize document.mimeType document.storageProvider')
-        .lean(),
     ]);
 
     const manualRequestMap = new Map();
@@ -1106,12 +1080,6 @@ const getAttendance = async (req, res) => {
       }
     }
 
-    const dailyLogMap = new Map();
-    for (const dl of dailyLogs) {
-      if (dl.userId) {
-        dailyLogMap.set(dl.userId.toString(), dl);
-      }
-    }
 
     const attendanceMap = new Map();
     for (const record of attendanceRecords) {
@@ -1126,25 +1094,13 @@ const getAttendance = async (req, res) => {
     const fullAttendance = members.map((member) => {
       const existing = attendanceMap.get(member._id.toString());
       const manualReq = manualRequestMap.get(member._id.toString()) || null;
-      let dailyLog = dailyLogMap.get(member._id.toString()) || null;
-      
-      if (dailyLog && dailyLog.document && !dailyLog.documentName) {
-        dailyLog = {
-          ...dailyLog,
-          documentName: dailyLog.document.fileName,
-          documentSize: dailyLog.document.fileSize,
-          documentMimeType: dailyLog.document.mimeType
-        };
-      }
-      
-      const dailyLogSubmitted = Boolean(dailyLog);
-      
+
       const isOnlineManager = member.role === 'manager' && date === todayStr && onlineUsers.has(member._id.toString());
 
       if (existing) {
         const enrichedExisting = employeeProfileService.enrichAttendanceRecord(existing);
         
-        let calculatedHoursSpent = dailyLog?.hoursSpent || 0;
+        let calculatedHoursSpent = 0;
         const netMins = enrichedExisting.actualWorkMinutes ?? (enrichedExisting.totalDurationMinutes ? Math.max(0, enrichedExisting.totalDurationMinutes - (enrichedExisting.totalBreakMinutes || 0)) : null);
         if (netMins !== null && netMins !== undefined && netMins > 0) {
           calculatedHoursSpent = Math.round((netMins / 60) * 10) / 10;
@@ -1153,8 +1109,6 @@ const getAttendance = async (req, res) => {
         return {
           ...enrichedExisting,
           manualRequest: manualReq,
-          dailyLogSubmitted,
-          dailyLog,
           hoursSpent: calculatedHoursSpent,
           status: isOnlineManager && enrichedExisting.status !== 'present' ? 'present' : enrichedExisting.status,
           checkInTime: isOnlineManager && !enrichedExisting.checkInTime ? new Date() : enrichedExisting.checkInTime,
@@ -1171,9 +1125,7 @@ const getAttendance = async (req, res) => {
         status: isOnlineManager ? 'present' : (manualReq && manualReq.status === 'pending' ? 'manual_pending' : 'not_checked_in'),
         breaks: [],
         manualRequest: manualReq,
-        dailyLogSubmitted,
-        dailyLog,
-        hoursSpent: dailyLog?.hoursSpent || 0,
+        hoursSpent: 0,
       };
     });
 
@@ -1349,46 +1301,6 @@ const getEmployeeAttendanceHistory = async (req, res) => {
   }
 };
 
-/**
- * GET /api/admin/employees/:id/daily-logs
- */
-const getEmployeeDailyLogs = async (req, res) => {
-  try {
-    const result = await employeeProfileService.getPaginatedDailyLogs(req.params.id, req.query);
-    return success(res, 'Daily logs fetched successfully', result);
-  } catch (err) {
-    console.error('admin getEmployeeDailyLogs error:', err);
-    return badRequest(res, 'Failed to fetch daily logs');
-  }
-};
-
-const getDailyLogDocument = async (req, res) => {
-  try {
-    const { logId } = req.params;
-    const log = await DailyLog.findById(logId).select('document').lean();
-    if (!log) {
-      return res.status(404).json({ success: false, message: 'Log not found' });
-    }
-
-    if (log.document && log.document.storageKey) {
-      const storageService = require('../services/storage/storageService');
-      const expiresIn = parseInt(process.env.SUPABASE_SIGNED_URL_EXPIRES, 10) || 300;
-      const signedUrl = await storageService.getSignedUrl(log.document.storageKey, expiresIn);
-      
-      return success(res, 'Document fetched', {
-        documentUrl: signedUrl,
-        attachmentUrl: signedUrl,
-        documentName: log.document.fileName,
-        doctype: (log.document.fileName || '').split('.').pop(),
-      });
-    }
-
-    return res.status(404).json({ success: false, message: 'Document not found' });
-  } catch (err) {
-    console.error('getDailyLogDocument error:', err);
-    return badRequest(res, 'Failed to fetch document');
-  }
-};
 
 /**
  * GET /api/admin/employees/:id/overtime
@@ -1518,8 +1430,7 @@ module.exports = {
   resetManagerMfa,
   getEmployeeProfile,
   getEmployeeAttendanceHistory,
-  getEmployeeDailyLogs,
-  getDailyLogDocument,
+
   getEmployeeOvertimeHistory,
   getSessionReactivations,
   handleSessionReactivationDecision,

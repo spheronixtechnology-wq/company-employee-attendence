@@ -4,6 +4,8 @@ export default function Panel({
   title,
   subtitle,
   badge,
+  icon: Icon,
+  iconVariant = 'violet',
   action,
   showMenu = true,
   onMenuClick,
@@ -11,16 +13,34 @@ export default function Panel({
   className = '',
   bodyClassName = '',
 }) {
+  const iconStyles = {
+    violet: 'bg-violet-100/80 text-violet-600 shadow-[0_4px_12px_-4px_rgba(139,92,246,0.5)]',
+    blue: 'bg-sky-100/80 text-sky-600 shadow-[0_4px_12px_-4px_rgba(14,165,233,0.5)]',
+    green: 'bg-emerald-100/80 text-emerald-600 shadow-[0_4px_12px_-4px_rgba(16,185,129,0.5)]',
+    amber: 'bg-amber-100/80 text-amber-600 shadow-[0_4px_12px_-4px_rgba(245,158,11,0.5)]',
+  };
+  const iconCls = iconStyles[iconVariant] || iconStyles.violet;
+
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col ${className}`}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <h2 className="text-sm font-bold text-slate-900 tracking-wide truncate">{title}</h2>
-          {badge && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              {badge}
-            </span>
+    <div className={`bg-white/80 backdrop-blur-sm rounded-3xl border border-slate-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow ${className}`}>
+      <div className="flex items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-3 min-w-0">
+          {Icon && (
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${iconCls}`}>
+              <Icon size={18} />
+            </div>
           )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-bold text-slate-800 tracking-tight truncate">{title}</h2>
+              {badge && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100/80 text-violet-600 shadow-[inset_0_1px_2px_rgba(139,92,246,0.15)] whitespace-nowrap">
+                  {badge}
+                </span>
+              )}
+            </div>
+            {subtitle && <p className="text-xs text-slate-400 mt-0.5 truncate">{subtitle}</p>}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -29,7 +49,7 @@ export default function Panel({
             <button
               type="button"
               onClick={onMenuClick}
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-xl text-slate-300 hover:text-violet-600 hover:bg-violet-50/70 transition-colors"
               title="More options"
             >
               <MoreVertical size={16} />
@@ -38,13 +58,7 @@ export default function Panel({
         </div>
       </div>
 
-      {subtitle && (
-        <div className="px-5 pt-2.5 text-xs text-slate-500">
-          {subtitle}
-        </div>
-      )}
-
-      <div className={`p-5 flex-1 ${bodyClassName}`}>
+      <div className={`px-5 pb-5 pt-1 flex-1 ${bodyClassName}`}>
         {children}
       </div>
     </div>

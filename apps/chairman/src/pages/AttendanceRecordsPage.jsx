@@ -25,7 +25,7 @@ export default function AttendanceRecordsPage() {
     if (['attended', 'present'].includes(qFilter)) return 'attended';
     if (['not_attended', 'absent'].includes(qFilter)) return 'not_attended';
     if (['pending', 'review'].includes(qFilter)) return 'pending';
-    if (['missing_logs', 'missing'].includes(qFilter)) return 'missing_logs';
+    if (['pending'].includes(qFilter)) return 'pending';
     return 'all';
   });
   const [search, setSearch] = useState('');
@@ -44,7 +44,7 @@ export default function AttendanceRecordsPage() {
       if (['attended', 'present'].includes(paramFilter)) setStatusFilter('attended');
       else if (['not_attended', 'absent'].includes(paramFilter)) setStatusFilter('not_attended');
       else if (['pending', 'review'].includes(paramFilter)) setStatusFilter('pending');
-      else if (['missing_logs', 'missing'].includes(paramFilter)) setStatusFilter('missing_logs');
+
       else if (paramFilter === 'all') setStatusFilter('all');
     }
   }, [searchParams]);
@@ -143,16 +143,14 @@ export default function AttendanceRecordsPage() {
     return true;
   }, [isAttended, isManualPending]);
 
-  const isMissingLog = useCallback((rec) => {
-    return isAttended(rec) && !rec.dailyLogSubmitted;
-  }, [isAttended]);
+
 
   // Overall counts
   const totalEmployees = records.length;
   const attendedCount = records.filter(isAttended).length;
   const notAttendedCount = records.filter(isNotAttended).length;
   const manualPendingCount = records.filter(isManualPending).length;
-  const missingLogCount = records.filter(isMissingLog).length;
+
   const turnoutPct = totalEmployees > 0 ? Math.round((attendedCount / totalEmployees) * 100) : 0;
 
   // Filter records by search term and status tab
@@ -162,7 +160,7 @@ export default function AttendanceRecordsPage() {
       if (statusFilter === 'attended' && !isAttended(rec)) return false;
       if (statusFilter === 'not_attended' && !isNotAttended(rec)) return false;
       if (statusFilter === 'pending' && !isManualPending(rec)) return false;
-      if (statusFilter === 'missing_logs' && !isMissingLog(rec)) return false;
+
 
       // Text search
       if (!search.trim()) return true;
@@ -173,7 +171,7 @@ export default function AttendanceRecordsPage() {
       const teamName = rec.userId?.teamId?.name?.toLowerCase() || '';
       return name.includes(q) || email.includes(q) || designation.includes(q) || teamName.includes(q);
     });
-  }, [records, statusFilter, search, isAttended, isNotAttended, isManualPending, isMissingLog]);
+  }, [records, statusFilter, search, isAttended, isNotAttended, isManualPending]);
 
   // Formatted date string for selected date
   const formattedDate = useMemo(() => {
@@ -396,29 +394,6 @@ export default function AttendanceRecordsPage() {
               </button>
             )}
 
-            {/* Missing Daily Logs (Purple) if any */}
-            {missingLogCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setStatusFilter(statusFilter === 'missing_logs' ? 'all' : 'missing_logs')}
-                className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all duration-200 cursor-pointer ${
-                  statusFilter === 'missing_logs'
-                    ? 'bg-purple-100/90 border-purple-500 ring-2 ring-purple-300 shadow-md'
-                    : 'bg-gradient-to-r from-purple-50 via-white to-indigo-50/40 border-purple-200/80 hover:border-purple-300 hover:shadow-sm'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <FileText size={17} className="text-purple-600 flex-shrink-0" />
-                  <div>
-                    <span className="text-xs font-bold text-purple-900">Missing Daily Logs</span>
-                    <p className="text-[10px] text-purple-700 font-medium">Checked in without EOD report</p>
-                  </div>
-                </div>
-                <span className="text-sm font-black text-purple-800 bg-purple-200/80 px-2.5 py-0.5 rounded-xl">
-                  {missingLogCount}
-                </span>
-              </button>
-            )}
 
             {/* Tip Banner */}
             <div className="text-[11px] text-slate-500 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/60 leading-relaxed flex items-start gap-2">
@@ -480,19 +455,7 @@ export default function AttendanceRecordsPage() {
                   Not Attended ({notAttendedCount})
                 </button>
 
-                {/* Missing Daily Logs (Purple) Tab */}
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter('missing_logs')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                    statusFilter === 'missing_logs'
-                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/25 scale-[1.02]'
-                      : 'bg-purple-50 hover:bg-purple-100/80 text-purple-700 border border-purple-200/80'
-                  }`}
-                >
-                  <FileText size={14} />
-                  Missing Logs ({missingLogCount})
-                </button>
+
 
                 {/* Pending Tab */}
                 {manualPendingCount > 0 && (
@@ -809,16 +772,7 @@ export default function AttendanceRecordsPage() {
                         </div>
                       ) : (
                         <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                          {attended && (
-                            <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border shadow-2xs ${
-                              rec.dailyLogSubmitted
-                                ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 border-emerald-200'
-                                : 'bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-800 border-purple-200'
-                            }`}>
-                              <FileText size={12} className={rec.dailyLogSubmitted ? 'text-emerald-600' : 'text-purple-600'} />
-                              {rec.dailyLogSubmitted ? `Log Filed (${rec.hoursSpent || 0}h)` : 'No Daily Log'}
-                            </span>
-                          )}
+
 
                           {/* Standard Green / Red / Amber Status Badge */}
                           <span

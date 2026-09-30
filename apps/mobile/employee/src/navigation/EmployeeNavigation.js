@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import DashboardScreen from '../screens/employee/DashboardScreen';
 import AttendanceHistoryScreen from '../screens/employee/AttendanceHistoryScreen';
-import DailyLogScreen from '../screens/employee/DailyLogScreen';
+
 import OvertimeScreen from '../screens/employee/OvertimeScreen';
 import LeaveScreen from '../screens/employee/LeaveScreen';
 import DeviceStatusScreen from '../screens/employee/DeviceStatusScreen';
@@ -37,7 +37,7 @@ export default function EmployeeNavigation() {
           <DashboardScreen
             onNavigateHistory={() => navigateTo('history')}
             onNavigateOvertime={() => navigateTo('overtime')}
-            onNavigateDailyLog={() => navigateTo('dailylog')}
+
             onNavigateLeave={() => navigateTo('leave')}
             onNavigateDevice={() => navigateTo('device')}
             onNavigateManual={() => navigateTo('manual')}
@@ -49,9 +49,7 @@ export default function EmployeeNavigation() {
         {activeTab === 'history' && (
           <AttendanceHistoryScreen onBack={handleBack} />
         )}
-        {activeTab === 'dailylog' && (
-          <DailyLogScreen onBack={handleBack} />
-        )}
+
         {activeTab === 'services' && (
           <ServicesHubScreen onNavigate={(screen) => navigateTo(screen)} onBack={handleBack} />
         )}

@@ -346,7 +346,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
             {[
               { id: 'profile', label: 'Profile Info' },
               { id: 'attendance', label: 'Attendance Records', count: attendanceData?.totalCount },
-              { id: 'logs', label: 'Daily Log Sheets', count: logsData?.totalCount },
+
               { id: 'overtime', label: 'Overtime (OT)', count: otData?.totalCount },
               { id: 'device', label: 'Attendance Device' },
             ].map((tab) => {

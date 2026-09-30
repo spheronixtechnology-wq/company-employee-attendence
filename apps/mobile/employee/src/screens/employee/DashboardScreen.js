@@ -60,7 +60,7 @@ import DailyAttendanceReport from '../../components/DailyAttendanceReport';
 import CheckInModal from '../../components/CheckInModal';
 import CheckoutQrScanner from '../../components/CheckoutQrScanner';
 import AttendanceReportModal from '../../components/AttendanceReportModal';
-import DailyLogModal from '../../components/DailyLogModal';
+
 import { GeofenceProvider, useGeofence } from '../../contexts/GeofenceContext';
 // GeofenceAlertModal removed as per Phase 4 strict geofence design
 export default function DashboardScreen({
@@ -68,7 +68,7 @@ export default function DashboardScreen({
   onStartCheckIn,
   onStartCheckOut,
   onNavigateOvertime,
-  onNavigateDailyLog,
+
   onNavigateLeave,
   onNavigateDevice,
   onNavigateManual,
@@ -89,7 +89,7 @@ export default function DashboardScreen({
   const [checkInModalVisible, setCheckInModalVisible] = useState(false);
   const [checkInInitialMethod, setCheckInInitialMethod] = useState('qr_code');
   const [checkInAutoOpenScanner, setCheckInAutoOpenScanner] = useState(false);
-  const [dailyLogModalVisible, setDailyLogModalVisible] = useState(false);
+
   const [checkoutScannerVisible, setCheckoutScannerVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [reportData, setReportData] = useState(null);
@@ -255,11 +255,7 @@ export default function DashboardScreen({
    * Authoritative Check-Out Handler
    */
   const executeCheckout = async (extraPayload = {}) => {
-    // 1. Daily work log compliance check
-    if (!dashboard?.dailyLogSubmitted) {
-      setDailyLogModalVisible(true);
-      return;
-    }
+
 
     setCheckoutLoading(true);
     try {
@@ -434,7 +430,7 @@ export default function DashboardScreen({
         onStartCheckIn={onStartCheckIn}
         onStartCheckOut={onStartCheckOut}
         onNavigateOvertime={onNavigateOvertime}
-        onNavigateDailyLog={onNavigateDailyLog}
+
         onNavigateLeave={onNavigateLeave}
         onNavigateDevice={onNavigateDevice}
         onNavigateManual={onNavigateManual}
@@ -450,8 +446,7 @@ export default function DashboardScreen({
         checkInInitialMethod={checkInInitialMethod}
         checkInAutoOpenScanner={checkInAutoOpenScanner}
         handleOpenCheckIn={handleOpenCheckIn}
-        dailyLogModalVisible={dailyLogModalVisible}
-        setDailyLogModalVisible={setDailyLogModalVisible}
+
         checkoutScannerVisible={checkoutScannerVisible}
         setCheckoutScannerVisible={setCheckoutScannerVisible}
         reportModalVisible={reportModalVisible}
@@ -501,7 +496,7 @@ function DashboardInner(props) {
     onStartCheckIn,
     onStartCheckOut,
     onNavigateOvertime,
-    onNavigateDailyLog,
+
     onNavigateLeave,
     onNavigateDevice,
     onNavigateManual,
@@ -517,8 +512,7 @@ function DashboardInner(props) {
     checkInInitialMethod,
     checkInAutoOpenScanner,
     handleOpenCheckIn,
-    dailyLogModalVisible,
-    setDailyLogModalVisible,
+
     checkoutScannerVisible,
     setCheckoutScannerVisible,
     reportModalVisible,
@@ -776,7 +770,7 @@ function DashboardInner(props) {
     ? formatTime(todayAtt.checkInTime)
     : '--:--';
 
-  const isLogSubmitted = Boolean(dashboard?.dailyLogSubmitted);
+  const isLogSubmitted = true;
 
   return (
     <View style={styles.screen}>
@@ -894,8 +888,7 @@ function DashboardInner(props) {
           <TouchableOpacity
             style={styles.subTabItem}
             onPress={() => {
-              if (onNavigateDailyLog) onNavigateDailyLog();
-              else setDailyLogModalVisible(true);
+
             }}
           >
             <Text style={styles.subTabText}>Daily Work Log</Text>
@@ -1239,8 +1232,7 @@ function DashboardInner(props) {
             activeOpacity={0.7}
             onPress={() => {
               if (viewMode === 'Day' && isToday) {
-                if (onNavigateDailyLog) onNavigateDailyLog();
-                else setDailyLogModalVisible(true);
+
               }
             }}
           >
@@ -1250,7 +1242,7 @@ function DashboardInner(props) {
               </View>
               <View style={[styles.kpiChip, { backgroundColor: '#ffedd5' }]}>
                 <Text style={[styles.kpiChipText, { color: '#c2410c' }]}>
-                  {viewMode === 'Day' ? 'Compliance' : 'Half Shifts'}
+                  Half Shifts
                 </Text>
               </View>
             </View>
@@ -1258,16 +1250,7 @@ function DashboardInner(props) {
               style={[
                 styles.kpiValueText,
                 {
-                  color:
-                    viewMode !== 'Day'
-                      ? '#ea580c'
-                      : isToday
-                      ? isLogSubmitted
-                        ? '#16a34a'
-                        : '#ea580c'
-                      : selectedDayRecord?.dailyLogSubmitted
-                      ? '#16a34a'
-                      : '#64748b',
+                  color: '#ea580c',
                 },
               ]}
             >
@@ -1275,16 +1258,10 @@ function DashboardInner(props) {
                 ? `${weekSummary.halfDays} Days`
                 : viewMode === 'Month'
                 ? `${monthSummary.halfDays} Days`
-                : isToday
-                ? isLogSubmitted
-                  ? 'Submitted'
-                  : 'Mandatory'
-                : selectedDayRecord?.dailyLogSubmitted
-                ? 'Submitted'
-                : 'Not Filed'}
+                : `${selectedDayRecord?.isHalfDay ? 1 : 0} Days`}
             </Text>
             <Text style={styles.kpiLabel}>
-              {viewMode === 'Day' ? 'Daily Work Log' : 'Half Days'}
+              Half Days
             </Text>
           </TouchableOpacity>
 
@@ -1518,11 +1495,7 @@ function DashboardInner(props) {
                   </View>
                 </View>
 
-                <View style={styles.pastRecordFooter}>
-                  <Text style={styles.pastRecordFooterText}>
-                    Daily Log: {selectedDayRecord.dailyLogSubmitted ? '✅ Log Sheet Submitted' : '⚠️ No Log Sheet on Record'}
-                  </Text>
-                </View>
+
               </View>
             ) : (
               <View style={styles.emptyPastBox}>
@@ -1949,8 +1922,7 @@ function DashboardInner(props) {
                       ]}
                       activeOpacity={0.8}
                       onPress={() => {
-                        if (onNavigateDailyLog) onNavigateDailyLog();
-                        else setDailyLogModalVisible(true);
+
                       }}
                     >
                       {isLogSubmitted ? (
@@ -2041,8 +2013,7 @@ function DashboardInner(props) {
                             'Daily Log Required',
                             'Please complete Step 1 (submit your daily work log) before checking out.'
                           );
-                          if (onNavigateDailyLog) onNavigateDailyLog();
-                          else setDailyLogModalVisible(true);
+
                         }}
                       >
                         <Lock size={14} color="#94a3b8" />
@@ -2307,8 +2278,7 @@ function DashboardInner(props) {
                 style={styles.drawerNavItem}
                 onPress={() => {
                   setDrawerVisible(false);
-                  if (onNavigateDailyLog) onNavigateDailyLog();
-                  else setDailyLogModalVisible(true);
+
                 }}
               >
                 <FileText size={18} color="#475569" />
@@ -2418,16 +2388,7 @@ function DashboardInner(props) {
         onSuccess={() => fetchDashboard()}
       />
 
-      {/* Daily Work Log Compliance Modal */}
-      <DailyLogModal
-        visible={dailyLogModalVisible}
-        onClose={() => setDailyLogModalVisible(false)}
-        onSuccess={() => {
-          fetchDashboard();
-          Alert.alert('Daily Log Verified', 'Log submitted! Now proceeding to check-out.');
-          executeCheckout();
-        }}
-      />
+
 
       {/* Strict Mobile Geofence: Alert Modals Removed */}
       {/* Post-Checkout Shift Attendance Report Modal */}

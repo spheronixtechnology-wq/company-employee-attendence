@@ -12,7 +12,7 @@ import ManagerDeviceRequestsScreen from '../screens/manager/requests/ManagerDevi
 import ManagerLocationRequestsScreen from '../screens/manager/requests/ManagerLocationRequestsScreen';
 import TeamMembersScreen from '../screens/manager/members/TeamMembersScreen';
 import TeamAttendanceScreen from '../screens/manager/attendance/TeamAttendanceScreen';
-import TeamDailyLogsScreen from '../screens/manager/logs/TeamDailyLogsScreen';
+
 import ManagerProfileScreen from '../screens/manager/profile/ManagerProfileScreen';
 
 const NAV_ITEMS = [
@@ -21,7 +21,7 @@ const NAV_ITEMS = [
   { id: 'team-attendance', label: 'Team Attendance' },
   { id: 'session-reactivations', label: 'Session Reactivations' },
   { id: 'team-overtime', label: 'Overtime' },
-  { id: 'team-daily-logs', label: 'Daily Logs' },
+
   { id: 'leave-requests', label: 'Leave Requests' },
   { id: 'device-requests', label: 'Device Requests' },
   { id: 'location-requests', label: 'Location Requests' },
@@ -71,10 +71,6 @@ export default function ManagerNavigation() {
 
         {activeTab === 'team-attendance' && (
           <TeamAttendanceScreen navigation={{ goBack: handleBack }} />
-        )}
-
-        {activeTab === 'team-daily-logs' && (
-          <TeamDailyLogsScreen navigation={{ goBack: handleBack }} />
         )}
 
         {activeTab === 'session-reactivations' && (

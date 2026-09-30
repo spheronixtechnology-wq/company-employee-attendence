@@ -17,9 +17,8 @@ router.get('/dashboard', isAdmin, adminController.getDashboard);
 router.get('/employees', isChairmanOrPrincipal, adminController.getEmployees);
 router.get('/employees/:id/profile', isChairmanOrPrincipal, adminController.getEmployeeProfile);
 router.get('/employees/:id/attendance', isChairmanOrPrincipal, adminController.getEmployeeAttendanceHistory);
-router.get('/employees/:id/daily-logs', isChairmanOrPrincipal, adminController.getEmployeeDailyLogs);
-router.get('/daily-log/:logId/document', isChairmanOrPrincipal, adminController.getDailyLogDocument);
-router.get('/employees/:id/overtime', isChairmanOrPrincipal, adminController.getEmployeeOvertimeHistory);
+
+// router.get('/employees/:id/overtime', isChairmanOrPrincipal, adminController.getEmployeeOvertimeHistory);
 router.get('/teams', isChairmanOrPrincipal, adminController.getTeams);
 router.post('/teams', isChairmanOrPrincipal, adminController.createTeam);
 router.patch('/teams/:id', isChairmanOrPrincipal, adminController.updateTeam);
@@ -65,7 +64,7 @@ router.post('/session-reactivations/:id/reject', isAdmin, adminController.handle
 router.get('/leave-requests', isAdmin, adminController.getLeaveRequests);
 router.post('/leave/:id/decision', isAdmin, adminController.handleLeaveDecision);
 
-// Overtime Oversight
-router.get('/overtime', isAdmin, overtimeController.getAllCompanyOvertime);
+// Overtime Oversight - DEPRECATED
+// router.get('/overtime', isAdmin, overtimeController.getAllCompanyOvertime);
 
 module.exports = router;

@@ -6,7 +6,7 @@ const employeeController = require('../controllers/employee.controller');
 const overtimeController = require('../controllers/overtime.controller');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
-const { uploadDailyLogDoc } = require('../middleware/upload.middleware');
+const biometricRoutes = require('./biometric.routes');
 
 const isManager = [authenticate, authorize('manager', 'principal', 'hod')];
 
@@ -18,15 +18,7 @@ router.get('/team/attendance', isManager, managerController.getTeamAttendance);
 router.get('/team/members', isManager, managerController.getTeamMembers);
 router.get('/team/members/:id/profile', isManager, managerController.getMemberProfile);
 router.get('/team/members/:id/attendance', isManager, managerController.getMemberAttendanceHistory);
-router.get('/team/members/:id/daily-logs', isManager, managerController.getMemberDailyLogs);
-router.get('/team/members/:id/overtime', isManager, managerController.getMemberOvertimeHistory);
-router.get('/team/daily-logs', isManager, managerController.getTeamDailyLogs);
-
-// Manager Log Management
-router.post('/team/daily-log', isManager, uploadDailyLogDoc, managerController.submitTeamMemberDailyLog);
-router.patch('/team/daily-log/:logId', isManager, uploadDailyLogDoc, managerController.updateTeamMemberDailyLog);
-router.get('/team/daily-log/:logId/document', isManager, managerController.getDailyLogDocument);
-
+// router.get('/team/members/:id/overtime', isManager, managerController.getMemberOvertimeHistory);
 // Team Members
 router.post('/team/members', isManager, managerController.createTeamMember);
 router.delete('/team/members/:id', isManager, managerController.deleteTeamMember);
@@ -38,10 +30,10 @@ router.get('/team/:teamId/leave-quotas', isManager, managerController.getTeamLea
 router.put('/team/:teamId/leave-quotas', isManager, managerController.updateTeamLeaveQuotas);
 router.get('/team/members/:id/leave-balances', isManager, managerController.getMemberLeaveBalances);
 
-// Overtime (Two-Stage Approvals: Stage 1 Permission & Stage 2 Work Verification)
-router.get('/team/overtime', isManager, overtimeController.getTeamOvertime);
-router.post('/team/overtime/:id/permission-decision', isManager, overtimeController.handlePermissionDecision);
-router.post('/team/overtime/:id/work-decision', isManager, overtimeController.handleWorkVerificationDecision);
+// Overtime (Two-Stage Approvals: Stage 1 Permission & Stage 2 Work Verification) - DEPRECATED
+// router.get('/team/overtime', isManager, overtimeController.getTeamOvertime);
+// router.post('/team/overtime/:id/permission-decision', isManager, overtimeController.handlePermissionDecision);
+// router.post('/team/overtime/:id/work-decision', isManager, overtimeController.handleWorkVerificationDecision);
 
 router.get('/device-requests', isManager, managerController.getDeviceRequests);
 router.patch('/device-requests/:id/decision', isManager, managerController.handleDeviceRequestDecision);
@@ -73,11 +65,19 @@ router.get('/current-ip', isManager, adminController.getCurrentIp);
 router.get('/notifications/unread-count', isManager, managerController.getUnreadNotificationCount);
 
 // Manager Personal Attendance (Punch & Shift tracking)
+router.get('/my-dashboard', isManager, employeeController.getDashboard);
 router.get('/my-attendance', isManager, employeeController.getMyAttendanceHistory);
 router.post('/attendance/check-in', isManager, employeeController.checkIn);
 router.post('/attendance/initiate-checkout', isManager, employeeController.initiateCheckout);
 router.post('/attendance/check-out', isManager, employeeController.checkOut);
 router.post('/break/start', isManager, employeeController.startBreak);
 router.post('/break/end', isManager, employeeController.endBreak);
+
+// Additional mapped routes for MyAttendancePage
+router.get('/attendance/me', isManager, employeeController.getMyAttendanceHistory);
+router.get('/network-status', isManager, employeeController.getNetworkStatus);
+router.get('/qr/current', isManager, employeeController.getCurrentQrCode);
+
+router.use('/biometric', isManager, biometricRoutes);
 
 module.exports = router;

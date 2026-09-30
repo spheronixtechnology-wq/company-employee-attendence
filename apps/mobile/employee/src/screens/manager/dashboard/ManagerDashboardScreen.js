@@ -240,7 +240,6 @@ export default function ManagerDashboardScreen({ onNavigate }) {
     { name: 'Checked In', value: dashboardData?.checkedIn || 0, color: colors.success },
     { name: 'Not Checked In', value: dashboardData?.notCheckedIn || 0, color: colors.danger },
     { name: 'On Leave', value: dashboardData?.onLeave || 0, color: colors.warning },
-    { name: 'Missing Logs', value: dashboardData?.missingDailyLogs || 0, color: colors.primary },
   ], [dashboardData]);
 
   const getGreeting = () => {
@@ -354,11 +353,7 @@ export default function ManagerDashboardScreen({ onNavigate }) {
               <Text style={styles.kpiValue}>{dashboardData?.onLeave || 0}</Text>
               <Text style={styles.kpiLabel}>On Leave</Text>
             </TouchableOpacity>
-          <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.danger }]} onPress={() => onNavigate('team-daily-logs')} activeOpacity={0.7}>
-              <View style={styles.kpiIconWrapper}><AlertCircle size={18} color={colors.danger} /></View>
-              <Text style={styles.kpiValue}>{dashboardData?.missingDailyLogs || 0}</Text>
-              <Text style={styles.kpiLabel}>Missing Logs</Text>
-            </TouchableOpacity>
+
           <TouchableOpacity style={[styles.kpiTile, { borderTopColor: colors.warning }]} onPress={() => onNavigate('leave-requests')} activeOpacity={0.7}>
               <View style={styles.kpiIconWrapper}><ClipboardList size={18} color={colors.warning} /></View>
               <Text style={styles.kpiValue}>{dashboardData?.pendingLeaveRequests || 0}</Text>
@@ -527,13 +522,6 @@ export default function ManagerDashboardScreen({ onNavigate }) {
                         <Text style={[styles.premiumUserStatus, { color: statusColor }]}>{statusLabel}</Text>
                       </View>
                       <View style={styles.premiumLogBadge}>
-                        {m.dailyLogSubmitted ? (
-                          <View style={styles.logBadgeSuccess}><Text style={styles.logBadgeSuccessText}>Logged</Text></View>
-                        ) : isCheckedIn ? (
-                          <View style={styles.logBadgeWarning}><Text style={styles.logBadgeWarningText}>Pending</Text></View>
-                        ) : (
-                          <View style={styles.logBadgeMuted}><Text style={styles.logBadgeMutedText}>No Log</Text></View>
-                        )}
                       </View>
                     </View>
 

@@ -85,7 +85,7 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
       {[
         { id: 'profile', label: 'Profile', icon: User },
         { id: 'attendance', label: 'Attendance', icon: Calendar },
-        { id: 'logs', label: 'Daily Logs', icon: FileText },
+
         { id: 'overtime', label: 'Overtime', icon: Clock },
         { id: 'device', label: 'Device', icon: Smartphone }
       ].map(t => {
@@ -188,68 +188,7 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
     );
   };
 
-  const renderLogsTab = () => {
-    const records = data?.dailyLogs?.records || [];
-    if (records.length === 0) return <Text style={styles.emptyText}>No daily logs found.</Text>;
-    return (
-      <FlatList
-        data={records}
-        keyExtractor={item => item._id}
-        renderItem={({ item }) => (
-          <View style={styles.listCard}>
-            <View style={styles.listCardHeader}>
-              <Text style={styles.listDate}>{item.logDate}</Text>
-              <Text style={styles.listDuration}>{item.hoursSpent} Hrs</Text>
-            </View>
-            {!!item.taskTitle && <Text style={{fontWeight: '700', fontSize: 13, marginBottom: 4}}>{item.taskTitle}</Text>}
-            {!!item.description && <Text style={styles.logText} numberOfLines={3}>{item.description}</Text>}
-            {!!item.blockers && <Text style={{color: colors.warning, fontSize: 12, marginTop: 4}}>Blockers: {item.blockers}</Text>}
-            
-            {/* GitHub Link */}
-            {!!item.githubLink && (
-              <TouchableOpacity style={styles.docLink} onPress={() => Linking.openURL(item.githubLink.startsWith('http') ? item.githubLink : `https://${item.githubLink}`)}>
-                <ExternalLink size={14} color={colors.primary} />
-                <Text style={styles.docLinkText} numberOfLines={1}>{item.githubLink}</Text>
-              </TouchableOpacity>
-            )}
 
-            {/* Document Attachments */}
-            {(!!item.documentUrl || !!item.attachmentUrl || item.hasDocument) && (
-              <TouchableOpacity 
-                  style={styles.docBtn} 
-                  disabled={loadingDocId === item._id}
-                  onPress={async () => {
-                    if (loadingDocId) return;
-                    setLoadingDocId(item._id);
-                  let url = item.documentUrl || item.attachmentUrl;
-                  if (!url && item.hasDocument && item._id) {
-                    try {
-                      const res = await managerApi.getDailyLogDocument(item._id);
-                      if (res.data?.success && res.data?.data) {
-                        url = res.data.data.documentUrl || res.data.data.attachmentUrl;
-                      } else {
-                        Alert.alert('Error', 'Could not load the document payload from the server.');
-                        return;
-                      }
-                    } catch (e) {
-                      Alert.alert('Error', 'Failed to fetch the document. ' + (e.response?.data?.message || ''));
-                        setLoadingDocId(null);
-                        return;
-                      }
-                  }
-                  if (url) { setViewerUrl(url); setViewerName(item.documentName || 'Document'); setLoadingDocId(null); } else { setLoadingDocId(null); }
-                }}
-              >
-                {loadingDocId === item._id && <ActivityIndicator size="small" color={colors.primary} style={{marginRight: 6}} />}
-                <Text style={styles.docBtnText} numberOfLines={1}>{item.documentName || 'Attached Document'}</Text>
-                {!!item.documentSize && <Text style={styles.docSizeText}>({(item.documentSize / (1024 * 1024)).toFixed(2)} MB)</Text>}
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      />
-    );
-  };
 
   const renderOvertimeTab = () => {
     const records = data?.overtime?.records || [];
@@ -406,7 +345,7 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
               <>
                 {activeTab === 'profile' && renderProfileTab()}
                 {activeTab === 'attendance' && renderAttendanceTab()}
-                {activeTab === 'logs' && renderLogsTab()}
+
                 {activeTab === 'overtime' && renderOvertimeTab()}
                 {activeTab === 'device' && renderDeviceTab()}
               </>

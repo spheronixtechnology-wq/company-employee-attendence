@@ -2,7 +2,7 @@ const Team = require('../models/Team');
 const User = require('../models/User');
 const ManagerPermission = require('../models/ManagerPermission');
 const Attendance = require('../models/Attendance');
-const DailyLog = require('../models/DailyLog');
+
 const LeaveRequest = require('../models/LeaveRequest');
 const DeviceRequest = require('../models/DeviceRequest');
 const LocationRequest = require('../models/LocationRequest');
@@ -21,6 +21,7 @@ const storageService = require('../services/storage/storageService');
 const { writeAuditLog } = require('../services/audit.service');
 const { createNotification } = require('../services/notification.service');
 const sessionReactivationService = require('../services/sessionReactivation.service');
+const ApprovalWorkflowService = require('../services/ApprovalWorkflowService');
 
 const { emitToUser, emitToTeam, emitToManagers, emitToAdmins, emitToDeviceRequest, emitToAll } = require('../socket');
 
@@ -71,10 +72,18 @@ const getManagedTeam = async (userId) => {
 /**
  * Gets all employee user IDs belonging to the given team(s).
  */
-const getTeamMemberIds = async (teamIds, excludeUserId = null) => {
+const getTeamMemberIds = async (user, teamIds, excludeUserId = null) => {
   const ids = Array.isArray(teamIds) ? teamIds : (teamIds ? [teamIds] : []);
-  if (!ids.length) return [];
-  const query = { teamId: { $in: ids }, role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
+  let query;
+  if (user && (user.role === 'admin' || user.role === 'chairman')) {
+    query = { role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true, deletedAt: null };
+  } else if (user && user.role === 'principal') {
+    query = { role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
+  } else {
+    if (!ids.length) return [];
+    query = { teamId: { $in: ids }, role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
+  }
+  
   if (excludeUserId) query._id = { $ne: excludeUserId };
   const members = await User.find(query).select('_id').lean();
   return members.map(m => m._id);
@@ -102,7 +111,7 @@ const getDashboard = async (req, res) => {
         checkedIn: 0,
         onLeave: 0,
         notCheckedIn: 0,
-        missingDailyLogs: 0,
+
         pendingLeaveRequests: 0,
         pendingDeviceRequests: 0,
         pendingLocationRequests: 0,
@@ -116,16 +125,7 @@ const getDashboard = async (req, res) => {
     // Chairman/Admin: all staff including Principal
     // Principal: all staff except Principal and Chairman
     // HOD/Manager: their team members only
-    let memberIds;
-    if (req.user.role === 'admin' || req.user.role === 'chairman') {
-      const staffUsers = await User.find({ role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true, deletedAt: null }).select('_id').lean();
-      memberIds = staffUsers.map(u => u._id);
-    } else if (req.user.role === 'principal') {
-      const staffUsers = await User.find({ role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null }).select('_id').lean();
-      memberIds = staffUsers.map(u => u._id);
-    } else {
-      memberIds = await getTeamMemberIds(teamIds);
-    }
+    const memberIds = await getTeamMemberIds(req.user, teamIds);
 
     if (memberIds.length === 0) {
       return success(res, 'Team is empty', {
@@ -133,7 +133,7 @@ const getDashboard = async (req, res) => {
         checkedIn: 0,
         onLeave: 0,
         notCheckedIn: 0,
-        missingDailyLogs: 0,
+
         pendingLeaveRequests: 0,
         pendingDeviceRequests: 0,
         pendingLocationRequests: 0,
@@ -157,8 +157,7 @@ const getDashboard = async (req, res) => {
       endDate: { $gte: targetDate }
     });
 
-    const loggedUsers = await DailyLog.distinct('userId', { logDate: targetDate, userId: { $in: memberIds } });
-    const missingDailyLogs = Math.max(0, checkedInCount - loggedUsers.length);
+
 
     const pendingLeaveRequests = await LeaveRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
     const pendingDeviceRequests = await DeviceRequest.countDocuments({ userId: { $in: memberIds }, status: 'pending' });
@@ -174,7 +173,7 @@ const getDashboard = async (req, res) => {
       checkedIn: checkedInCount,
       onLeave: onLeaveCount,
       notCheckedIn: Math.max(0, totalMembers - checkedInCount - onLeaveCount),
-      missingDailyLogs,
+
       pendingLeaveRequests,
       pendingDeviceRequests,
       pendingLocationRequests,
@@ -193,7 +192,16 @@ const getTeamAttendance = async (req, res) => {
     if (!teams || teams.length === 0) return success(res, 'Fetched attendance', { attendance: [] });
 
     const teamIds = teams.map(t => t._id);
-    const members = await User.find({ teamId: { $in: teamIds }, role: { $in: ['employee', 'faculty'] }, isActive: true, deletedAt: null })
+    let memberQuery;
+    if (req.user.role === 'admin' || req.user.role === 'chairman') {
+      memberQuery = { role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true, deletedAt: null };
+    } else if (req.user.role === 'principal') {
+      memberQuery = { role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
+    } else {
+      memberQuery = { teamId: { $in: teamIds }, role: { $in: ['employee', 'faculty'] }, isActive: true, deletedAt: null };
+    }
+
+    const members = await User.find(memberQuery)
       .select('name designation email avatarUrl phone teamId')
       .populate('teamId', 'name')
       .sort({ name: 1 });
@@ -266,34 +274,20 @@ const getTeamMembers = async (req, res) => {
 
     const teamIds = teams.map(t => t._id);
     
-    // Chairman/Admin sees ALL staff including Principal
-    // Principal sees all staff EXCEPT Principal and Chairman
-    // HODs/Managers see only their team
-    let memberQuery;
-    if (req.user.role === 'admin' || req.user.role === 'chairman') {
-      memberQuery = { role: { $in: ['employee', 'manager', 'faculty', 'hod', 'principal'] }, isActive: true, deletedAt: null };
-    } else if (req.user.role === 'principal') {
-      memberQuery = { role: { $in: ['employee', 'manager', 'faculty', 'hod'] }, isActive: true, deletedAt: null };
-    } else {
-      memberQuery = { teamId: { $in: teamIds }, role: { $in: ['employee', 'faculty'] }, isActive: true, deletedAt: null };
-    }
+    const memberIds = await getTeamMemberIds(req.user, teamIds);
 
-    const members = await User.find(memberQuery)
+    const members = await User.find({ _id: { $in: memberIds } })
       .select('name email phone designation avatarUrl teamId role createdAt')
       .populate('teamId', 'name')
       .sort({ name: 1 })
       .lean();
 
     const targetDate = req.query.date || getTodayDateString();
-    const memberIds = members.map(m => m._id);
 
     const attendances = await Attendance.find({ userId: { $in: memberIds }, date: targetDate }).lean();
     const attMap = new Map(attendances.map(a => [a.userId.toString(), a]));
 
-    const dailyLogs = await DailyLog.find({ userId: { $in: memberIds }, logDate: targetDate })
-      .select('userId checkInTime checkOutTime hoursSpent')
-      .lean();
-    const logMap = new Map(dailyLogs.map(l => [l.userId.toString(), l]));
+
 
     // For HODs, always resolve their team from leadUserId relationship (this is the source of truth)
     // This prevents stale teamId values from showing the wrong department
@@ -306,7 +300,6 @@ const getTeamMembers = async (req, res) => {
 
     const enrichedMembers = members.map(member => {
       const att = attMap.get(member._id.toString());
-      const dLog = logMap.get(member._id.toString());
       let currentStatus = 'not_checked_in';
       if (att) {
         if (att.checkOutTime) {
@@ -324,10 +317,10 @@ const getTeamMembers = async (req, res) => {
         ...member,
         teamId: resolvedTeamId,
         currentStatus,
-        checkInTime: att?.checkInTime || (dLog?.checkInTime ? `${targetDate}T${dLog.checkInTime}:00` : null),
-        checkOutTime: att?.checkOutTime || (dLog?.checkOutTime ? `${targetDate}T${dLog.checkOutTime}:00` : null),
-        totalWorkMinutes: att?.actualWorkMinutes || att?.totalDurationMinutes || (dLog?.hoursSpent ? Math.round(dLog.hoursSpent * 60) : 0),
-        dailyLogSubmitted: Boolean(dLog || att?.dailyLogSubmitted),
+        checkInTime: att?.checkInTime || null,
+        checkOutTime: att?.checkOutTime || null,
+        totalWorkMinutes: att?.actualWorkMinutes || att?.totalDurationMinutes || 0,
+        dailyLogSubmitted: Boolean(att?.dailyLogSubmitted),
         todayAttendance: att || null,
       };
     });
@@ -349,7 +342,7 @@ const getTeamLeaveRequests = async (req, res) => {
     const teams = await getManagedTeams(req.user);
     if (!teams || teams.length === 0) return success(res, 'Fetched leave requests', { requests: [], counts: { total: 0, pending: 0, approved: 0, rejected: 0 } });
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     
     // Always fetch all to compute counts
     const allRequests = await LeaveRequest.find({ userId: { $in: memberIds } })
@@ -390,7 +383,7 @@ const handleLeaveDecision = async (req, res) => {
     const teams = await getManagedTeams(req.user);
     if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any team');
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     if (!memberIds.map(m => m.toString()).includes(leave.userId.toString())) {
       return forbidden(res, 'This user is not in your team');
     }
@@ -425,7 +418,7 @@ const getTeamDailyLogs = async (req, res) => {
     const teams = await getManagedTeams(req.user);
     if (!teams || teams.length === 0) return success(res, 'Fetched daily logs', { logs: [], totalTeamMembers: 0 });
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     
     let query = { userId: { $in: memberIds } };
     
@@ -880,9 +873,16 @@ const getDeviceRequests = async (req, res) => {
       });
     }
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     
-    const baseQuery = { userId: { $in: memberIds } };
+    // Include requests from team members, OR requests currently assigned to this user, OR requests previously approved by this user
+    const baseQuery = { 
+      $or: [
+        { userId: { $in: memberIds } },
+        { currentApproverId: req.user._id },
+        { "approvalHistory.approverId": req.user._id }
+      ] 
+    };
     const query = { ...baseQuery };
     if (status !== 'all') query.status = status;
 
@@ -926,9 +926,6 @@ const getDeviceRequests = async (req, res) => {
 
 const handleDeviceRequestDecision = async (req, res) => {
   try {
-    const canManage = await checkManagerPermission(req.user._id, 'canManageDeviceRequests');
-    if (!canManage) return forbidden(res, 'You do not have permission to manage device requests');
-
     const { id } = req.params;
     const { action, decisionNote, approvedUntil } = req.body;
 
@@ -936,26 +933,22 @@ const handleDeviceRequestDecision = async (req, res) => {
       return badRequest(res, 'Action must be approve or reject');
     }
 
-    const request = await DeviceRequest.findById(id);
-    if (!request) return notFound(res, 'Device request not found');
+    const uppercaseAction = action === 'approve' ? 'APPROVED' : 'REJECTED';
+    let request;
 
-    const teams = await getManagedTeams(req.user);
-    if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any team');
-
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
-    if (!memberIds.map(m => m.toString()).includes(request.userId.toString())) {
-      return forbidden(res, 'This user is not in your team');
+    try {
+      request = await ApprovalWorkflowService.progressApprovalWorkflow(id, req.user, uppercaseAction, decisionNote);
+    } catch (err) {
+      return forbidden(res, err.message);
     }
 
-    const newStatus = action === 'approve' ? 'approved' : 'rejected';
-    request.status = newStatus;
-    request.decisionNote = decisionNote;
     if (action === 'approve' && approvedUntil) {
       request.requestedUntil = approvedUntil;
+      await request.save();
     }
-    await request.save();
 
-    if (action === 'approve') {
+    // If fully approved by the entire chain
+    if (request.status === 'approved') {
       // Deactivate existing device
       await RegisteredDevice.updateMany({ userId: request.userId }, { isActive: false, status: 'REVOKED' });
 
@@ -980,49 +973,13 @@ const handleDeviceRequestDecision = async (req, res) => {
       await User.findByIdAndUpdate(request.userId, { $inc: { tokenVersion: 1 } });
     }
 
-    await createNotification({
-      userId: request.userId,
-      type: action === 'approve' ? 'device_approved' : 'device_rejected',
-      title: 'Device Request ' + (action === 'approve' ? 'Approved ✅' : 'Rejected ❌'),
-      message: `Your device request has been ${action}d.` + (decisionNote ? ` Note: ${decisionNote}` : ''),
-      relatedId: request._id
-    });
-
-    // Mark manager notifications related to this request as read
+    // Mark manager notifications related to this request as read for THIS specific user
     await Notification.updateMany(
-      { relatedId: request._id, isRead: false },
+      { relatedId: request._id, userId: req.user._id, isRead: false },
       { $set: { isRead: true } }
     );
 
-    // Real-time WebSocket emission to the employee, managers, admins, and guest login socket
-    emitToUser(request.userId, 'device:request_resolved', {
-      requestId: request._id,
-      action,
-      status: newStatus,
-      decisionNote,
-      userId: request.userId,
-    });
-    emitToManagers('device:request_resolved', {
-      requestId: request._id,
-      action,
-      status: newStatus,
-      userId: request.userId,
-    });
-    emitToAdmins('device:request_resolved', {
-      requestId: request._id,
-      action,
-      status: newStatus,
-      userId: request.userId,
-    });
-    emitToDeviceRequest(request._id, 'device:request_resolved', {
-      requestId: request._id,
-      action,
-      status: newStatus,
-      decisionNote,
-      userId: request.userId,
-    });
-
-    return success(res, `Device request ${action}d`, { request });
+    return success(res, `Device request decision recorded`, { request });
   } catch (error) {
     console.error('handleDeviceRequestDecision error:', error);
     return badRequest(res, 'Failed to handle device request decision');
@@ -1043,7 +1000,7 @@ const getLocationRequests = async (req, res) => {
       });
     }
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     
     const baseQuery = { userId: { $in: memberIds } };
     const query = { ...baseQuery };
@@ -1095,7 +1052,7 @@ const handleLocationRequestDecision = async (req, res) => {
     const teams = await getManagedTeams(req.user);
     if (!teams || teams.length === 0) return forbidden(res, 'You do not manage any team');
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     if (!memberIds.map(m => m.toString()).includes(request.userId.toString())) {
       return forbidden(res, 'This user is not in your team');
     }
@@ -1150,7 +1107,7 @@ const getUnreadNotificationCount = async (req, res) => {
     const teams = await getManagedTeams(req.user);
     if (!teams || teams.length === 0) return success(res, 'Unread notification count fetched', { count: 0 });
 
-    const memberIds = await getTeamMemberIds(teams.map(t => t._id));
+    const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     const count = await DeviceRequest.countDocuments({
       userId: { $in: memberIds },
       status: 'pending'
@@ -1676,8 +1633,6 @@ module.exports = {
   getTeamMembers,
   getTeamLeaveRequests,
   handleLeaveDecision,
-  getTeamDailyLogs,
-  getDailyLogDocument,
   getDeviceRequests,
   handleDeviceRequestDecision,
   getLocationRequests,
@@ -1686,14 +1641,11 @@ module.exports = {
   getUnreadNotificationCount,
   createTeamMember,
   deleteTeamMember,
-  submitTeamMemberDailyLog,
-  updateTeamMemberDailyLog,
   getManagedTeams,
   getManagedTeam,
   getTeamMemberIds,
   getMemberProfile,
   getMemberAttendanceHistory,
-  getMemberDailyLogs,
   getMemberOvertimeHistory,
   getTeamLeaveQuotas,
   updateTeamLeaveQuotas,

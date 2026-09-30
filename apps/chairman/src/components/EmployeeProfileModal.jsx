@@ -26,16 +26,13 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
 
   //  Period / Date filter state
   const [preset, setPreset] = useState('current_month');
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'attendance' | 'logs' | 'overtime' | 'device'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'attendance' | 'overtime' | 'device'
 
   // Sub-tab pagination states
   const [attendancePage, setAttendancePage] = useState(1);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceData, setAttendanceData] = useState(null);
 
-  const [logsPage, setLogsPage] = useState(1);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsData, setLogsData] = useState(null);
 
   const [otPage, setOtPage] = useState(1);
   const [otLoading, setOtLoading] = useState(false);
@@ -76,10 +73,8 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
       const data = res.data?.data;
       setProfileData(data);
       setAttendanceData(data?.attendance);
-      setLogsData(data?.dailyLogs);
       setOtData(data?.overtime);
       setAttendancePage(1);
-      setLogsPage(1);
       setOtPage(1);
     } catch (err) {
       console.error('Failed to load employee profile:', err);
@@ -111,21 +106,6 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
     }
   };
 
-  // Paginated Daily Logs Fetch
-  const fetchLogsPage = async (page) => {
-    if (!memberId || !profileData?.period) return;
-    setLogsLoading(true);
-    try {
-      const { from, to } = profileData.period;
-      const res = await api.get(`/admin/employees/${memberId}/daily-logs?page=${page}&limit=10&from=${from}&to=${to}`);
-      setLogsData(res.data?.data);
-      setLogsPage(page);
-    } catch (err) {
-      console.error('Failed to paginate daily logs:', err);
-    } finally {
-      setLogsLoading(false);
-    }
-  };
 
   // Paginated Overtime Fetch
   const fetchOtPage = async (page) => {
@@ -284,18 +264,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
               </p>
             </div>
 
-            <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center gap-2 text-slate-500 text-[11px] font-semibold">
-                <FileText size={14} className="text-indigo-600" />
-                <span>Daily Logs</span>
-              </div>
-              <p className="text-lg font-black text-slate-900 mt-1">
-                {summary.totalDailyLogs ?? 0} <span className="text-xs font-medium text-slate-500">Sheets</span>
-              </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {summary.totalLogHours ? `${summary.totalLogHours}h logged` : 'Work reported'}
-              </p>
-            </div>
+
 
             <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center gap-2 text-slate-500 text-[11px] font-semibold">
@@ -329,7 +298,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
             {[
               { id: 'profile', label: 'Profile Info' },
               { id: 'attendance', label: 'Attendance Records', count: attendanceData?.totalCount },
-              { id: 'logs', label: 'Daily Log Sheets', count: logsData?.totalCount },
+
               { id: 'overtime', label: 'Overtime (OT)', count: otData?.totalCount },
               { id: 'device', label: 'Attendance Device' },
             ].map((tab) => {
@@ -768,171 +737,6 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
               )}
 
               {/* ──────────────── TAB 2: DAILY LOG SHEETS ──────────────── */}
-              {activeTab === 'logs' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <p className="font-semibold">
-                      Submitted work reports for <span className="text-slate-900 font-bold">{profileData?.period?.label}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Total {logsData?.totalCount || 0} sheets
-                    </p>
-                  </div>
-
-                  {logsLoading ? (
-                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-violet-600" size={24} /></div>
-                  ) : logsData?.records?.length > 0 ? (
-                    <div className="space-y-3">
-                      {logsData.records.map((log) => (
-                        <div key={log._id} className="card p-4 border border-slate-200 bg-white rounded-2xl shadow-xs space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-black text-slate-900 text-sm">{log.logDate}</span>
-                                {log.projectName && (
-                                  <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
-                                    {log.projectName}
-                                  </span>
-                                )}
-                              </div>
-                              {log.taskTitle && (
-                                <p className="text-xs font-bold text-slate-800 mt-1">{log.taskTitle}</p>
-                              )}
-                            </div>
-                            <span className="px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 font-mono font-bold text-xs flex-shrink-0">
-                              {log.hoursSpent} Hours
-                            </span>
-                          </div>
-
-                          {log.description && (
-                            <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200/80 whitespace-pre-wrap leading-relaxed">
-                              {log.description}
-                            </p>
-                          )}
-
-                          {log.blockers && (
-                            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
-                              <AlertCircle size={14} className="text-amber-600 flex-shrink-0" />
-                              <span><strong className="font-semibold">Blockers:</strong> {log.blockers}</span>
-                            </div>
-                          )}
-
-                          {log.githubLink && (
-                            <div className="pt-1">
-                              <a
-                                href={log.githubLink.startsWith('http') ? log.githubLink : `https://${log.githubLink}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 font-mono underline"
-                              >
-                                <ExternalLink size={13} /> {log.githubLink}
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Document Attachment Action */}
-                          {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype || log.hasDocument || log.document?.storageKey) && (
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-xs text-slate-600">
-                                <FileText size={15} className="text-violet-600" />
-                                <span className="font-semibold">{log.documentName || 'Attached Document'}</span>
-                                {log.documentSize && (
-                                  <span className="text-[10px] text-slate-400">({(log.documentSize / (1024 * 1024)).toFixed(2)} MB)</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (!log.documentUrl && !log.attachmentUrl && log._id) {
-                                      try {
-                                        const res = await api.get(`/admin/daily-log/${log._id}/document`);
-                                        if (res.data?.success && res.data?.data) {
-                                          log.documentUrl = res.data.data.documentUrl;
-                                          log.attachmentUrl = res.data.data.attachmentUrl;
-                                        } else {
-                                          alert('Could not load the document payload from the server.');
-                                          return;
-                                        }
-                                      } catch (e) {
-                                        console.error('Failed to load document payload', e);
-                                        alert('Failed to load document payload: ' + (e.response?.data?.message || e.message));
-                                        return;
-                                      }
-                                    }
-                                    setPreviewDoc(log);
-                                  }}
-                                  className="btn bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold rounded-lg shadow-xs"
-                                >
-                                  <Eye size={12} /> Preview
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    try {
-                                      let finalUrl = log.documentUrl || log.attachmentUrl;
-                                      if (!finalUrl && log._id) {
-                                        const res = await api.get(`/admin/daily-log/${log._id}/document`);
-                                        if (res.data?.success && res.data?.data) {
-                                          finalUrl = res.data.data.documentUrl || res.data.data.attachmentUrl;
-                                        }
-                                      }
-                                      if (finalUrl) {
-                                        const link = document.createElement('a');
-                                        link.href = finalUrl;
-                                        link.download = log.documentName || 'work-document';
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                      } else {
-                                        alert('Document payload could not be loaded.');
-                                      }
-                                    } catch (e) {
-                                      alert('Failed to download document: ' + e.message);
-                                    }
-                                  }}
-                                  className="btn bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold rounded-lg shadow-xs"
-                                >
-                                  <Download size={12} /> Download
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs">
-                      No daily log sheets submitted by this employee in {profileData?.period?.label}.
-                    </div>
-                  )}
-
-                  {/* Logs Pagination */}
-                  {logsData?.totalPages > 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        Page {logsPage} of {logsData.totalPages}
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => fetchLogsPage(logsPage - 1)}
-                          disabled={logsPage <= 1}
-                          className="btn-ghost py-1 px-2.5 text-xs flex items-center gap-1 disabled:opacity-40"
-                        >
-                          <ChevronLeft size={14} /> Previous
-                        </button>
-                        <button
-                          onClick={() => fetchLogsPage(logsPage + 1)}
-                          disabled={logsPage >= logsData.totalPages}
-                          className="btn-ghost py-1 px-2.5 text-xs flex items-center gap-1 disabled:opacity-40"
-                        >
-                          Next <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* ──────────────── TAB 3: OVERTIME (OT) ──────────────── */}
               {activeTab === 'overtime' && (

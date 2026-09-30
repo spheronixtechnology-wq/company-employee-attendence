@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Loader2, CheckCircle, AlertTriangle, Smartphone, Monitor } from 'lucide-react';
+import { ShieldAlert, Loader2, CheckCircle, AlertTriangle, Smartphone, Monitor, ShieldCheck, ArrowRight, Shield } from 'lucide-react';
 import api from '../lib/api';
 import { getDeviceFingerprint } from '../lib/fingerprint';
 import { useSocket } from '../contexts/SocketContext';
@@ -84,85 +84,113 @@ const DeviceOnboardingPage = () => {
 
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
-        <Loader2 size={32} className="animate-spin text-violet-400" />
+      <div className="flex items-center justify-center min-h-[calc(100vh-100px)]">
+        <div className="relative">
+          <div className="absolute inset-0 bg-violet-500 rounded-full blur-xl opacity-20 animate-pulse"></div>
+          <Loader2 size={40} className="animate-spin text-violet-600 relative z-10" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in max-w-md mx-auto mt-8">
-      <div className="card p-8 border border-slate-700/50 bg-gradient-to-br from-slate-800/80 to-slate-900/80 shadow-xl backdrop-blur-sm text-center">
-        <div className="mx-auto w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-6">
-          <ShieldAlert size={32} className="text-amber-400" />
-        </div>
+    <div className="min-h-[calc(100vh-100px)] flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* Background Decorative Blobs */}
+      <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-violet-500/10 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
+      <div className="absolute top-1/3 right-1/4 w-72 h-72 bg-indigo-500/10 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
+      <div className="absolute -bottom-8 left-1/3 w-80 h-80 bg-fuchsia-500/10 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000"></div>
 
-        {currentStatus === 'active' ? (
-          <>
-            <h1 className="text-2xl font-bold text-white mb-2">Device Already Active</h1>
-            <p className="text-slate-400 mb-6">Your device is already registered and active. You can mark attendance now.</p>
-            <button onClick={() => navigate('/dashboard')} className="btn-primary w-full">
-              Go to Dashboard
-            </button>
-          </>
-        ) : currentStatus === 'pending' ? (
-          <>
-            <h1 className="text-2xl font-bold text-white mb-2">Approval Pending</h1>
-            <p className="text-slate-400 mb-6">Your device registration request is awaiting manager approval. You'll be notified when it's approved.</p>
-            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm mb-5 flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin flex-shrink-0" />
-              Waiting for manager approval...
-            </div>
-            <button onClick={() => navigate('/dashboard')} className="btn-ghost w-full">
-              Back to Dashboard
-            </button>
-          </>
-        ) : (
-          <>
-            <h1 className="text-2xl font-bold text-white mb-2">Device Not Recognized</h1>
-            <p className="text-slate-400 mb-5">
-              Register this device with your manager to mark attendance.
-            </p>
-
-            {/* Device confirmation card — 100% automated */}
-            <div className="p-4 rounded-2xl bg-slate-700/50 border border-slate-600/60 mb-6 text-left">
-              <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-2">Device to Register</p>
-              <div className="flex items-center gap-3">
-                {isMobile ? (
-                  <Smartphone size={28} className="text-violet-400 flex-shrink-0" />
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white/90 backdrop-blur-3xl border border-white/60 rounded-[32px] p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05),0_0_40px_rgba(139,92,246,0.15)] transition-all duration-500">
+          
+          <div className="flex flex-col items-center text-center">
+            
+            {/* Dynamic Animated Icon */}
+            <div className="relative mb-8 group">
+              <div className="absolute inset-0 bg-gradient-to-tr from-violet-400 to-fuchsia-400 rounded-3xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-500 animate-pulse"></div>
+              <div className="relative w-24 h-24 bg-gradient-to-tr from-white to-violet-50 rounded-3xl border border-white/80 shadow-[0_8px_20px_rgba(139,92,246,0.15)] flex items-center justify-center transform transition-transform duration-500 hover:scale-105 hover:-rotate-3">
+                {currentStatus === 'active' ? (
+                  <ShieldCheck size={36} className="text-emerald-500 drop-shadow-sm" />
+                ) : currentStatus === 'pending' ? (
+                  <Shield size={36} className="text-amber-500 drop-shadow-sm animate-bounce" />
                 ) : (
-                  <Monitor size={28} className="text-violet-400 flex-shrink-0" />
+                  <ShieldAlert size={36} className="text-rose-500 drop-shadow-sm" />
                 )}
-                <div>
-                  <p className="text-white font-semibold text-base">{deviceLabel}</p>
-                  <p className="text-slate-400 text-xs mt-0.5">This info will be visible to your manager</p>
-                </div>
               </div>
             </div>
 
-            {message && (
-              <div className={`p-3 rounded-xl mb-5 flex items-start gap-3 text-sm text-left ${message.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
-                {message.type === 'success' ? <CheckCircle size={18} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />}
-                {message.text}
+            {currentStatus === 'active' ? (
+              <div className="w-full animate-fade-in-up">
+                <h1 className="text-3xl font-extrabold bg-gradient-to-br from-slate-800 to-slate-500 bg-clip-text text-transparent mb-3 tracking-tight">Access Granted</h1>
+                <p className="text-slate-500 mb-8 leading-relaxed">Your device is successfully registered. You are fully authenticated to mark attendance.</p>
+                <button onClick={() => navigate('/dashboard')} className="group relative w-full flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-8 py-4 text-white font-bold transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95">
+                  <span className="relative z-10 flex items-center gap-2">Go to Dashboard <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></span>
+                </button>
+              </div>
+            ) : currentStatus === 'pending' ? (
+              <div className="w-full animate-fade-in-up">
+                <h1 className="text-3xl font-extrabold bg-gradient-to-br from-slate-800 to-slate-500 bg-clip-text text-transparent mb-3 tracking-tight">Approval Pending</h1>
+                <p className="text-slate-500 mb-8 leading-relaxed">Your device registration request has been securely routed and is awaiting manager approval.</p>
+                
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/50 text-amber-700 text-sm mb-8 flex items-center gap-3 shadow-[inset_0_2px_10px_rgba(251,191,36,0.1)]">
+                  <Loader2 size={20} className="animate-spin text-amber-500 flex-shrink-0" />
+                  <span className="font-semibold">Waiting for manager approval...</span>
+                </div>
+
+                <button onClick={() => navigate('/dashboard')} className="w-full py-4 text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors">
+                  Back to Dashboard
+                </button>
+              </div>
+            ) : (
+              <div className="w-full animate-fade-in-up">
+                <h1 className="text-[32px] leading-tight font-extrabold bg-gradient-to-br from-slate-800 to-slate-500 bg-clip-text text-transparent mb-4 tracking-tight">Device Verification</h1>
+                <p className="text-slate-500 mb-8 text-[15px] leading-relaxed">
+                  To ensure maximum security, this device must be registered with your manager before marking attendance.
+                </p>
+
+                {/* Premium Device Card */}
+                <div className="relative group mb-8 text-left">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-200 to-fuchsia-200 rounded-2xl blur-md opacity-40 transition duration-500 group-hover:opacity-70 group-hover:blur-lg"></div>
+                  <div className="relative p-5 rounded-2xl bg-white/80 backdrop-blur-xl border border-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex items-center gap-4 transition-transform duration-300 group-hover:-translate-y-0.5">
+                    <div className="w-14 h-14 rounded-full bg-violet-50 flex items-center justify-center flex-shrink-0 border border-violet-100 shadow-inner">
+                      {isMobile ? (
+                        <Smartphone size={26} className="text-violet-600" />
+                      ) : (
+                        <Monitor size={26} className="text-violet-600" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-violet-500 mb-1">Detected Device</p>
+                      <p className="text-slate-800 font-bold text-base">{deviceLabel}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {message && (
+                  <div className={`p-4 rounded-2xl mb-8 flex items-start gap-3 text-sm font-semibold text-left shadow-sm border ${message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+                    {message.type === 'success' ? <CheckCircle size={20} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={20} className="mt-0.5 flex-shrink-0" />}
+                    {message.text}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleRequest}
+                  disabled={loading || message?.type === 'success'}
+                  className="group relative w-full flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-4 text-white font-bold transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_25px_rgba(139,92,246,0.4)] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2"><Loader2 size={18} className="animate-spin" /> Submitting Request...</span>
+                  ) : (
+                    <span className="relative z-10 flex items-center gap-2">Request Secure Access <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></span>
+                  )}
+                  {/* Button shine effect */}
+                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                </button>
               </div>
             )}
-
-            <button
-              onClick={handleRequest}
-              disabled={loading || message?.type === 'success'}
-              className="btn-primary w-full flex justify-center items-center gap-2"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-              {loading ? 'Submitting Request...' : 'Request Device Approval'}
-            </button>
-
-            {!isMobile && (
-              <p className="text-slate-500 text-xs mt-4">
-                💡 For attendance, use this portal on your registered mobile device.
-              </p>
-            )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );
