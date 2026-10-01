@@ -31,7 +31,7 @@ const mockReqRes = (user, body = {}, params = {}, query = {}) => {
 };
 
 async function runTests() {
-  console.log('=== TEST SUITE: Manager Permissions API ===\n');
+  console.log('=== TEST SUITE: Principal & HOD Permissions API ===\n');
 
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('--- Connected to MongoDB ---');
@@ -46,17 +46,17 @@ async function runTests() {
   console.log(`Found Manager: ${managerUser.name} (${managerUser.email})`);
 
   // 1. Test getManagerPermissions
-  console.log('\n--- Test 1: GET Manager Permissions ---');
+  console.log('\n--- Test 1: GET Principal & HOD Permissions ---');
   const getCtx = mockReqRes(adminUser);
   await adminController.getManagerPermissions(getCtx.req, getCtx.res);
   const getRes = getCtx.getData();
   console.log('Get response status:', getCtx.getStatus());
   console.log('Managers count:', getRes.data?.managers?.length);
   const targetMgr = getRes.data?.managers?.find(m => m._id.toString() === managerUser._id.toString());
-  console.log('Target manager permissions:', targetMgr?.permissions);
+  console.log('Target principal & hod permissions:', targetMgr?.permissions);
 
   if (!targetMgr || !targetMgr.permissions) {
-    throw new Error('Target manager permissions missing from response');
+    throw new Error('Target principal & hod permissions missing from response');
   }
 
   // 2. Test updateManagerPermission

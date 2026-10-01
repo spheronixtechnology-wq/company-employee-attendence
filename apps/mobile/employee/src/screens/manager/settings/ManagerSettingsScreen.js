@@ -24,7 +24,7 @@ const colors = {
 };
 
 const ATTENDANCE_METHODS = [
-  { key: 'qr_code', label: 'QR Code Attendance', icon: QrCode, desc: 'Daily dynamic rotating QR code. Employees scan the office QR display at check-in.', badge: 'Popular' },
+  { key: 'qr_code', label: 'QR Code Attendance', icon: QrCode, desc: 'Daily dynamic rotating QR code. Faculty members scan the office QR display at check-in.', badge: 'Popular' },
   { key: 'wifi_ip', label: 'WiFi / IP Network Gate', icon: Wifi, desc: 'Validates employee presence on approved office Wi-Fi networks by checking IP/subnet match.', badge: 'Zero-touch' },
   { key: 'biometric', label: 'Biometric (WebAuthn)', icon: Fingerprint, desc: 'Device-owner biometric verification using hardware sensors.', badge: 'High Security' },
 ];
@@ -405,7 +405,7 @@ export default function ManagerSettingsScreen({ navigation, initialTab }) {
               
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Wi-Fi SSID</Text>
-                <TextInput style={styles.input} value={form.wifiSsid} onChangeText={t => setForm({...form, wifiSsid: t})} placeholder="e.g. Spheronix_Corporate" />
+                <TextInput style={styles.input} value={form.wifiSsid} onChangeText={t => setForm({...form, wifiSsid: t})} placeholder="e.g. College_Corporate" />
               </View>
 
               <View style={styles.inputGroup}>

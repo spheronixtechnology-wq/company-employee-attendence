@@ -51,4 +51,4 @@ connectDB().then(() => {
   console.error('❌ Failed to start server:', err);
   process.exit(1);
 });
-// Server entry point - Spheronix Technology 
+// Server entry point - College Technology 

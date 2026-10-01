@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, LogIn, Loader2 } from 'lucide-react';
-import companyLogo from '../images/company logo.png';
+import companyLogo from '../images/college logo.png';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -38,9 +38,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <img src={companyLogo} alt="Spheronix" className="h-16 w-auto mx-auto mb-4 object-contain" />
+          <img src={companyLogo} alt="College" className="h-16 w-auto mx-auto mb-4 object-contain" />
           <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
-          <p className="text-slate-600 mt-1 text-sm">Spheronix Technology — Admin Portal</p>
+          <p className="text-slate-600 mt-1 text-sm">College Technology — Admin Portal</p>
         </div>
 
         {/* Login Card */}
@@ -117,7 +117,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-slate-500 text-xs mt-6">
-          &copy; {new Date().getFullYear()} Spheronix Technology. All rights reserved.
+          &copy; {new Date().getFullYear()} College Technology. All rights reserved.
         </p>
       </div>
     </div>

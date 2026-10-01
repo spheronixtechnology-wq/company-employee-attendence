@@ -11,7 +11,7 @@ const methods = [
     key: 'qr_code',
     label: 'QR Code Attendance',
     icon: QrCode,
-    desc: 'Daily dynamic rotating QR code. Employees scan the office QR display at check-in.',
+    desc: 'Daily dynamic rotating QR code. Faculty members scan the office QR display at check-in.',
     badge: 'Popular',
   },
   {
@@ -205,7 +205,7 @@ export default function AttendanceMethodPage() {
               </div>
               <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed">
                 When turned <strong>ON</strong>, the system monitors employee presence heartbeats and can automatically check out sessions after prolonged loss of signal.
-                When turned <strong>OFF</strong>, heartbeat checking is deactivated, allowing employees to lock their mobile devices without getting logged out.
+                When turned <strong>OFF</strong>, heartbeat checking is deactivated, allowing faculty members to lock their mobile devices without getting logged out.
               </p>
             </div>
           </div>

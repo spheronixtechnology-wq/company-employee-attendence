@@ -326,12 +326,12 @@ export default function OfficeLocationsPage() {
               <div>
                 <label className="label">Office WiFi SSID</label>
                 <input
-                  placeholder="e.g. Spheronix-Office-5G"
+                  placeholder="e.g. College-Office-5G"
                   className="input"
                   value={form.wifiSsid}
                   onChange={(e) => setForm({ ...form, wifiSsid: e.target.value })}
                 />
-                <p className="text-[11px] text-slate-500 mt-1">Guidance label shown to employees at check-in.</p>
+                <p className="text-[11px] text-slate-500 mt-1">Guidance label shown to faculty members at check-in.</p>
               </div>
 
               <div>

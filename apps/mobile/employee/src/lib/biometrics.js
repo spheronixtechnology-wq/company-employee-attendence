@@ -36,7 +36,7 @@ export async function authenticateAndGetBiometricToken() {
   }
 
   const authResult = await LocalAuthentication.authenticateAsync({
-    promptMessage: 'Spheronix Attendance Biometric Verification',
+    promptMessage: 'College Attendance Biometric Verification',
     cancelLabel: 'Cancel',
     fallbackLabel: 'Use Device PIN / Pattern',
     disableDeviceFallback: false,

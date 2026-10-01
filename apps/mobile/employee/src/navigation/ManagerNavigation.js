@@ -17,8 +17,8 @@ import ManagerProfileScreen from '../screens/manager/profile/ManagerProfileScree
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'team-members', label: 'Team Members' },
-  { id: 'team-attendance', label: 'Team Attendance' },
+  { id: 'team-members', label: 'Faculty Members' },
+  { id: 'team-attendance', label: 'Faculty Attendance' },
   { id: 'session-reactivations', label: 'Session Reactivations' },
   { id: 'team-overtime', label: 'Overtime' },
 

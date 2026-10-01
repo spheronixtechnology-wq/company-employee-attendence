@@ -209,7 +209,7 @@ const runMidnightAutoCheckout = async (referenceDate = new Date()) => {
       autoCheckedOutUsers.push(user.email || user.name || user._id.toString());
     }
 
-    console.log(`[CRON] Auto-checked out ${incomplete.length} employee(s) at midnight:`, autoCheckedOutUsers);
+    console.log(`[CRON] Auto-checked out ${incomplete.length} faculty member(s) at midnight:`, autoCheckedOutUsers);
     return { processedCount: incomplete.length, autoCheckedOutUsers };
   } catch (err) {
     console.error('[CRON] Midnight auto-checkout job failed:', err);

@@ -1,5 +1,5 @@
 /**
- * Spheronix Attendance System — Centralized CORS Configuration
+ * College Attendance System — Centralized CORS Configuration
  * Single source of truth for allowed frontend origins across Express and Socket.io.
  */
 

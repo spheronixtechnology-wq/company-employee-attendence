@@ -541,7 +541,7 @@ export default function AttendanceRecordsPage() {
                     className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer"
                   >
                     <option value="all">All Staff</option>
-                    <option value="employee">Employees</option>
+                    <option value="employee">Faculty Members</option>
                     <option value="manager">Managers</option>
                   </select>
                 </div>

@@ -1,7 +1,7 @@
 const { haversineDistance, isWithinGeofence } = require('../../src/utils/haversine');
 
 describe('Haversine Distance Utility', () => {
-  // Office Coordinate (Spheronix HQ - Approx)
+  // Office Coordinate (College HQ - Approx)
   const officeLat = 17.385044;
   const officeLng = 78.486671;
 

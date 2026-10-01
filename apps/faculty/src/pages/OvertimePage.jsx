@@ -263,7 +263,7 @@ export default function OvertimePage() {
       {/* ── Page Header ── */}
       <PageHeader
         title="Overtime Management"
-        subtitle="Two-Stage Approval: Manager permission required before OT · Manager verification required after OT"
+        subtitle="Two-Stage Approval: Principal & HOD permission required before OT · Manager verification required after OT"
         badgeText={activeSession ? '🔴 OT Session In Progress' : permittedSession ? '🟢 OT Permitted Today' : 'Standard Shift'}
         rightActions={
           <div className="flex items-center gap-2">

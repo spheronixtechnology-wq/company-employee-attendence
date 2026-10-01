@@ -501,7 +501,7 @@ export default function OvertimeScreen({ onBack }) {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Request Overtime Permission</Text>
             <Text style={styles.modalSubtitle}>
-              Stage 1: Manager permission is required before working overtime.
+              Stage 1: Principal & HOD permission is required before working overtime.
             </Text>
 
             <View style={styles.formGroup}>

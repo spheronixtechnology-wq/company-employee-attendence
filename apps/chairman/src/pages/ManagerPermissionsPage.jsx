@@ -26,10 +26,10 @@ export default function ManagerPermissionsPage() {
       const res = await api.get('/admin/manager-permissions');
       setManagers(res.data?.data?.managers || []);
     } catch (err) {
-      console.error('Failed to fetch manager permissions:', err);
+      console.error('Failed to fetch principal & hod permissions:', err);
       setNotification({
         type: 'error',
-        text: err.response?.data?.message || 'Failed to fetch manager permissions.',
+        text: err.response?.data?.message || 'Failed to fetch principal & hod permissions.',
       });
     } finally {
       setLoading(false);
@@ -163,7 +163,7 @@ export default function ManagerPermissionsPage() {
     <div className="space-y-6 animate-fade-in text-slate-900 max-w-7xl mx-auto pb-8">
       {/* ── 1. Page Header (TimeChamp Style) ── */}
       <PageHeader
-        title="Manager Permissions & MFA"
+        title="Principal & HOD Permissions & MFA"
         subtitle="Manage supervisory operational authorizations, team report access, and Multi-Factor Authentication (TOTP) lifecycle."
         badgeText={`${stats.total} Authorized Managers`}
         tabs={[

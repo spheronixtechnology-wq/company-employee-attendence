@@ -162,7 +162,7 @@ export default function AdminDashboard() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: TrendingUp },
-    { id: 'employees', label: 'Employees', icon: Users },
+    { id: 'employees', label: 'Faculty Members', icon: Users },
     { id: 'attendance', label: 'Attendance', icon: ClipboardList },
     { id: 'leaves', label: 'Leave Requests', icon: Calendar, badge: data?.pendingLeaveRequests ? `${data.pendingLeaveRequests}` : null, badgeClass: 'bg-amber-500/20 text-amber-300' },
     { id: 'settings', label: 'System Settings', icon: Settings },
@@ -256,7 +256,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         <KpiTile
           icon={Users}
-          label="Total Employees"
+          label="Total Faculty Members"
           value={data?.totalEmployees}
           variant="blue"
           subtext="Headcount"
@@ -317,7 +317,7 @@ export default function AdminDashboard() {
             <DonutChart
               data={donutData}
               centerValue={String(data?.totalEmployees || 0)}
-              centerLabel="Employees"
+              centerLabel="Faculty Members"
               onItemClick={handleDonutItemClick}
             />
           </Panel>
@@ -332,11 +332,11 @@ export default function AdminDashboard() {
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 h-full">
               {[
-                { label: 'Manage Employees', desc: 'Accounts & profiles', icon: Users, href: '/employees', color: 'text-sky-400', bg: 'hover:border-sky-500/50 hover:bg-sky-500/5' },
+                { label: 'Manage Faculty Members', desc: 'Accounts & profiles', icon: Users, href: '/employees', color: 'text-sky-400', bg: 'hover:border-sky-500/50 hover:bg-sky-500/5' },
                 { label: 'Attendance Records', desc: 'Daily punch logs', icon: ClipboardList, href: '/attendance', color: 'text-emerald-400', bg: 'hover:border-emerald-500/50 hover:bg-emerald-500/5' },
                 { label: 'Leave Requests', desc: `${data?.pendingLeaveRequests || 0} pending review`, icon: Calendar, href: '/leave-requests', color: 'text-amber-400', bg: 'hover:border-amber-500/50 hover:bg-amber-500/5' },
                 { label: 'Device Approvals', desc: `${data?.pendingDeviceApprovals || 0} pending hardware`, icon: Smartphone, href: '/device-requests', color: 'text-purple-400', bg: 'hover:border-purple-500/50 hover:bg-purple-500/5' },
-                { label: 'Manager Permissions', desc: 'Roles & overrides', icon: Shield, href: '/manager-permissions', color: 'text-indigo-400', bg: 'hover:border-indigo-500/50 hover:bg-indigo-500/5' },
+                { label: 'Principal & HOD Permissions', desc: 'Roles & overrides', icon: Shield, href: '/manager-permissions', color: 'text-indigo-400', bg: 'hover:border-indigo-500/50 hover:bg-indigo-500/5' },
                 { label: 'Attendance Mode', desc: 'QR, WiFi & Biometrics', icon: Settings, href: '/attendance-method', color: 'text-rose-400', bg: 'hover:border-rose-500/50 hover:bg-rose-500/5' },
               ].map((act) => (
                 <button
@@ -386,7 +386,7 @@ export default function AdminDashboard() {
                     return (
                       <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-lg text-xs space-y-1">
                         <p className="font-semibold text-slate-900">{label}</p>
-                        <p className="text-sky-600 font-bold">Checked In: {val} employees</p>
+                        <p className="text-sky-600 font-bold">Checked In: {val} faculty members</p>
                         <p className="text-slate-500 text-[10px]">Turnout Rate: {pct}%</p>
                       </div>
                     );

@@ -9,7 +9,7 @@ import {
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
-  // Derive display ID from MongoDB _id (matches mobile 'EMP-001' pattern)
+  // Derive display ID from MongoDB _id (matches mobile 'FACULTY-0001' pattern)
   const empDisplayId = user?.employeeId || null;
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -255,7 +255,7 @@ export default function ProfilePage() {
               {empDisplayId && (
                 <div className="p-3.5 bg-violet-50/60 rounded-2xl border border-violet-100 shadow-[inset_0_2px_8px_-4px_rgba(148,163,184,0.3)]">
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-1">
-                    <Shield size={13} className="text-violet-500" /> Employee ID
+                    <Shield size={13} className="text-violet-500" /> Faculty ID
                   </div>
                   <p className="text-slate-800 text-sm font-bold font-mono tracking-wide">{empDisplayId}</p>
                 </div>
@@ -302,7 +302,7 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-1">
                   <Shield size={13} className="text-violet-500" /> Access Role
                 </div>
-                <p className="text-slate-800 text-sm font-semibold capitalize">{user?.role || 'Employee'}</p>
+                <p className="text-slate-800 text-sm font-semibold capitalize">{user?.role || 'Faculty Member'}</p>
               </div>
             </div>
           </div>

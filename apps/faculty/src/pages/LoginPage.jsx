@@ -9,7 +9,7 @@ import { getDeviceFingerprint } from '../lib/fingerprint';
 import { getDeviceInfo } from '../lib/deviceNames';
 import api from '../lib/api';
 import { io } from 'socket.io-client';
-import companyLogo from '../images/company logo.png';
+import companyLogo from '../images/college logo.png';
 
 const PRESET_REASONS = [
   'Bought a new phone',
@@ -169,8 +169,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo / Brand */}
         <div className="text-center mb-6">
-          <img src={companyLogo} alt="Spheronix" className="h-16 w-auto mx-auto mb-3 object-contain" />
-          <h1 className="text-2xl font-bold text-white">Spheronix Attendance</h1>
+          <img src={companyLogo} alt="College" className="h-16 w-auto mx-auto mb-3 object-contain" />
+          <h1 className="text-2xl font-bold text-white">College Attendance</h1>
           <p className="text-slate-400 mt-0.5 text-xs">Secure Employee & Attendance Portal</p>
         </div>
 
@@ -399,7 +399,7 @@ export default function LoginPage() {
         )}
 
         <p className="text-center text-slate-500 text-xs mt-6">
-          &copy; {new Date().getFullYear()} Spheronix Technology. All rights reserved.
+          &copy; {new Date().getFullYear()} College Technology. All rights reserved.
         </p>
       </div>
     </div>

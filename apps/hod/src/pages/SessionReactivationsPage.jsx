@@ -251,7 +251,7 @@ export default function SessionReactivationsPage() {
           </div>
           <p className="text-2xl font-black text-slate-800 mt-2">{data.kpis.totalAutoCheckedOut}</p>
           <div className="flex items-center justify-between mt-0.5">
-            <p className="text-[11px] text-slate-400">Team members out-of-bounds</p>
+            <p className="text-[11px] text-slate-400">Faculty members out-of-bounds</p>
             {activeFilter === 'all' && (
               <span className="text-[10px] font-bold text-violet-600 bg-violet-100 px-1.5 py-0.2 rounded-md">Selected</span>
             )}
@@ -449,7 +449,7 @@ export default function SessionReactivationsPage() {
                     )}
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-slate-900 text-sm">{employee?.name || 'Unknown Team Member'}</h3>
+                        <h3 className="font-bold text-slate-900 text-sm">{employee?.name || 'Unknown Faculty Member'}</h3>
                         {employee?.designation && (
                           <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                             {employee.designation}
@@ -612,7 +612,7 @@ export default function SessionReactivationsPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">
-                    {actionType === 'approve' ? 'Reactivate Team Member Session' : 'Reject Reactivation'}
+                    {actionType === 'approve' ? 'Reactivate Faculty Member Session' : 'Reject Reactivation'}
                   </h3>
                   <p className="text-xs text-slate-500">
                     Employee: {selectedRecord.userId?.name}

@@ -105,7 +105,7 @@ export async function startPresenceTracking() {
               distanceInterval: 0, 
               deferredUpdatesInterval: 3000,
               foregroundService: {
-                notificationTitle: 'Spheronix Active Shift Tracking',
+                notificationTitle: 'College Active Shift Tracking',
                 notificationBody: 'Attendance geofence monitoring is active.',
                 notificationColor: '#6366f1',
               },

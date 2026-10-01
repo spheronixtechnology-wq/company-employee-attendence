@@ -1,5 +1,5 @@
 /**
- * Structural QR Validator for Spheronix Attendance System
+ * Structural QR Validator for College Attendance System
  * 100% parity with web isValidCollegeQr and isValidCheckoutQr in DashboardPage.jsx
  */
 

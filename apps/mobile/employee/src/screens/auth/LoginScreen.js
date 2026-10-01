@@ -191,7 +191,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.appTitle}>Spheronix Employee</Text>
+            <Text style={styles.appTitle}>College Employee</Text>
             <Text style={styles.appSubtitle}>Attendance & Workday Portal</Text>
           </View>
 
@@ -216,7 +216,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                   onPress={() => setSelectedRole('employee')}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.roleTabText, selectedRole === 'employee' && styles.roleTabTextActive]}>Employee</Text>
+                  <Text style={[styles.roleTabText, selectedRole === 'employee' && styles.roleTabTextActive]}>Faculty Member</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.roleTab, selectedRole === 'manager' && styles.roleTabActive]}

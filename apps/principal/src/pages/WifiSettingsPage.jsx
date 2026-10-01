@@ -695,7 +695,7 @@ export default function WifiSettingsPage() {
               <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
                 {ipv6Subnet
                   ? <>Your network supports IPv6. Whitelisting the <strong className="text-slate-800">/64 subnet</strong> matches all office devices even when mobile OS privacy addresses rotate.</>
-                  : <>Your office network uses IPv4 (<span className="text-amber-700 font-medium">No IPv6 Route</span>). Simply whitelist the <strong className="text-slate-800">Public IPv4</strong> address below to allow all employees on this Wi-Fi to check in.</>}
+                  : <>Your office network uses IPv4 (<span className="text-amber-700 font-medium">No IPv6 Route</span>). Simply whitelist the <strong className="text-slate-800">Public IPv4</strong> address below to allow all faculty members on this Wi-Fi to check in.</>}
               </p>
             </div>
 
@@ -785,12 +785,12 @@ export default function WifiSettingsPage() {
                 <label className="label text-slate-700 font-semibold">Office WiFi Name (SSID)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Spheronix-Office-5G"
+                  placeholder="e.g. College-Office-5G"
                   className="input text-sm border-slate-200 bg-white text-slate-900"
                   value={form.wifiSsid}
                   onChange={(e) => setForm({ ...form, wifiSsid: e.target.value })}
                 />
-                <p className="text-[11px] text-slate-600 mt-1">Display label telling employees which network to join.</p>
+                <p className="text-[11px] text-slate-600 mt-1">Display label telling faculty members which network to join.</p>
               </div>
             </div>
 

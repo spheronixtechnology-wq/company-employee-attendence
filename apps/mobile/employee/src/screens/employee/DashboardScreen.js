@@ -810,7 +810,7 @@ function DashboardInner(props) {
         {/* ── 2. Greeting Header & Active Mode Badge ── */}
         <View style={styles.greetingSection}>
           <Text style={styles.greetingTitle}>
-            Good {getGreeting()}, {user?.name?.split(' ')[0] || 'Employee'} 👋
+            Good {getGreeting()}, {user?.name?.split(' ')[0] || 'Faculty Member'} 👋
           </Text>
           <View style={styles.activeModePill}>
             <Text style={styles.activeModePillText}>
@@ -2205,7 +2205,7 @@ function DashboardInner(props) {
                   resizeMode="contain"
                 />
                 <View style={styles.employeeTag}>
-                  <Text style={styles.employeeTagText}>Employee</Text>
+                  <Text style={styles.employeeTagText}>Faculty Member</Text>
                 </View>
               </View>
               <TouchableOpacity
@@ -2231,9 +2231,9 @@ function DashboardInner(props) {
                 </View>
               )}
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.drawerProfileName}>{user?.name || 'Employee'}</Text>
+                <Text style={styles.drawerProfileName}>{user?.name || 'Faculty Member'}</Text>
                 <Text style={styles.drawerProfileRole}>
-                  {dashboard?.teamName || 'Spheronix Team'}
+                  {dashboard?.teamName || 'College Team'}
                 </Text>
               </View>
             </View>

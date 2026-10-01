@@ -328,7 +328,7 @@ export default function Member360ProfileModal({ visible, member, onClose }) {
               </View>
               <View style={styles.summaryInfo}>
                 <Text style={styles.summaryName}>{member.name}</Text>
-                <Text style={styles.summaryRole}>{member.designation || 'Team Member'}</Text>
+                <Text style={styles.summaryRole}>{member.designation || 'Faculty Member'}</Text>
                 <Text style={styles.summaryTeam}>{member.teamId?.name || 'Unassigned Team'}</Text>
               </View>
             </View>

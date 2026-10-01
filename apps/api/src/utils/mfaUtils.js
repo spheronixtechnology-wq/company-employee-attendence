@@ -78,7 +78,7 @@ function verifyTotp(token, secretBase32, window = 1, timeStep = 30) {
 /**
  * Generates standard otpauth URI for Authenticator apps.
  */
-function generateOtpauthUri(email, secret, issuer = 'Spheronix') {
+function generateOtpauthUri(email, secret, issuer = 'College') {
   const encodedIssuer = encodeURIComponent(issuer);
   const encodedEmail = encodeURIComponent(email);
   return `otpauth://totp/${encodedIssuer}:${encodedEmail}?secret=${secret}&issuer=${encodedIssuer}&algorithm=SHA1&digits=6&period=30`;

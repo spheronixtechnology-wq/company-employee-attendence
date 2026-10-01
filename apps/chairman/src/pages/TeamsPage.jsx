@@ -111,7 +111,7 @@ export default function TeamsPage() {
             Department Management
           </h1>
           <p className="text-slate-600 text-sm mt-1">
-            Active departments and HOD assignments at Spheronix.
+            Active departments and HOD assignments at College.
           </p>
         </div>
 
@@ -182,7 +182,7 @@ export default function TeamsPage() {
                   )}
                 </div>
 
-                {/* Team Members */}
+                {/* Faculty Members */}
                 <div className="space-y-2">
                   <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                     <Users size={14} className="text-slate-500" /> Assigned Members:
@@ -201,7 +201,7 @@ export default function TeamsPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500 italic">No employees assigned yet.</p>
+                    <p className="text-xs text-slate-500 italic">No faculty members assigned yet.</p>
                   )}
                 </div>
               </div>
@@ -321,7 +321,7 @@ export default function TeamsPage() {
             </div>
             <h2 className="text-lg font-black text-slate-900 mb-2">Delete Department?</h2>
             <p className="text-slate-500 text-xs mb-6 px-2">
-              Are you sure you want to permanently delete the <strong>{teamToDelete?.name}</strong> department? All assigned employees will become unassigned. This action cannot be undone.
+              Are you sure you want to permanently delete the <strong>{teamToDelete?.name}</strong> department? All assigned faculty members will become unassigned. This action cannot be undone.
             </p>
             <div className="flex gap-3">
               <button 

@@ -260,7 +260,7 @@ export default function TeamOvertimePage() {
           }`}
         >
           <Users size={14} />
-          <span>Team Member Totals</span>
+          <span>Faculty Member Totals</span>
         </button>
 
         <button
@@ -281,7 +281,7 @@ export default function TeamOvertimePage() {
         <Panel
           title="Stage 1: Pre-Overtime Permission Requests"
           badge={`${stage1Queue.length} awaiting permission`}
-          subtitle="Employees cannot start an OT session without this permission approval."
+          subtitle="Faculty members cannot start an OT session without this permission approval."
         >
           {stage1Queue.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-xs">
@@ -298,7 +298,7 @@ export default function TeamOvertimePage() {
                       {r.userId?.avatarUrl ? (
                         <img
                           src={r.userId.avatarUrl}
-                          alt={r.userId?.name || 'Employee'}
+                          alt={r.userId?.name || 'Faculty Member'}
                           className="w-9 h-9 rounded-xl object-cover shadow-xs border border-amber-200"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
@@ -397,7 +397,7 @@ export default function TeamOvertimePage() {
                         {r.userId?.avatarUrl ? (
                           <img
                             src={r.userId.avatarUrl}
-                            alt={r.userId?.name || 'Employee'}
+                            alt={r.userId?.name || 'Faculty Member'}
                             className="w-10 h-10 rounded-xl object-cover shadow-xs border border-violet-200"
                             onError={(e) => {
                               e.currentTarget.style.display = 'none';
@@ -517,24 +517,24 @@ export default function TeamOvertimePage() {
         </Panel>
       )}
 
-      {/* ── Sub-Tab 3: Team Member Totals ── */}
+      {/* ── Sub-Tab 3: Faculty Member Totals ── */}
       {activeTab === 'members' && (
         <Panel
-          title="Team Member Overtime Accumulated Totals"
+          title="Faculty Member Overtime Accumulated Totals"
           subtitle="Distinction: Recorded OT Time is total tracked duration; Approved OT Time is the manager-verified total that counts."
-          badge={`${teamMembers.length} team members`}
+          badge={`${teamMembers.length} faculty members`}
         >
           {teamMembers.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-xs">
               <Users size={32} className="mx-auto text-slate-400 mb-2" />
-              <p className="font-semibold text-slate-700 text-sm">No team member overtime history recorded yet.</p>
+              <p className="font-semibold text-slate-700 text-sm">No faculty member overtime history recorded yet.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
-                    <th className="py-3 px-4">Employee</th>
+                    <th className="py-3 px-4">Faculty Member</th>
                     <th className="py-3 px-4">Email</th>
                     <th className="py-3 px-4">Completed Sessions</th>
                     <th className="py-3 px-4">Pending Requests</th>
@@ -598,7 +598,7 @@ export default function TeamOvertimePage() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
                     <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Employee</th>
+                    <th className="py-3 px-4">Faculty Member</th>
                     <th className="py-3 px-4">Initial Reason</th>
                     <th className="py-3 px-4">Stage 1 Decider</th>
                     <th className="py-3 px-4">Recorded Duration</th>

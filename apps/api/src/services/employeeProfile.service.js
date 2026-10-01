@@ -355,7 +355,7 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
 
   const securityAudit = {
     ipAddress: attendanceIp,
-    userAgent: rawUA || 'Spheronix Mobile PWA / Chrome',
+    userAgent: rawUA || 'College Mobile PWA / Chrome',
     deviceId: deviceFingerprint,
   };
 
@@ -409,7 +409,7 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
       emergencyContactNumber: member.emergencyContactNumber,
       emergencyContactRelation: member.emergencyContactRelation,
       department: member.department,
-      designation: member.designation || 'Employee',
+      designation: member.designation || 'Faculty Member',
       jobType: member.jobType,
       joinedDate: member.joinedDate,
       workLocation: member.workLocation,

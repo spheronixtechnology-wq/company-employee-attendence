@@ -365,7 +365,7 @@ export default function ManagerDashboardScreen({ onNavigate }) {
         {/* ── Donut Chart Panel ── */}
         <TouchableOpacity style={styles.panel} onPress={() => onNavigate('team-attendance')} activeOpacity={0.9}>
             <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Team Attendance {isToday ? 'Today' : ''}</Text>
+              <Text style={styles.panelTitle}>Faculty Attendance {isToday ? 'Today' : ''}</Text>
             <View style={styles.panelBadge}>
               <Text style={styles.panelBadgeText}>{isToday ? 'Live' : 'Archive'}</Text>
             </View>
@@ -414,7 +414,7 @@ export default function ManagerDashboardScreen({ onNavigate }) {
                       <Calendar size={18} color={colors.warning} />
                     </View>
                     <View style={styles.approvalItemInfo}>
-                      <Text style={styles.approvalItemTitle}>{req.userId?.name || 'Employee'}</Text>
+                      <Text style={styles.approvalItemTitle}>{req.userId?.name || 'Faculty Member'}</Text>
                       <Text style={styles.approvalItemSub}>Leave Request</Text>
                     </View>
                   </View>
@@ -444,7 +444,7 @@ export default function ManagerDashboardScreen({ onNavigate }) {
                       <Smartphone size={18} color={colors.primary} />
                     </View>
                     <View style={styles.approvalItemInfo}>
-                      <Text style={styles.approvalItemTitle}>{req.userId?.name || 'Employee'}</Text>
+                      <Text style={styles.approvalItemTitle}>{req.userId?.name || 'Faculty Member'}</Text>
                       <Text style={styles.approvalItemSub}>Device Reset</Text>
                     </View>
                   </View>
@@ -481,7 +481,7 @@ export default function ManagerDashboardScreen({ onNavigate }) {
 
           {members.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateSub}>No team members found for this date.</Text>
+              <Text style={styles.emptyStateSub}>No faculty members found for this date.</Text>
             </View>
           ) : (
             <View style={styles.tableList}>
@@ -581,8 +581,8 @@ export default function ManagerDashboardScreen({ onNavigate }) {
             <ScrollView contentContainerStyle={styles.menuScroll}>
               {[
                 { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: colors.primary },
-                { id: 'team-members', label: 'Team Members', icon: Users, color: '#6366f1' },
-                { id: 'team-attendance', label: 'Team Attendance', icon: UserCheck, color: '#3b82f6' },
+                { id: 'team-members', label: 'Faculty Members', icon: Users, color: '#6366f1' },
+                { id: 'team-attendance', label: 'Faculty Attendance', icon: UserCheck, color: '#3b82f6' },
                 { id: 'session-reactivations', label: 'Session Reactivations', icon: ShieldCheck, color: '#8b5cf6' },
                 { id: 'team-overtime', label: 'Overtime', icon: Clock, color: colors.success },
                 { id: 'team-daily-logs', label: 'Daily Logs', icon: FileText, color: '#06b6d4' },

@@ -24,7 +24,7 @@ import EmployeeCreationModal from './components/EmployeeCreationModal';
 
 
 import { EyeOff, LogIn, ShieldCheck, Copy, Check, ArrowLeft, KeyRound, QrCode } from 'lucide-react';
-import companyLogo from './images/company logo.png';
+import companyLogo from './images/college logo.png';
 
 const LoginPage = () => {
   const { login, verifyMfaSetup, verifyMfa } = useAuth();
@@ -136,9 +136,9 @@ const LoginPage = () => {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo / Header */}
         <div className="text-center mb-6">
-          <img src={companyLogo} alt="Spheronix" className="h-16 w-auto mx-auto mb-4 object-contain" />
+          <img src={companyLogo} alt="College" className="h-16 w-auto mx-auto mb-4 object-contain" />
           <h1 className="text-2xl font-bold text-slate-900">Principal Portal</h1>
-          <p className="text-slate-600 mt-1 text-xs">Spheronix Technology</p>
+          <p className="text-slate-600 mt-1 text-xs">College Technology</p>
         </div>
 
         <div className="card bg-white border border-slate-200 shadow-xl p-6">
@@ -300,7 +300,7 @@ const LoginPage = () => {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900">Two-Factor Authentication</h2>
                 <p className="text-slate-600 text-xs mt-1">
-                  Open your Authenticator app and enter the 6-digit code for <strong>Spheronix</strong>.
+                  Open your Authenticator app and enter the 6-digit code for <strong>College</strong>.
                 </p>
               </div>
 
@@ -346,7 +346,7 @@ const LoginPage = () => {
   );
 };
 
-// ── Team Members Page ─────────────────────────────────────────────────────────
+// ── Faculty Members Page ─────────────────────────────────────────────────────────
 const TeamMembersPage = () => {
   const [data, setData] = useState({ teams: [], members: [] });
   const [loading, setLoading] = useState(true);
@@ -383,13 +383,13 @@ const TeamMembersPage = () => {
       setMemberToDelete(null);
       fetchMembers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to archive team member.');
+      alert(err.response?.data?.message || 'Failed to archive faculty member.');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // Real-time updates for team member status
+  // Real-time updates for faculty member status
   useEffect(() => {
     if (!socket) return;
     const onUpdate = () => {
@@ -411,7 +411,7 @@ const TeamMembersPage = () => {
     <div className="page-container space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Team Members</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Faculty Members</h1>
           <p className="text-slate-600 text-sm mt-0.5">
             {data.teams.map(t => t.name).join(', ') || 'Managed Teams'} · {data.members.length} member{data.members.length === 1 ? '' : 's'}
           </p>
@@ -426,7 +426,7 @@ const TeamMembersPage = () => {
 
       {data.members.length === 0 ? (
         <div className="card text-center py-12 text-slate-500">
-          No team members found in your assigned team(s).
+          No faculty members found in your assigned team(s).
         </div>
       ) : (
         <div className="space-y-8">
@@ -489,7 +489,7 @@ const TeamMembersPage = () => {
                               <Trash2 size={13} />
                             </button>
                           </div>
-                        <p className="text-slate-600 text-xs mt-0.5 truncate">{member.designation || 'Employee'}</p>
+                        <p className="text-slate-600 text-xs mt-0.5 truncate">{member.designation || 'Faculty Member'}</p>
                         <p className="text-slate-500 text-xs truncate">{member.email}</p>
                       </div>
                     </div>
@@ -533,9 +533,9 @@ const TeamMembersPage = () => {
             <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 size={24} />
             </div>
-            <h2 className="text-lg font-black text-slate-900 mb-2">Archive Team Member?</h2>
+            <h2 className="text-lg font-black text-slate-900 mb-2">Archive Faculty Member?</h2>
             <p className="text-slate-500 text-xs mb-6">
-              Are you sure you want to remove <strong>{memberToDelete?.name}</strong>? They will no longer appear in the team member list, but their attendance history will be preserved.
+              Are you sure you want to remove <strong>{memberToDelete?.name}</strong>? They will no longer appear in the faculty member list, but their attendance history will be preserved.
             </p>
             <div className="flex gap-3">
               <button 
@@ -560,7 +560,7 @@ const TeamMembersPage = () => {
   );
 };
 
-// ── Team Attendance Page ───────────────────────────────────────────────────────
+// ── Faculty Attendance Page ───────────────────────────────────────────────────────
 const TeamAttendancePage = () => {
   const [searchParams] = useSearchParams();
   const qDate = searchParams.get('date');
@@ -705,7 +705,7 @@ const TeamAttendancePage = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Team Attendance</h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Faculty Attendance</h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs">
               Live Roster
             </span>
@@ -801,7 +801,7 @@ const TeamAttendancePage = () => {
               {totalCount}
             </p>
             <p className={`text-[11px] font-semibold mt-1.5 ${statusFilter === 'all' ? 'text-violet-200' : 'text-slate-500'}`}>
-              Assigned Employees
+              Assigned Faculty Members
             </p>
           </div>
         </div>
@@ -944,11 +944,11 @@ const TeamAttendancePage = () => {
           <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
             <Users size={24} />
           </div>
-          <h3 className="text-sm font-extrabold text-slate-900">No employees match your criteria</h3>
+          <h3 className="text-sm font-extrabold text-slate-900">No faculty members match your criteria</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             {search
               ? `No employee records found matching "${search}".`
-              : `No employees currently in the "${statusFilter.replace('_', ' ')}" category for this date.`}
+              : `No faculty members currently in the "${statusFilter.replace('_', ' ')}" category for this date.`}
           </p>
           {(search || statusFilter !== 'all') && (
             <button
@@ -1022,10 +1022,10 @@ const TeamAttendancePage = () => {
 
                       <div className="min-w-0">
                         <h3 className="text-sm font-extrabold text-slate-900 truncate group-hover:text-violet-700 transition-colors">
-                          {rec.userId?.name || 'Employee'}
+                          {rec.userId?.name || 'Faculty Member'}
                         </h3>
                         <p className="text-[11px] font-medium text-slate-500 truncate">
-                          {rec.userId?.designation || 'Team Member'}
+                          {rec.userId?.designation || 'Faculty Member'}
                         </p>
                       </div>
                     </div>
@@ -1270,7 +1270,7 @@ const TeamLeaveRequestsPage = () => {
           </div>
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Team Leave Requests</h1>
-            <p className="text-slate-500 text-xs mt-0.5 font-medium">Review, approve, or reject leave applications from your team members.</p>
+            <p className="text-slate-500 text-xs mt-0.5 font-medium">Review, approve, or reject leave applications from your faculty members.</p>
           </div>
         </div>
         <button
@@ -1736,7 +1736,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
             {user.avatarUrl ? (
               <img
                 src={user.avatarUrl}
-                alt={user.name || 'Employee'}
+                alt={user.name || 'Faculty Member'}
                 className="w-12 h-12 rounded-2xl object-cover shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10 shrink-0"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
@@ -1753,7 +1753,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
             <div className="min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight truncate">
-                  {user.name || 'Employee'}
+                  {user.name || 'Faculty Member'}
                 </h2>
                 {att?.status && (
                   <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shadow-2xs ${
@@ -1769,7 +1769,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
               </div>
               <div className="mt-2 flex items-center gap-2 flex-wrap text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-100/90 border border-slate-200/50 text-slate-800 font-bold text-[11px]">
-                  {user.designation || 'Team Member'}
+                  {user.designation || 'Faculty Member'}
                 </span>
                 {user.email && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-100/90 border border-slate-200/50 text-slate-600 font-medium text-[11px]">
@@ -2608,7 +2608,7 @@ const TeamDailyLogsPage = () => {
             <div className="text-[11px] text-slate-500 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/60 leading-relaxed flex items-start gap-2">
               <Sparkles size={15} className="text-primary-600 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Tip:</strong> Click any date with a dot to view submitted daily logs or add logs on behalf of missing team members.
+                <strong>Tip:</strong> Click any date with a dot to view submitted daily logs or add logs on behalf of missing faculty members.
               </span>
             </div>
           </div>
@@ -2683,7 +2683,7 @@ const TeamDailyLogsPage = () => {
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search team member by name or designation..."
+                placeholder="Search faculty member by name or designation..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="input pl-10 pr-8 text-xs py-2 w-full border-slate-200 bg-white text-slate-900 shadow-2xs rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all"
@@ -2704,7 +2704,7 @@ const TeamDailyLogsPage = () => {
           {/* List Status Summary Bar */}
           <div className="flex items-center justify-between px-1 text-xs text-slate-500 font-medium">
             <span>
-              Showing <strong className="text-slate-800">{totalVisibleCount}</strong> team member{totalVisibleCount !== 1 ? 's' : ''} for {formattedDate}
+              Showing <strong className="text-slate-800">{totalVisibleCount}</strong> faculty member{totalVisibleCount !== 1 ? 's' : ''} for {formattedDate}
             </span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1 text-emerald-700 font-bold">
@@ -2730,7 +2730,7 @@ const TeamDailyLogsPage = () => {
               <FileText className="mx-auto text-slate-300 mb-2.5" size={42} />
               <p className="text-sm font-bold text-slate-800">No logs expected or matching criteria</p>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                No team member daily logs found for {selectedDate} with the current filter settings.
+                No faculty member daily logs found for {selectedDate} with the current filter settings.
               </p>
               {(statusFilter !== 'all' || search.trim()) && (
                 <button
@@ -2777,7 +2777,7 @@ const TeamDailyLogsPage = () => {
                         <div className="space-y-1 min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-extrabold text-slate-900 text-sm truncate">
-                              {log.userId?.name || 'Team Member'}
+                              {log.userId?.name || 'Faculty Member'}
                             </span>
 
                             {/* Manager Submission/Edit Tag */}
@@ -2935,7 +2935,7 @@ const TeamDailyLogsPage = () => {
 
 
 const PlaceholderPage = ({ title }) => (
-  <div className="page-container"><h1 className="text-2xl font-bold text-slate-900">{title}</h1><p className="text-slate-600 mt-2">This section is available when the required manager permission is enabled by Admin.</p></div>
+  <div className="page-container"><h1 className="text-2xl font-bold text-slate-900">{title}</h1><p className="text-slate-600 mt-2">This section is available when the required principal & hod permission is enabled by Admin.</p></div>
 );
 
 
@@ -3058,7 +3058,7 @@ const ManagerProfilePage = () => {
         <div className="text-center">
           <p className="font-black text-slate-900 text-lg">{user?.name}</p>
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold mt-1">
-            <Shield size={11} /> Manager
+            <Shield size={11} /> {user?.role === 'hod' ? 'HOD' : user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Manager'}
           </span>
         </div>
         {avatarPreview !== user?.avatarUrl && (
@@ -3224,7 +3224,16 @@ export default function App() {
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <SocketProvider>
-          <AppRoutes />
+          <div className="flex flex-col min-h-screen">
+            <div className="flex-grow">
+              <AppRoutes />
+            </div>
+            <footer className="w-full py-3 bg-white/50 border-t border-slate-200/60 backdrop-blur-sm text-center z-50 relative">
+              <p className="text-[11px] font-bold tracking-wide text-slate-500 uppercase">
+                &copy; {new Date().getFullYear()} Spheronix Technologies Pvt. Ltd. All rights reserved.
+              </p>
+            </footer>
+          </div>
         </SocketProvider>
       </AuthProvider>
     </BrowserRouter>

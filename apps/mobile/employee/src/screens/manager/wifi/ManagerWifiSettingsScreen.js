@@ -248,7 +248,7 @@ export default function ManagerWifiSettingsScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} colors={[colors.primary]} />}
       >
         <Text style={styles.pageSubtitle}>
-          Configure office network boundaries. When enabled, employees can only check in while connected to these approved networks.
+          Configure office network boundaries. When enabled, faculty members can only check in while connected to these approved networks.
         </Text>
 
         {/* Status Banner */}
@@ -257,7 +257,7 @@ export default function ManagerWifiSettingsScreen({ navigation }) {
             <CheckCircle size={20} color={colors.success} />
             <View style={styles.statusBannerText}>
               <Text style={styles.statusBannerTitle}>WiFi Network Gate is Active</Text>
-              <Text style={styles.statusBannerSub}>Employees must be on an approved network.</Text>
+              <Text style={styles.statusBannerSub}>Faculty members must be on an approved network.</Text>
             </View>
           </View>
         ) : (

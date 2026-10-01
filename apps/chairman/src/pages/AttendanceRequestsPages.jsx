@@ -580,12 +580,12 @@ export const OfficeLocationsPage = () => {
               <div>
                 <label className="label">Office WiFi Name (SSID)</label>
                 <input
-                  placeholder="e.g. Spheronix-Office-5G"
+                  placeholder="e.g. College-Office-5G"
                   className="input"
                   value={form.wifiSsid}
                   onChange={e => setForm({...form, wifiSsid: e.target.value})}
                 />
-                <p className="text-[11px] text-slate-500 mt-1">Display guidance label telling employees which network to join.</p>
+                <p className="text-[11px] text-slate-500 mt-1">Display guidance label telling faculty members which network to join.</p>
               </div>
 
               <div>

@@ -121,7 +121,7 @@ export default function ProfileScreen({ onBack }) {
   const handleLogout = () => {
     Alert.alert(
       'Confirm Sign Out',
-      'Are you sure you want to sign out of Spheronix Attendance?',
+      'Are you sure you want to sign out of College Attendance?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -206,9 +206,9 @@ export default function ProfileScreen({ onBack }) {
             )}
           </View>
 
-          <Text style={styles.profileHeroName}>{user?.name || 'Employee'}</Text>
+          <Text style={styles.profileHeroName}>{user?.name || 'Faculty Member'}</Text>
           <Text style={styles.profileHeroRole}>
-            {user?.designation || user?.role || 'Team Member'}
+            {user?.designation || user?.role || 'Faculty Member'}
           </Text>
           {user?.employeeId && (
             <View style={styles.empIdBadge}>

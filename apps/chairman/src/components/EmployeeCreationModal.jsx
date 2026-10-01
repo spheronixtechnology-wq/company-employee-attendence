@@ -385,7 +385,7 @@ const EmployeeCreationModal = ({ onClose, onSuccess, teams = [] }) => {
       await api.post('/admin/users', form);
       onSuccess();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create team member.');
+      setError(err.response?.data?.message || 'Failed to create faculty member.');
     } finally {
       setLoading(false);
     }

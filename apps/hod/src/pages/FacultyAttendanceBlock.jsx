@@ -1982,7 +1982,7 @@ export default function EmployeeDashboard() {
   const employeeTabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'attendance', label: 'Attendance' },
-    { id: 'log', label: 'Daily Work Log', badge: isLogSubmitted ? 'Submitted' : 'Mandatory', badgeClass: isLogSubmitted ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300' },
+    // { id: 'log', label: 'Daily Work Log', badge: isLogSubmitted ? 'Submitted' : 'Mandatory', badgeClass: isLogSubmitted ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300' },
     { id: 'leave', label: 'Leave Balance', badge: `${totalRemainingLeaves} Days`, badgeClass: 'bg-sky-500/20 text-sky-300' },
   ];
 
@@ -2016,7 +2016,7 @@ export default function EmployeeDashboard() {
       {/* ── Sub-Header & Date Controls ── */}
       <PageHeader
         title={`Good ${getGreeting()}, ${user?.name?.split(' ')[0]} 👋`}
-        subtitle={`Daily presence tracking, shift timers, and compliance verification · ${dashboard?.teamName || 'Spheronix Team'}`}
+        subtitle={`Daily presence tracking, shift timers, and compliance verification · ${dashboard?.teamName || 'College Team'}`}
         tabs={employeeTabs}
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -2346,22 +2346,7 @@ export default function EmployeeDashboard() {
           variant="amber"
           subtext={viewMode === 'Day' ? 'Deductions' : 'Total Breaks'}
         />
-        <KpiTile
-          icon={FileText}
-          label={viewMode === 'Day' ? 'Daily Work Log' : 'Half-Days'}
-          value={
-            viewMode === 'Day' ? (
-              isToday
-                ? (isLogSubmitted ? 'Submitted' : 'Mandatory')
-                : (selectedDayRecord?.dailyLogSubmitted ? 'Submitted' : (selectedDayRecord ? 'Missing' : '--'))
-            ) : (
-              `${viewMode === 'Week' ? weekSummary.halfDays : monthSummary.halfDays} Days`
-            )
-          }
-          variant={isLogSubmitted ? 'green' : 'amber'}
-          subtext={viewMode === 'Day' ? 'Step 1 Req' : 'Recorded Half Days'}
-          onClick={() => navigate('/daily-log')}
-        />
+
         <KpiTile
           icon={Calendar}
           label="Leave Balance"
@@ -3003,108 +2988,35 @@ export default function EmployeeDashboard() {
             <div className={`${isCheckedIn ? 'lg:col-span-7' : 'lg:col-span-6'} flex flex-col justify-between space-y-4`}>
               {isCheckedIn && (
                 <div className="space-y-4">
-                  {/* Step 1: Mandatory Daily Log Sheet */}
-                  <div className={`p-4 rounded-3xl border transition-all shadow-[0_8px_22px_-12px_rgba(148,163,184,0.5),inset_0_1px_0_rgba(255,255,255,0.8)] ${
-                    isLogSubmitted
-                      ? 'bg-emerald-50/70 border-emerald-100'
-                      : 'bg-amber-50/70 border-amber-100'
-                  }`}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <FileText size={16} className={isLogSubmitted ? 'text-emerald-600' : 'text-amber-600'} />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                          Step 1: Daily Work Log Sheet
-                        </span>
-                      </div>
-                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                        isLogSubmitted 
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                          : 'bg-amber-100 text-amber-800 border border-amber-300'
-                      }`}>
-                        {isLogSubmitted ? <><CheckCircle size={12} /> Submitted</> : <><XCircle size={12} /> Mandatory Before Check-Out</>}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-600 mb-3">
-                      {isLogSubmitted ? '✅ Today’s work summary is submitted. Check-out is unlocked.' : 'You must fill and submit your daily work log sheet before check-out is unlocked.'}
-                    </p>
-
-                    {!isLogSubmitted ? (
-                      isLogSheetLocked ? (
-                        <div className="w-full py-2.5 px-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-semibold flex items-start gap-2 shadow-sm text-left">
-                          <Lock size={15} className="mt-0.5 flex-shrink-0" />
-                          <span>Deadline missed (8:00 PM). Please approach your manager to upload your log sheet and check you out.</span>
-                        </div>
-                      ) : (
-                        <button
-                          id="open-daily-log-btn"
-                          onClick={() => navigate('/daily-log')}
-                          className="btn-primary w-full py-2.5 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm"
-                        >
-                          <FileText size={15} /> Fill & Submit Daily Log Sheet
-                        </button>
-                      )
-                    ) : (
-                      <button
-                        id="view-daily-log-btn"
-                        onClick={() => navigate('/daily-log')}
-                        className="btn-ghost w-full py-1.5 text-xs text-slate-700 hover:text-slate-900 flex items-center justify-center gap-1.5 border border-slate-200"
-                        disabled={isLogSheetLocked}
-                      >
-                        <FileText size={13} /> {isLogSheetLocked ? 'Log Sheet Locked' : 'Update Submitted Daily Log'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Step 2: Check Out */}
+                  {/* Check Out */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between px-1">
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                        Step 2: Check-Out
-                      </span>
-                      <span className={`text-[11px] font-semibold ${isLogSubmitted ? 'text-emerald-600' : 'text-slate-400'}`}>
-                        {isLogSubmitted ? '🟢 Unlocked' : '🔒 Locked'}
+                        Check-Out
                       </span>
                     </div>
 
-                    {!isLogSubmitted ? (
-                      <div>
+                    <div>
+                      <button
+                        id="check-out-btn"
+                        onClick={handleCheckOutClick}
+                        disabled={!!actionLoading || geoLoading}
+                        className="btn-danger btn-lg w-full shadow-md shadow-rose-500/20 flex items-center justify-center gap-2 animate-in fade-in"
+                      >
+                        {actionLoading === 'checkout' ? <Loader2 size={20} className="animate-spin" /> : <LogOut size={20} />}
+                        {actionLoading === 'checkout' ? 'Checking Out…' : 'Check Out'}
+                      </button>
+                      {isMobile && (
                         <button
-                          id="check-out-btn-blocked"
-                          disabled={true}
-                          onClick={() => {
-                            showMessage('error', '⚠️ Log sheet is mandatory before check-out. Please complete Step 1 first.');
-                            navigate('/daily-log');
-                          }}
-                          className="w-full py-3.5 px-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-75"
+                          id="manual-scan-checkout-btn"
+                          onClick={() => setShowCheckoutScanner(true)}
+                          className="btn-ghost text-xs w-full mt-2 py-2 flex items-center justify-center gap-1.5 border border-slate-200 text-slate-700 hover:text-slate-900"
                         >
-                          <Lock size={16} className="text-slate-400" />
-                          Check-Out Blocked (Submit Log Sheet First)
+                          <Camera size={14} className="text-sky-600" />
+                          Scan PC Screen to Check Out
                         </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <button
-                          id="check-out-btn"
-                          onClick={handleCheckOutClick}
-                          disabled={!!actionLoading || geoLoading}
-                          className="btn-danger btn-lg w-full shadow-md shadow-rose-500/20 flex items-center justify-center gap-2 animate-in fade-in"
-                        >
-                          {actionLoading === 'checkout' ? <Loader2 size={20} className="animate-spin" /> : <LogOut size={20} />}
-                          {actionLoading === 'checkout' ? 'Checking Out…' : 'Check Out'}
-                        </button>
-                        {isMobile && (
-                          <button
-                            id="manual-scan-checkout-btn"
-                            onClick={() => setShowCheckoutScanner(true)}
-                            className="btn-ghost text-xs w-full mt-2 py-2 flex items-center justify-center gap-1.5 border border-slate-200 text-slate-700 hover:text-slate-900"
-                          >
-                            <Camera size={14} className="text-sky-600" />
-                            Scan PC Screen to Check Out
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* Break Controls */}

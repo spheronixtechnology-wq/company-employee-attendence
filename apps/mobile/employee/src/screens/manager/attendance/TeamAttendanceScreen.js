@@ -352,7 +352,7 @@ export default function TeamAttendanceScreen({ navigation }) {
             <ChevronLeft size={28} color="#0f172a" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Team Attendance</Text>
+            <Text style={styles.headerTitle}>Faculty Attendance</Text>
             <Text style={styles.headerSubtitle}>Daily logs and history</Text>
           </View>
         </View>

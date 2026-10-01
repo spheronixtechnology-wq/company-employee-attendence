@@ -1044,12 +1044,14 @@ const getLeaveBalance = async (req, res) => {
   try {
     const userId = req.user._id;
     const year = getCurrentYear();
+    const leaveTypes = await LeaveType.find({ isActive: true }).select('name code description annualQuota isPaid');
     let balances = await LeaveBalance.find({ userId, year }).populate('leaveTypeId');
-    if (!balances || balances.length === 0) {
+    
+    // If no balances or some are missing, initialize them
+    if (!balances || balances.length < leaveTypes.length) {
       await leaveService.initializeLeaveBalances(userId);
       balances = await LeaveBalance.find({ userId, year }).populate('leaveTypeId');
     }
-    const leaveTypes = await LeaveType.find({ isActive: true }).select('name code description annualQuota isPaid');
 
     return success(res, 'Leave balance fetched', { balances, leaveTypes });
   } catch (error) {

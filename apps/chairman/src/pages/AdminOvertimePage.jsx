@@ -181,7 +181,7 @@ export default function AdminOvertimePage() {
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[10px]">
                   <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">Employee</th>
+                  <th className="py-3 px-4">Faculty Member</th>
                   <th className="py-3 px-4">Team</th>
                   <th className="py-3 px-4">Requested Window</th>
                   <th className="py-3 px-4">Stated Purpose</th>

@@ -1,5 +1,5 @@
 /**
- * Spheronix Attendance System — Centralized Cookie Configuration
+ * College Attendance System — Centralized Cookie Configuration
  * Manages httpOnly cookie options for session tokens across login and logout.
  * 
  * Rules:

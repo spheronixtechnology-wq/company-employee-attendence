@@ -73,7 +73,7 @@ const AttendanceMethodPage = () => {
       key: 'qr_code',
       label: 'QR Code Attendance',
       icon: QrCode,
-      desc: 'Daily dynamic rotating QR code. Employees scan the office QR display at check-in.',
+      desc: 'Daily dynamic rotating QR code. Faculty members scan the office QR display at check-in.',
       badge: 'Popular',
     },
     {
@@ -257,7 +257,16 @@ export default function App() {
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <SocketProvider>
-          <AppRoutes />
+          <div className="flex flex-col min-h-screen">
+            <div className="flex-grow">
+              <AppRoutes />
+            </div>
+            <footer className="w-full py-3 bg-white/50 border-t border-slate-200/60 backdrop-blur-sm text-center z-50 relative">
+              <p className="text-[11px] font-bold tracking-wide text-slate-500 uppercase">
+                &copy; {new Date().getFullYear()} Spheronix Technologies Pvt. Ltd. All rights reserved.
+              </p>
+            </footer>
+          </div>
         </SocketProvider>
       </AuthProvider>
     </BrowserRouter>

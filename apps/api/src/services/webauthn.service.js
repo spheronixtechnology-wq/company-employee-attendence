@@ -101,7 +101,7 @@ const generateEnrollmentOptionsForUser = async (user, registeredDevice, req) => 
   }));
 
   const options = await generateRegistrationOptions({
-    rpName: process.env.RP_NAME || 'Spheronix Attendance System',
+    rpName: process.env.RP_NAME || 'College Attendance System',
     rpID,
     userID: Buffer.from(userIdStr),
     userName: user.email,

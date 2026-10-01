@@ -332,7 +332,7 @@ export default function CheckInModal({
                   <View style={styles.networkRow}>
                     <Text style={styles.networkKey}>Target Network:</Text>
                     <Text style={styles.networkVal}>
-                      {networkStatus?.targetSsid || 'Spheronix Office WiFi'}
+                      {networkStatus?.targetSsid || 'College Office WiFi'}
                     </Text>
                   </View>
                   <View style={styles.networkRow}>

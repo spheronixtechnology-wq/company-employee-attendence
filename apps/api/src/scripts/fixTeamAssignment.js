@@ -1,4 +1,4 @@
-// Fix: Assign all unassigned employees to Test Team
+// Fix: Assign all unassigned faculty members to Test Team
 const mongoose = require('mongoose');
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 const User = require('../models/User');
@@ -15,7 +15,7 @@ async function fix() {
   console.log('Fixed:', result.modifiedCount, 'employees assigned to Test Team');
   
   const users = await User.find({ teamId: TEST_TEAM_ID }, 'name email role teamId');
-  console.log('Test Team members now:');
+  console.log('Test Faculty members now:');
   users.forEach(u => console.log(' -', u.name, '(' + u.role + ')'));
   
   await mongoose.disconnect();

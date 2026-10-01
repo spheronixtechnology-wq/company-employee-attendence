@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const dateStr = useMemo(() => formatDateKey(currentDate), [currentDate]);
   const isToday = useMemo(() => dateStr === formatDateKey(new Date()), [dateStr]);
 
-  // Team members list for "Work Hours (Avg)" table
+  // Faculty members list for "Work Hours (Avg)" table
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(true);
   const [pageSize, setPageSize] = useState(5);
@@ -166,7 +166,7 @@ export default function DashboardPage() {
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'attendance', label: 'Team Attendance' },
+    { id: 'attendance', label: 'Faculty Attendance' },
     { id: 'logs', label: 'Daily Logs' },
     { id: 'leaves', label: 'Leave Requests', badge: data?.pendingLeaveRequests ? `${data.pendingLeaveRequests}` : null, badgeClass: 'bg-amber-500/20 text-amber-300' },
     { id: 'devices', label: 'Device Requests', badge: data?.pendingDeviceRequests ? `${data.pendingDeviceRequests}` : null, badgeClass: 'bg-violet-500/20 text-violet-300' },
@@ -306,7 +306,7 @@ export default function DashboardPage() {
         {/* Left: Donut Chart Split */}
         <div className="lg:col-span-5 flex flex-col">
           <Panel
-            title={`Team Attendance ${isToday ? 'Today' : `(${new Date(currentDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })})`}`}
+            title={`Faculty Attendance ${isToday ? 'Today' : `(${new Date(currentDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })})`}`}
             subtitle={isToday ? "Real-time distribution of assigned workforce" : `Attendance breakdown for ${new Date(currentDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`}
             badge={isToday ? "Live" : "Archive"}
             className="h-full"
@@ -349,7 +349,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs font-bold text-slate-900 truncate">{req.userId?.name || 'Employee'}</p>
+                            <p className="text-xs font-bold text-slate-900 truncate">{req.userId?.name || 'Faculty Member'}</p>
                             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-semibold border border-amber-200">
                               Leave: {req.leaveTypeId?.name || 'Leave'}
                             </span>
@@ -393,7 +393,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs font-bold text-slate-900 truncate">{req.userId?.name || 'Employee'}</p>
+                            <p className="text-xs font-bold text-slate-900 truncate">{req.userId?.name || 'Faculty Member'}</p>
                             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-violet-100 text-violet-800 font-semibold border border-violet-200">
                               Device Reg
                             </span>
@@ -431,7 +431,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Team Member Work Hours & Live Activity Table (TimeChamp style) ── */}
+      {/* ── Faculty Member Work Hours & Live Activity Table (TimeChamp style) ── */}
       <Panel
         title="Work Hours & Live Activity"
         subtitle="Per-member punch status, working hours estimate, and log progression"
@@ -443,7 +443,7 @@ export default function DashboardPage() {
           </div>
         ) : members.length === 0 ? (
           <div className="text-center py-10 text-slate-400 text-sm">
-            No team members assigned to your supervision.
+            No faculty members assigned to your supervision.
           </div>
         ) : (
           <div>

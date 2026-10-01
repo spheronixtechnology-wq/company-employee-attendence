@@ -7,7 +7,7 @@ import {
   ClipboardList, User, LogOut, Menu, X, ChevronRight, Loader2, ShieldAlert, Clock, GraduationCap
 } from 'lucide-react';
 import api from '../lib/api';
-import companyLogo from '../images/company logo.png';
+import companyLogo from '../images/college logo.png';
 
 const isMobileDevice = () => {
   if (typeof window === 'undefined') return false;
@@ -112,11 +112,11 @@ export default function Layout({ children }) {
           <Link to="/dashboard" className="group flex shrink-0 items-center gap-2.5">
             <img
               src={companyLogo}
-              alt="Spheronix"
+              alt="College"
               className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
             />
             <span className="hidden shrink-0 items-center rounded-full bg-sky-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-sky-700 ring-1 ring-sky-200/70 sm:inline-flex">
-              {user?.role || 'Employee'}
+              {user?.role || 'Faculty Member'}
             </span>
           </Link>
 
@@ -162,7 +162,7 @@ export default function Layout({ children }) {
               </div>
               <div className="leading-tight">
                 <p className="text-[14px] font-semibold text-slate-800">{user?.name}</p>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-600">{user?.teamId?.name || user?.role || 'Employee'}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-600">{user?.teamId?.name || user?.role || 'Faculty Member'}</p>
               </div>
             </Link>
 
@@ -186,11 +186,11 @@ export default function Layout({ children }) {
               <div className="flex items-center gap-2.5">
                 <img
                   src={companyLogo}
-                  alt="Spheronix"
+                  alt="College"
                   className="h-10 w-auto object-contain"
                 />
                 <span className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider bg-sky-50 px-1.5 py-0.5 rounded-full border border-sky-200">
-                  {user?.role || 'Employee'}
+                  {user?.role || 'Faculty Member'}
                 </span>
               </div>
               <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-slate-400 hover:text-slate-700">
@@ -213,7 +213,7 @@ export default function Layout({ children }) {
               )}
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
-                <p className="text-xs text-slate-500 truncate">{user?.teamId?.name || user?.role || 'Employee'}</p>
+                <p className="text-xs text-slate-500 truncate">{user?.teamId?.name || user?.role || 'Faculty Member'}</p>
               </div>
             </div>
 

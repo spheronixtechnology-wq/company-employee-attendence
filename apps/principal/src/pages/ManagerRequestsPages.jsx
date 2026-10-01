@@ -142,7 +142,7 @@ export function ManagerDeviceRequestsPage() {
             Team Device Requests
           </h1>
           <p className="text-slate-600 text-sm mt-0.5">
-            Review and approve your team members' mobile device registrations and access requests.
+            Review and approve your faculty members' mobile device registrations and access requests.
           </p>
         </div>
         <button
@@ -624,7 +624,7 @@ export function ManagerLocationRequestsPage() {
             Team Location Requests
           </h1>
           <p className="text-slate-600 text-sm mt-0.5">
-            Review and approve requests from team members to work from another office branch.
+            Review and approve requests from faculty members to work from another office branch.
           </p>
         </div>
         <button

@@ -996,10 +996,10 @@ const getManagerPermissions = async (req, res) => {
       },
     }));
 
-    return success(res, 'Manager permissions retrieved', { managers: result });
+    return success(res, 'Principal & HOD permissions retrieved', { managers: result });
   } catch (error) {
     console.error('getManagerPermissions error:', error);
-    return badRequest(res, 'Failed to fetch manager permissions');
+    return badRequest(res, 'Failed to fetch principal & hod permissions');
   }
 };
 
@@ -1031,13 +1031,13 @@ const updateManagerPermission = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    return success(res, 'Manager permissions updated successfully', {
+    return success(res, 'Principal & HOD permissions updated successfully', {
       managerId: userId,
       permissions: updated.permissions,
     });
   } catch (error) {
     console.error('updateManagerPermission error:', error);
-    return res.status(400).json({ success: false, message: 'Failed to update manager permissions: ' + error.message });
+    return res.status(400).json({ success: false, message: 'Failed to update principal & hod permissions: ' + error.message });
   }
 };
 

@@ -46,7 +46,7 @@ router.get('/attendance-method/active', isAdminOrManager, adminController.getAct
 router.patch('/attendance-method/switch', isAdminOrManager, adminController.switchAttendanceMethod);
 router.patch('/attendance-method/heartbeat', isAdminOrManager, adminController.toggleHeartbeatMonitoring);
 
-// Manager Permissions & MFA
+// Principal & HOD Permissions & MFA
 router.get('/manager-permissions', isAdmin, adminController.getManagerPermissions);
 router.patch('/manager-permissions/:userId', isAdmin, adminController.updateManagerPermission);
 router.post('/managers/:id/reset-mfa', isAdmin, adminController.resetManagerMfa);

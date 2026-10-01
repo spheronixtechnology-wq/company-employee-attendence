@@ -3,7 +3,7 @@ import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import api from '../lib/api';
-import companyLogo from '../images/company logo.png';
+import companyLogo from '../images/college logo.png';
 import {
   LayoutDashboard, Users, Calendar, ClipboardList, Shield,
   QrCode, Wifi, MapPin, Fingerprint, Settings, ScrollText,
@@ -22,9 +22,9 @@ const navSections = [
   {
     label: 'People',
     items: [
-      { path: '/employees', label: 'Employees', icon: Users, id: 'nav-employees' },
+      { path: '/employees', label: 'Faculty Members', icon: Users, id: 'nav-employees' },
       { path: '/teams', label: 'Departments', icon: GitBranch, id: 'nav-teams' },
-      { path: '/manager-permissions', label: 'Manager Permissions', icon: Shield, id: 'nav-permissions' },
+      { path: '/manager-permissions', label: 'Principal & HOD Permissions', icon: Shield, id: 'nav-permissions' },
     ],
   },
   {
@@ -99,7 +99,7 @@ export default function AdminLayout({ children }) {
       {/* Logo */}
       <div className="p-5 border-b border-slate-700">
         <div className="flex items-center gap-3">
-          <img src={companyLogo} alt="Spheronix" className="h-14 w-auto object-contain" />
+          <img src={companyLogo} alt="College" className="h-14 w-auto object-contain" />
           <span className="text-slate-400 text-xs font-semibold">Admin</span>
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function AdminLayout({ children }) {
           <Link to="/dashboard" className="group flex shrink-0 items-center gap-2.5">
             <img
               src={companyLogo}
-              alt="Spheronix"
+              alt="College"
               className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
             />
             <span className="hidden shrink-0 items-center rounded-full bg-violet-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-violet-700 ring-1 ring-violet-200/70 sm:inline-flex">
@@ -231,7 +231,7 @@ export default function AdminLayout({ children }) {
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-2 py-3.5 -my-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex xl:hidden">
             {[
               { path: '/dashboard', label: 'Dashboard', id: 'nav-md-dashboard' },
-              { path: '/employees', label: 'Employees', id: 'nav-md-employees' },
+              { path: '/employees', label: 'Faculty Members', id: 'nav-md-employees' },
               { path: '/attendance', label: 'Attendance', id: 'nav-md-attendance' },
               { path: '/session-reactivations', label: 'Reactivations', id: 'nav-md-reactivations' },
               { path: '/device-requests', label: 'Devices', id: 'nav-md-devices' },
@@ -308,7 +308,7 @@ export default function AdminLayout({ children }) {
           <div className="bg-white border-r border-slate-200 w-72 h-full flex flex-col p-4 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <img src={companyLogo} alt="Spheronix" className="h-14 w-auto max-h-14 object-contain" />
+                <img src={companyLogo} alt="College" className="h-14 w-auto max-h-14 object-contain" />
                 <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
                   Admin
                 </span>

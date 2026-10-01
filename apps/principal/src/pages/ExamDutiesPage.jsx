@@ -4,8 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import ExamDutyForm from '../components/ExamDutyForm';
 import ExamDutyImportWizard from '../components/ExamDutyImportWizard';
+import ExamAllocationManager from '../components/ExamAllocationManager';
 
 export default function ExamDutiesPage() {
+  const [activeTab, setActiveTab] = useState('ALLOCATION'); // 'ALLOCATION' or 'DUTIES'
   const [duties, setDuties] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,12 +48,33 @@ export default function ExamDutiesPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex border-b border-slate-200">
+        <button 
+          onClick={() => setActiveTab('ALLOCATION')} 
+          className={`px-6 py-3 font-medium text-sm ${activeTab === 'ALLOCATION' ? 'border-b-2 border-primary-600 text-primary-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Exam & Seating Allocation
+        </button>
+        {/* 
+        <button 
+          onClick={() => setActiveTab('DUTIES')} 
+          className={`px-6 py-3 font-medium text-sm ${activeTab === 'DUTIES' ? 'border-b-2 border-primary-600 text-primary-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Duty Attendance Tracking
+        </button> 
+        */}
+      </div>
+
+      {activeTab === 'ALLOCATION' ? (
+        <ExamAllocationManager />
+      ) : (
+      <div className="space-y-6 animate-in fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <GraduationCap className="text-primary-600" /> Exam Duties
+            <GraduationCap className="text-primary-600" /> Duty Attendance Tracking
           </h1>
-          <p className="text-slate-500 mt-1">Manage and assign examination duties to faculty and HODs.</p>
+          <p className="text-slate-500 mt-1">Manage physical attendance for exam invigilators.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -141,6 +164,8 @@ export default function ExamDutiesPage() {
             alert(`✅ Success! ${count} exam ${count === 1 ? 'duty' : 'duties'} created and assignments sent.`);
           }}
         />
+      )}
+      </div>
       )}
     </div>
   );

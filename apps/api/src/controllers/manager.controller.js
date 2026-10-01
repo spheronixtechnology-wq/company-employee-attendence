@@ -124,7 +124,7 @@ const getDashboard = async (req, res) => {
     // Role-aware member resolution:
     // Chairman/Admin: all staff including Principal
     // Principal: all staff except Principal and Chairman
-    // HOD/Manager: their team members only
+    // HOD/Manager: their faculty members only
     const memberIds = await getTeamMemberIds(req.user, teamIds);
 
     if (memberIds.length === 0) {
@@ -230,7 +230,7 @@ const getTeamAttendance = async (req, res) => {
       }
     }
 
-    // Merge team members so un-checked-in employees are still visible in roster
+    // Merge faculty members so un-checked-in employees are still visible in roster
     const fullAttendance = members.map(member => {
       const existing = attendanceMap.get(member._id.toString());
       const manualReq = manualRequestMap.get(member._id.toString()) || null;
@@ -325,14 +325,14 @@ const getTeamMembers = async (req, res) => {
       };
     });
 
-    return success(res, 'Team members fetched successfully', {
+    return success(res, 'Faculty members fetched successfully', {
       teams: teams.map(t => ({ id: t._id, name: t.name, description: t.description })),
       members: enrichedMembers,
       selectedDate: targetDate,
     });
   } catch (error) {
     console.error('getTeamMembers error:', error);
-    return badRequest(res, 'Failed to fetch team members');
+    return badRequest(res, 'Failed to fetch faculty members');
   }
 };
 
@@ -625,7 +625,7 @@ const createTeamMember = async (req, res) => {
     return success(res, 'Team member created successfully', { user: user.toSafeObject() });
   } catch (error) {
     console.error('createTeamMember error:', error);
-    return badRequest(res, 'Failed to create team member');
+    return badRequest(res, 'Failed to create faculty member');
   }
 };
 
@@ -875,7 +875,7 @@ const getDeviceRequests = async (req, res) => {
 
     const memberIds = await getTeamMemberIds(req.user, teams.map(t => t._id));
     
-    // Include requests from team members, OR requests currently assigned to this user, OR requests previously approved by this user
+    // Include requests from faculty members, OR requests currently assigned to this user, OR requests previously approved by this user
     const baseQuery = { 
       $or: [
         { userId: { $in: memberIds } },
@@ -1375,8 +1375,8 @@ const deleteTeamMember = async (req, res) => {
 
     return success(res, 'Team member archived successfully');
   } catch (error) {
-    console.error('Error deleting team member:', error);
-    return badRequest(res, 'Failed to archive team member');
+    console.error('Error deleting faculty member:', error);
+    return badRequest(res, 'Failed to archive faculty member');
   }
 };
 
@@ -1434,44 +1434,54 @@ const getTeamLeaveQuotas = async (req, res) => {
  */
 const updateTeamLeaveQuotas = async (req, res) => {
   try {
-    let teamId = req.params.teamId;
+    let targetTeamId = req.params.teamId;
     const { SL, CL, EL, UL } = req.body;
     
     const teams = await getManagedTeams(req.user);
-    if (teamId === 'primary') {
-      if (!teams || teams.length === 0) {
-        return res.status(404).json({ success: false, message: 'No teams found for this manager.' });
+    if (!teams || teams.length === 0) {
+      return res.status(404).json({ success: false, message: 'No teams found for this manager.' });
+    }
+
+    // Determine which teams to update
+    let teamsToUpdate = [];
+    if (targetTeamId === 'primary') {
+      teamsToUpdate = teams; // Update all managed teams
+    } else {
+      const managesTeam = teams.some(t => t._id.toString() === targetTeamId);
+      if (!managesTeam) {
+        return res.status(403).json({ success: false, message: 'Not authorized to manage this team.' });
       }
-      teamId = teams[0]._id.toString();
+      const specificTeam = await Team.findById(targetTeamId);
+      if (specificTeam) teamsToUpdate = [specificTeam];
     }
 
-    // Verify manager manages this team
-    const managesTeam = teams.some(t => t._id.toString() === teamId);
-    if (!managesTeam) {
-      return res.status(403).json({ success: false, message: 'Not authorized to manage this team.' });
+    if (teamsToUpdate.length === 0) {
+      return res.status(404).json({ success: false, message: 'Team(s) not found.' });
     }
 
-    const team = await Team.findById(teamId);
-    if (!team) {
-      return res.status(404).json({ success: false, message: 'Team not found.' });
-    }
-
-    // Validate inputs
     const validateQuota = (val) => (typeof val === 'number' && val >= 0 ? val : null);
-    
-    team.leaveQuotas = {
-      SL: validateQuota(SL) ?? team.leaveQuotas?.SL ?? null,
-      CL: validateQuota(CL) ?? team.leaveQuotas?.CL ?? null,
-      EL: validateQuota(EL) ?? team.leaveQuotas?.EL ?? null,
-      UL: validateQuota(UL) ?? team.leaveQuotas?.UL ?? null,
-    };
-
-    await team.save();
-
-    // Now update all team members' allocated balances safely
-    const teamMembers = await User.find({ teamId, role: { $in: ['employee', 'faculty'] }, isActive: true }).lean();
     const leaveTypes = await LeaveType.find({ isActive: true }).lean();
-    const currentYear = new Date().getFullYear(); // Using JS date as util might not be imported
+    const currentYear = new Date().getFullYear();
+
+    for (const team of teamsToUpdate) {
+      team.leaveQuotas = {
+        SL: validateQuota(SL) ?? team.leaveQuotas?.SL ?? null,
+        CL: validateQuota(CL) ?? team.leaveQuotas?.CL ?? null,
+        EL: validateQuota(EL) ?? team.leaveQuotas?.EL ?? null,
+        UL: validateQuota(UL) ?? team.leaveQuotas?.UL ?? null,
+      };
+      await Team.updateOne({ _id: team._id }, { $set: { leaveQuotas: team.leaveQuotas } });
+
+      // Now update all faculty members' allocated balances safely
+      const orConditions = [{ teamId: team._id, role: { $in: ['employee', 'faculty', 'hod'] } }];
+      if (team.leadUserId) {
+        orConditions.push({ _id: team.leadUserId });
+      }
+      
+      const teamMembers = await User.find({ 
+        $or: orConditions,
+        isActive: true 
+      }).lean();
 
     for (const member of teamMembers) {
       // 1. Initialize balances safely via the standard service (creates them if missing)
@@ -1507,11 +1517,12 @@ const updateTeamLeaveQuotas = async (req, res) => {
 
     // Notify all managers that quotas were updated in real-time
     emitToManagers('leave:quotas_updated', { teamId: team._id, quotas: team.leaveQuotas });
+    }
 
     return success(res, 'Team leave quotas updated successfully');
   } catch (error) {
     console.error('updateTeamLeaveQuotas error:', error);
-    return serverError(res, 'Failed to update team leave quotas', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to update team leave quotas', error: error.message });
   }
 };
 

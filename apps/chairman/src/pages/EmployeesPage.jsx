@@ -230,7 +230,7 @@ export default function EmployeesPage() {
             <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center border border-violet-200 shadow-xs">
               <Users size={20} />
             </div>
-            Employees Directory
+            Faculty Members Directory
           </h1>
           <p className="text-slate-500 text-xs mt-1">
             Organization-wide employee management, live attendance status, and 360° audit records
@@ -269,7 +269,7 @@ export default function EmployeesPage() {
           <button
             onClick={() => navigate('/session-reactivations')}
             className="btn bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 font-bold px-3.5 py-2 rounded-xl shadow-xs flex items-center gap-2 text-xs transition-colors"
-            title="Review Auto-Checked Out Employees"
+            title="Review Auto-Checked Out Faculty Members"
           >
             <ShieldAlert size={16} className="text-amber-600" />
             <span>Session Reactivations</span>
@@ -411,7 +411,7 @@ export default function EmployeesPage() {
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-violet-400 cursor-pointer"
           >
             <option value="all">All Roles</option>
-            <option value="employee">Employees</option>
+            <option value="employee">Faculty Members</option>
             <option value="manager">Managers</option>
           </select>
 
@@ -441,8 +441,8 @@ export default function EmployeesPage() {
       ) : filteredEmployees.length === 0 ? (
         <div className="card text-center py-16 bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
           <Users size={32} className="text-slate-400 mx-auto mb-2" />
-          <p className="text-slate-700 font-bold text-sm">No employees match your search criteria</p>
-          <p className="text-slate-400 text-xs mt-0.5">Try resetting search filters or add a new team member.</p>
+          <p className="text-slate-700 font-bold text-sm">No faculty members match your search criteria</p>
+          <p className="text-slate-400 text-xs mt-0.5">Try resetting search filters or add a new faculty member.</p>
           {(search || teamFilter !== 'all' || roleFilter !== 'all' || statusFilter !== 'all') && (
             <button
               onClick={() => {
@@ -505,7 +505,7 @@ export default function EmployeesPage() {
                           {emp.name}
                         </h3>
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                          {emp.designation || 'Team Member'}
+                          {emp.designation || 'Faculty Member'}
                         </p>
                       </div>
                     </div>
@@ -626,7 +626,7 @@ export default function EmployeesPage() {
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-500 uppercase text-[10px] font-bold">
-                  <th className="py-3 px-4">Employee</th>
+                  <th className="py-3 px-4">Faculty Member</th>
                   <th className="py-3 px-4">Live Status</th>
                   <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Team</th>
@@ -668,7 +668,7 @@ export default function EmployeesPage() {
                               {emp.name}
                             </span>
                             <span className="text-[11px] text-slate-400 block">
-                              {emp.designation || 'Team Member'}
+                              {emp.designation || 'Faculty Member'}
                             </span>
                           </div>
                         </div>
@@ -792,7 +792,7 @@ export default function EmployeesPage() {
                 <div>
                   <label className="label font-bold text-slate-700 mb-1">Role *</label>
                   <select className="input" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-                    <option value="employee">Employee</option>
+                    <option value="employee">Faculty Member</option>
                     <option value="manager">Manager</option>
                     <option value="admin">Admin</option>
                   </select>

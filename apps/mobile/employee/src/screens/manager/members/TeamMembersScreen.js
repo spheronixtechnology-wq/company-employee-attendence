@@ -78,7 +78,7 @@ export default function TeamMembersScreen({ navigation }) {
       setData(res.data?.data || { teams: [], members: [] });
     } catch (err) {
       console.error('Fetch members error:', err);
-      Alert.alert('Error', 'Failed to load team members.');
+      Alert.alert('Error', 'Failed to load faculty members.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -109,8 +109,8 @@ export default function TeamMembersScreen({ navigation }) {
 
   const handleArchiveMember = (member) => {
     Alert.alert(
-      'Archive Team Member?',
-      `Are you sure you want to remove ${member.name}? They will no longer appear in the team member list, but their attendance history will be preserved.`,
+      'Archive Faculty Member?',
+      `Are you sure you want to remove ${member.name}? They will no longer appear in the faculty member list, but their attendance history will be preserved.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -121,7 +121,7 @@ export default function TeamMembersScreen({ navigation }) {
               await managerApi.deleteTeamMember(member._id);
               fetchMembers();
             } catch (err) {
-              Alert.alert('Error', err.response?.data?.message || 'Failed to archive team member.');
+              Alert.alert('Error', err.response?.data?.message || 'Failed to archive faculty member.');
             }
           }
         }
@@ -209,7 +209,7 @@ export default function TeamMembersScreen({ navigation }) {
       resetCreateForm();
       fetchMembers();
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create team member.');
+      Alert.alert('Error', err.response?.data?.message || 'Failed to create faculty member.');
     } finally {
       setCreating(false);
     }
@@ -266,7 +266,7 @@ export default function TeamMembersScreen({ navigation }) {
             )}
             <View style={styles.memberDetails}>
               <Text style={styles.memberName}>{member.name}</Text>
-              <Text style={styles.memberRole}>{member.designation || 'Employee'}</Text>
+              <Text style={styles.memberRole}>{member.designation || 'Faculty Member'}</Text>
               <Text style={styles.memberEmail}>{member.email}</Text>
             </View>
           </View>
@@ -298,7 +298,7 @@ export default function TeamMembersScreen({ navigation }) {
           <ChevronLeft size={28} color="#0f172a" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Team Members</Text>
+          <Text style={styles.headerTitle}>Faculty Members</Text>
           <Text style={styles.headerSubtitle}>
             {(data.teams || []).map(t => t.name).join(', ') || 'Managed Teams'} · {(data.members || []).length} member(s)
           </Text>
@@ -368,7 +368,7 @@ export default function TeamMembersScreen({ navigation }) {
             <View style={styles.modalContentLarge}>
               <View style={styles.modalHeader}>
                 <View>
-                  <Text style={styles.modalTitle}>Add Team Member</Text>
+                  <Text style={styles.modalTitle}>Add Faculty Member</Text>
                   <Text style={styles.modalSubtitle}>Step {createStep} of 3</Text>
                 </View>
                 <TouchableOpacity onPress={() => setCreateModal(false)} style={styles.modalCloseBtn}>

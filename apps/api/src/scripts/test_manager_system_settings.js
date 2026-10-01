@@ -98,7 +98,7 @@ async function runTests() {
     latitude: 12.9716,
     longitude: 77.5946,
     radiusMeters: 250,
-    wifiSsid: 'Spheronix-Manager-5G',
+    wifiSsid: 'College-Manager-5G',
     allowedIps: ['192.168.1.1', '103.5.135.80/28'],
   });
   await adminController.createOfficeLocation(createLocCtx.req, createLocCtx.res);

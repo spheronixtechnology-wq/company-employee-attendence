@@ -98,7 +98,7 @@ async function runTests() {
     logDate: testWorkDate,
     hoursSpent: 8.5,
     taskTitle: 'Implemented Feature X',
-    projectName: 'Spheronix Core',
+    projectName: 'College Core',
     status: 'submitted',
   });
 

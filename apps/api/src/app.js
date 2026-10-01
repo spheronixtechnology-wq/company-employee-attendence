@@ -15,6 +15,7 @@ const employeeRoutes = require('./routes/employee.routes');
 const managerRoutes = require('./routes/manager.routes');
 const adminRoutes = require('./routes/admin.routes');
 const examDutyRoutes = require('./routes/examDuty.routes');
+const examRoutes = require('./modules/exams/routes/exam.routes');
 
 // Validate required env vars before anything else
 validateEnv();
@@ -61,6 +62,7 @@ app.set('trust proxy', 1);
 // ── Static File Serving — Uploaded Files ────────────────────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';
 app.use('/uploads', express.static(path.join(__dirname, '..', uploadDir)));
+app.use('/api/public', express.static(path.join(__dirname, 'public')));
 
 // ── Health Check ─────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -81,6 +83,7 @@ app.use('/api/employee', employeeRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/exam-duties', examDutyRoutes);
+app.use('/api/exams', examRoutes);
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {

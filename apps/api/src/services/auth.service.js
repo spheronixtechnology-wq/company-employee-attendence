@@ -22,7 +22,7 @@ const { getCookieOptions } = require('../config/cookie');
 
 /**
  * Builds the user payload to return on login/me.
- * Includes manager permissions if role is manager.
+ * Includes principal & hod permissions if role is manager.
  */
 const buildUserPayload = async (user) => {
   const teamObj = user.teamId && typeof user.teamId === 'object' && user.teamId.name ? user.teamId : null;
@@ -77,7 +77,7 @@ const login = async ({ email, password, deviceFingerprint, deviceLabel, isMobile
       // First-time enrollment OR after Admin MFA reset:
       // Generate a fresh Base32 secret and QR code for Authenticator apps
       const secret = generateBase32Secret(32);
-      const otpauthUri = generateOtpauthUri(user.email, secret, 'Spheronix');
+      const otpauthUri = generateOtpauthUri(user.email, secret, 'College');
       const qrCodeDataUrl = await generateQrCodeDataUrl(otpauthUri);
 
       // Save pending secret on user

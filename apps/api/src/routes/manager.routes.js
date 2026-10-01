@@ -19,7 +19,7 @@ router.get('/team/members', isManager, managerController.getTeamMembers);
 router.get('/team/members/:id/profile', isManager, managerController.getMemberProfile);
 router.get('/team/members/:id/attendance', isManager, managerController.getMemberAttendanceHistory);
 // router.get('/team/members/:id/overtime', isManager, managerController.getMemberOvertimeHistory);
-// Team Members
+// Faculty Members
 router.post('/team/members', isManager, managerController.createTeamMember);
 router.delete('/team/members/:id', isManager, managerController.deleteTeamMember);
 router.get('/team/leave-requests', isManager, managerController.getTeamLeaveRequests);

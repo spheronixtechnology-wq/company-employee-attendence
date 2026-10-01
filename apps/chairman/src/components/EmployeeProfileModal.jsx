@@ -144,7 +144,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
               {member?.avatarUrl ? (
                 <img
                   src={member.avatarUrl}
-                  alt={member?.name || 'Employee'}
+                  alt={member?.name || 'Faculty Member'}
                   className="w-14 h-14 rounded-2xl object-cover ring-2 ring-violet-200 shadow-md shadow-violet-500/20 flex-shrink-0"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
@@ -191,7 +191,7 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-1">
-                  <span className="font-semibold text-slate-700">{member?.designation || 'Team Member'}</span>
+                  <span className="font-semibold text-slate-700">{member?.designation || 'Faculty Member'}</span>
                   {member?.team && (
                     <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 font-semibold text-[11px]">
                       Team: {member.team.name}

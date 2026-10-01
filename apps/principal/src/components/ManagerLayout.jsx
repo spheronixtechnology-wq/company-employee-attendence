@@ -3,7 +3,7 @@ import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import api from '../lib/api';
-import companyLogo from '../images/company logo.png';
+import companyLogo from '../images/college logo.png';
 import {
   LayoutDashboard, ClipboardList, Calendar, FileText,
   LogOut, Menu, X, Smartphone, MapPin, Users,
@@ -13,9 +13,9 @@ import {
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, id: 'nav-dashboard' },
   { path: '/departments', label: 'Departments', icon: GitBranch, id: 'nav-departments' },
-  { path: '/team/members', label: 'Team Members', icon: Users, id: 'nav-members' },
+  { path: '/team/members', label: 'Faculty Members', icon: Users, id: 'nav-members' },
   { path: '/my-attendance', label: 'My Attendance', icon: ClipboardList, id: 'nav-my-attendance' },
-  { path: '/team/attendance', label: 'Team Attendance', icon: ClipboardList, id: 'nav-attendance' },
+  { path: '/team/attendance', label: 'Faculty Attendance', icon: ClipboardList, id: 'nav-attendance' },
   { path: '/session-reactivations', label: 'Session Reactivations', icon: ShieldAlert, id: 'nav-session-reactivations' },
   
   { path: '/exam-duties', label: 'Exam Duties', icon: GraduationCap, id: 'nav-exam-duties' },
@@ -102,7 +102,7 @@ export default function ManagerLayout({ children }) {
     socket.on('device:request_resolved', onNewEvent);
     socket.on('leave:request_created', onNewEvent);
     socket.on('leave:request_resolved', onNewEvent);
-    // Instantly bump the Team Attendance badge when a manual request comes in
+    // Instantly bump the Faculty Attendance badge when a manual request comes in
     socket.on('attendance:manual_request_created', onManualRequest);
     socket.on('reactivation:requested', fetchPendingReactivations);
     socket.on('attendance:update', fetchPendingReactivations);
@@ -133,7 +133,7 @@ export default function ManagerLayout({ children }) {
           <Link to="/dashboard" className="group flex shrink-0 items-center gap-2.5">
             <img
               src={companyLogo}
-              alt="Spheronix"
+              alt="College"
               className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.04]"
             />
             <span className="hidden shrink-0 items-center rounded-full bg-violet-600/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-violet-700 ring-1 ring-violet-200/70 sm:inline-flex">
@@ -267,7 +267,7 @@ export default function ManagerLayout({ children }) {
           <div className="bg-white border-r border-slate-200 w-72 h-full flex flex-col p-4 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <img src={companyLogo} alt="Spheronix" className="h-14 w-auto max-h-14 object-contain" />
+                <img src={companyLogo} alt="College" className="h-14 w-auto max-h-14 object-contain" />
                 <span className="text-[10px] font-semibold text-violet-700 uppercase tracking-wider bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-200">
                   {user?.role || 'Manager'}
                 </span>
