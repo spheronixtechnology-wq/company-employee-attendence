@@ -18,12 +18,15 @@ const getTodayDateString = (timeZone = 'Asia/Kolkata') => {
  */
 const getBusinessDateString = (date = new Date(), timeZone = 'Asia/Kolkata') => {
   const d = date instanceof Date ? date : new Date(date);
-  return new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(d);
+  }).formatToParts(d);
+  const pMap = {};
+  for (const p of parts) pMap[p.type] = p.value;
+  return `${pMap.year}-${pMap.month}-${pMap.day}`;
 };
 
 /**
