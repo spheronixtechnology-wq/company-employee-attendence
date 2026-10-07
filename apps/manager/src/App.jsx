@@ -9,7 +9,7 @@ import OfficeLocationsPage from './pages/OfficeLocationsPage';
 import WifiSettingsPage from './pages/WifiSettingsPage';
 import TeamOvertimePage from './pages/TeamOvertimePage';
 import SessionReactivationsPage from './pages/SessionReactivationsPage';
-import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3, Trash2 } from 'lucide-react';
+import { Loader2, X, Clock, Coffee, Timer, FileText, AlertTriangle, AlertCircle, ExternalLink, ChevronRight, ChevronLeft, Eye, Download, FileSpreadsheet, CheckCircle2, XCircle, Search, Filter, Users, ArrowRight, Sparkles, RefreshCw, Calendar as CalendarIcon, Plus, LogOut, UserCheck, UserX, MessageSquare, UserCircle2, Camera, Save, Phone, Mail, Briefcase, Shield, Edit3, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from './lib/api';
 import DocumentPreviewModal from './components/DocumentPreviewModal';
@@ -1888,101 +1888,113 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
           )}
 
           {/* Daily Work Log Content */}
-          <div className="p-4.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3.5 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
-              <span className="font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                <FileText size={15} className="text-indigo-600" /> Daily Work Summary
+          <div className="p-5 bg-white rounded-3xl border border-slate-200/90 space-y-4 text-xs shadow-sm shadow-slate-200/50">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <span className="font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center">
+                  <FileText size={14} />
+                </div>
+                Daily Work Summary
               </span>
-              <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-full">
+              <span className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-full">
                 Logged: {actualWork ? formatDuration(actualWork) : (log.hoursSpent ? `${log.hoursSpent}h` : '—')}
               </span>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {log.taskTitle && (
-                <div>
-                  <p className="text-[11px] text-slate-500 font-bold mb-1">Task Title</p>
-                  <p className="text-slate-900 font-semibold bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                <div className="group">
+                  <p className="text-[10px] text-slate-500 font-bold mb-1.5 uppercase tracking-wider">Task Title</p>
+                  <p className="text-slate-800 font-medium bg-slate-50/50 group-hover:bg-slate-50 transition-colors p-3.5 rounded-2xl border border-slate-200/60">
                     {log.taskTitle}
                   </p>
                 </div>
               )}
 
               {log.projectName && (
-                <div>
-                  <p className="text-[11px] text-slate-500 font-bold mb-1">Project Name</p>
-                  <p className="text-slate-900 font-semibold bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                <div className="group">
+                  <p className="text-[10px] text-slate-500 font-bold mb-1.5 uppercase tracking-wider">Project Name</p>
+                  <p className="text-slate-800 font-medium bg-slate-50/50 group-hover:bg-slate-50 transition-colors p-3.5 rounded-2xl border border-slate-200/60">
                     {log.projectName}
                   </p>
                 </div>
               )}
 
               {log.description && (
-                <div>
-                  <p className="text-[11px] text-slate-500 font-bold mb-1">Description</p>
-                  <p className="text-slate-800 bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs whitespace-pre-line leading-relaxed">
+                <div className="group">
+                  <p className="text-[10px] text-slate-500 font-bold mb-1.5 uppercase tracking-wider">Description</p>
+                  <p className="text-slate-800 bg-slate-50/50 group-hover:bg-slate-50 transition-colors p-3.5 rounded-2xl border border-slate-200/60 whitespace-pre-line leading-relaxed">
                     {log.description}
                   </p>
                 </div>
               )}
 
-              {log.blockers && (
-                <div>
-                  <p className="text-[11px] text-rose-600 font-bold mb-1 flex items-center gap-1">
-                    <AlertCircle size={12} /> Blockers / Issues
+              {log.blockers && !['n/a', 'none', 'na', '-', ''].includes(log.blockers.trim().toLowerCase()) && (
+                <div className="group">
+                  <p className="text-[10px] text-rose-600 font-bold mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertCircle size={14} /> Blockers / Issues
                   </p>
-                  <p className="text-rose-900 bg-rose-50/90 p-3 rounded-xl border border-rose-200/80 whitespace-pre-line leading-relaxed">
+                  <p className="text-rose-900 bg-rose-50/80 group-hover:bg-rose-50 transition-colors p-3.5 rounded-2xl border border-rose-200/80 whitespace-pre-line leading-relaxed">
                     {log.blockers}
                   </p>
                 </div>
               )}
 
               {log.githubLink && (
-                <div>
-                  <p className="text-[11px] text-slate-500 font-bold mb-1">GitHub Repository / PR</p>
+                <div className="group">
+                  <p className="text-[10px] text-slate-500 font-bold mb-1.5 uppercase tracking-wider">GitHub Repository / PR</p>
                   <a
                     href={log.githubLink}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-mono flex items-center gap-1.5 underline bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs"
+                    className="text-indigo-600 hover:text-indigo-700 font-mono flex items-center gap-2 bg-slate-50/50 group-hover:bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 transition-colors"
                   >
-                    <ExternalLink size={13} /> {log.githubLink}
+                    <ExternalLink size={14} /> {log.githubLink}
                   </a>
                 </div>
               )}
             </div>
 
             {/* Document Submission Card */}
-            {(log.documentUrl || log.attachmentUrl || log.documentName || log.doctype || log.hasDocument || log.document?.storageKey) && (
-              <div className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-3 shadow-sm">
+            {(() => {
+              const hasValidDoc = !!(log.documentUrl || log.attachmentUrl || (log.documentName && log.documentName !== 'null' && log.documentName !== 'undefined') || log.hasDocument || log.document?.storageKey);
+              if (!hasValidDoc) {
+                return (
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 mt-2 flex items-center justify-center text-slate-500 text-xs font-medium italic">
+                    No log sheet uploaded
+                  </div>
+                );
+              }
+              return (
+              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 mt-2 space-y-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs">
                       {(log.doctype || log.documentName || '').match(/\.(xlsx|xls|csv)$|^(xlsx|xls|csv)$/i) ? (
-                        <FileSpreadsheet size={20} />
+                        <FileSpreadsheet size={22} />
                       ) : (
-                        <FileText size={20} />
+                        <FileText size={22} />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-xs font-bold text-slate-900 truncate max-w-[240px]" title={log.documentName || 'Daily Work Document'}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-bold text-slate-900 truncate max-w-[240px]" title={log.documentName || 'Daily Work Document'}>
                           {log.documentName || log.taskTitle || 'Daily Work Document'}
                         </p>
                         {/* Doctype Badge */}
-                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
                           (log.doctype || log.documentName || '').match(/xlsx|xls|csv/i)
                             ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                             : (log.doctype || log.documentName || '').match(/docx|doc/i)
                             ? 'bg-blue-50 border-blue-200 text-blue-700'
                             : (log.doctype || log.documentName || '').match(/pdf/i)
                             ? 'bg-rose-50 border-rose-200 text-rose-700'
-                            : 'bg-primary-50 border-primary-200 text-primary-700'
+                            : 'bg-indigo-50 border-indigo-200 text-indigo-700'
                         }`}>
                           {log.doctype || (log.documentName || '').split('.').pop() || 'DOC'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-slate-500 font-medium">
                         {log.documentSize ? `${(log.documentSize / (1024 * 1024)).toFixed(2)} MB • ` : ''}
                         {(log.documentUrl && log.documentUrl.startsWith('data:')) ? 'Base64 encoded' : 'Uploaded document'} • Ready for preview
                       </p>
@@ -1991,7 +2003,7 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                 </div>
 
                 {/* Two Action Buttons: Preview (View without download) and Download */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
                   <button
                     type="button"
                     id="preview-document-btn"
@@ -2014,9 +2026,9 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                       }
                       setShowPreviewModal(true);
                     }}
-                    className="px-3.5 py-2 text-xs font-black text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2.5 text-xs font-black text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-xl shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Eye size={14} /> Preview Document
+                    <Eye size={15} /> Preview Document
                   </button>
 
                   <button
@@ -2045,17 +2057,18 @@ const EmployeeLogDetailModal = ({ log, onClose }) => {
                         alert('Failed to download document: ' + e.message);
                       }
                     }}
-                    className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-2xs active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-2xs active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Download size={14} /> Download
+                    <Download size={15} /> Download
                   </button>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
-            <div className="pt-2 text-[11px] text-slate-500 flex justify-between border-t border-slate-200/80">
-              <span className="font-medium">Log Date: <strong className="text-slate-700">{log.logDate}</strong></span>
-              <span className="font-medium">Submitted: <strong className="text-slate-700">{log.submittedAt ? formatTime(log.submittedAt) : 'Today'}</strong></span>
+            <div className="pt-3.5 mt-2 text-[10px] uppercase tracking-wider text-slate-500 flex justify-between border-t border-slate-100">
+              <span className="font-bold">Log Date: <strong className="text-slate-800 ml-1">{log.logDate}</strong></span>
+              <span className="font-bold">Submitted: <strong className="text-slate-800 ml-1">{log.submittedAt ? formatTime(log.submittedAt) : 'Today'}</strong></span>
             </div>
           </div>
         </div>
