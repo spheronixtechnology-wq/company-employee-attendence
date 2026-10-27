@@ -6,6 +6,7 @@ const StepUpGrant = require('../models/StepUpGrant');
 const IntegrationCredential = require('../models/IntegrationCredential');
 const IntegrationRequestLog = require('../models/IntegrationRequestLog');
 const integrationCredentialService = require('../services/integrationCredential.service');
+const syncHealthService = require('../services/syncHealth.service');
 const { writeAuditLog } = require('../services/audit.service');
 const { verifyTotp } = require('../utils/mfaUtils');
 const { getClientIp } = require('../utils/ipUtils');
@@ -450,6 +451,94 @@ const updateKeyAudience = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/admin/integrations/frappe-hrms/keys/sync-health
+ * Batched sync health evaluation for all Frappe HRMS integration keys.
+ */
+const getSyncHealth = async (req, res, next) => {
+  try {
+    const keys = await IntegrationCredential.find({ integration: 'frappe_hrms' })
+      .select('name keyId scopes employeeScope expectedPollMinutes status expiresAt')
+      .lean();
+
+    const keyIds = keys.map((k) => k.keyId);
+    const feedStatsMap = await syncHealthService.getFeedStats(keyIds);
+
+    const now = new Date();
+    const results = keys.map((key) => {
+      const stats = feedStatsMap.get(key.keyId) || [];
+      return syncHealthService.evaluateSyncHealth({ key, feedStats: stats, now });
+    });
+
+    res.json({
+      success: true,
+      data: results,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PATCH /api/admin/integrations/keys/:keyId/settings
+ * Operational settings update (e.g. expectedPollMinutes).
+ * Protected by standard isAdmin JWT authentication (no step-up MFA needed).
+ */
+const updateKeySettings = async (req, res, next) => {
+  try {
+    const { keyId } = req.params;
+    const { expectedPollMinutes } = req.body;
+
+    if (
+      expectedPollMinutes === undefined ||
+      isNaN(expectedPollMinutes) ||
+      parseInt(expectedPollMinutes, 10) < 1 ||
+      parseInt(expectedPollMinutes, 10) > 1440
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_POLL_MINUTES',
+        message: 'expectedPollMinutes must be an integer between 1 and 1440 (1 minute to 24 hours).',
+      });
+    }
+
+    const pollMinutes = parseInt(expectedPollMinutes, 10);
+
+    const cred = await IntegrationCredential.findOneAndUpdate(
+      { keyId },
+      { $set: { expectedPollMinutes: pollMinutes } },
+      { new: true }
+    );
+
+    if (!cred) {
+      return res.status(404).json({
+        success: false,
+        code: 'KEY_NOT_FOUND',
+        message: 'Integration key not found.',
+      });
+    }
+
+    await writeAuditLog({
+      action: 'INTEGRATION_KEY_SETTINGS_UPDATED',
+      performedBy: req.user,
+      targetCollection: 'integration_credentials',
+      metadata: { keyId, expectedPollMinutes: pollMinutes },
+    });
+
+    res.json({
+      success: true,
+      message: 'Integration key settings updated successfully.',
+      data: {
+        keyId: cred.keyId,
+        name: cred.name,
+        expectedPollMinutes: cred.expectedPollMinutes,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   stepUpLimiter,
   stepUpChallenge,
@@ -459,4 +548,6 @@ module.exports = {
   revokeKey,
   getKeyActivity,
   updateKeyAudience,
+  getSyncHealth,
+  updateKeySettings,
 };

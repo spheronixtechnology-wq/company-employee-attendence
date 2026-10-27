@@ -76,6 +76,8 @@ router.post('/integrations/frappe-hrms/keys', isAdmin, requireStepUp('integratio
 router.post('/integrations/keys/:keyId/rotate', isAdmin, requireStepUp('integration_key:rotate'), adminIntegrationController.rotateKey);
 router.post('/integrations/keys/:keyId/revoke', isAdmin, requireStepUp('integration_key:revoke'), adminIntegrationController.revokeKey);
 router.put('/integrations/keys/:keyId/audience', isAdmin, requireStepUp('integration_key:update_audience'), adminIntegrationController.updateKeyAudience);
+router.patch('/integrations/keys/:keyId/settings', isAdmin, adminIntegrationController.updateKeySettings);
+router.get('/integrations/frappe-hrms/keys/sync-health', isAdmin, adminIntegrationController.getSyncHealth);
 router.get('/integrations/keys/:keyId/activity', isAdmin, adminIntegrationController.getKeyActivity);
 
 module.exports = router;
