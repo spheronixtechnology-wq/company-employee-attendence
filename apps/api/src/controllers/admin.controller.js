@@ -224,7 +224,8 @@ const getEmployees = async (req, res) => {
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+        { email: { $regex: search, $options: 'i' } },
+        { employeeId: { $regex: search, $options: 'i' } }
       ];
     }
     
@@ -353,7 +354,8 @@ const createUser = async (req, res) => {
       email, companyEmail, mobileNumber, phone, currentAddress, 
       emergencyContactName, emergencyContactNumber, emergencyContactRelation,
       department, designation, jobType, dateOfJoining, workLocation, 
-      country, officeBranch, teamShift, teamId, password, role
+      country, officeBranch, teamShift, teamId, password, role,
+      employeeId
     } = req.body;
     
     // Support both `mobileNumber` (from EmployeeCreationModal) and legacy `phone`
@@ -366,6 +368,15 @@ const createUser = async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return badRequest(res, 'User with this email already exists.');
+    }
+
+    let trimmedEmployeeId = null;
+    if (employeeId && String(employeeId).trim() !== '') {
+      trimmedEmployeeId = String(employeeId).trim();
+      const existingWithId = await User.findOne({ employeeId: trimmedEmployeeId });
+      if (existingWithId) {
+        return badRequest(res, `Employee ID "${trimmedEmployeeId}" is already assigned to another user.`);
+      }
     }
     
     let primaryTeamId = null;
@@ -388,6 +399,7 @@ const createUser = async (req, res) => {
       passwordHash: password,
       role: role || 'employee',
       teamId: primaryTeamId,
+      ...(trimmedEmployeeId ? { employeeId: trimmedEmployeeId } : {}),
       forcePasswordChange: true
     });
     
@@ -408,7 +420,7 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password, role, teamId, designation, phone, isActive } = req.body;
+    const { name, email, employeeId, password, role, teamId, designation, phone, isActive } = req.body;
 
     const user = await User.findById(id).select('+passwordHash');
     if (!user) return badRequest(res, 'User not found.');
@@ -416,6 +428,19 @@ const updateUser = async (req, res) => {
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (role !== undefined) user.role = role;
+    
+    if (employeeId !== undefined) {
+      const trimmedId = employeeId ? String(employeeId).trim() : null;
+      if (trimmedId) {
+        const existingEmp = await User.findOne({ employeeId: trimmedId, _id: { $ne: id } });
+        if (existingEmp) {
+          return badRequest(res, `Employee ID "${trimmedId}" is already assigned to another user.`);
+        }
+        user.employeeId = trimmedId;
+      } else {
+        user.employeeId = null;
+      }
+    }
     
     let assignedTeamIds = [];
     if (teamId !== undefined) {

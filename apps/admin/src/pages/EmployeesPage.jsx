@@ -23,7 +23,7 @@ export default function EmployeesPage() {
   const [showCreationModal, setShowCreationModal] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', employeeId: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -102,7 +102,7 @@ export default function EmployeesPage() {
       setShowEditForm(false);
       setEditUser(null);
       setShowPassword(false);
-      setForm({ name: '', email: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
+      setForm({ name: '', email: '', employeeId: '', password: '', role: 'employee', teamId: '', designation: '', phone: '' });
       fetchData();
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Operation failed.' });
@@ -148,6 +148,7 @@ export default function EmployeesPage() {
     setForm({
       name: user.name,
       email: user.email,
+      employeeId: user.employeeId || '',
       password: '',
       role: user.role,
       teamId: user.teamId?._id || user.teamId || '',
@@ -501,9 +502,16 @@ export default function EmployeesPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="text-sm font-extrabold text-slate-900 truncate group-hover:text-violet-600 transition-colors leading-tight">
-                          {emp.name}
-                        </h3>
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="text-sm font-extrabold text-slate-900 truncate group-hover:text-violet-600 transition-colors leading-tight">
+                            {emp.name}
+                          </h3>
+                          {emp.employeeId && (
+                            <span className="font-mono text-[10px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200 flex-shrink-0">
+                              #{emp.employeeId}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">
                           {emp.designation || 'Team Member'}
                         </p>
@@ -664,9 +672,16 @@ export default function EmployeesPage() {
                             </div>
                           )}
                           <div>
-                            <span className="font-bold text-slate-900 group-hover:text-violet-600 transition-colors block">
-                              {emp.name}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-900 group-hover:text-violet-600 transition-colors">
+                                {emp.name}
+                              </span>
+                              {emp.employeeId && (
+                                <span className="font-mono text-[10px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200">
+                                  #{emp.employeeId}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[11px] text-slate-400 block">
                               {emp.designation || 'Team Member'}
                             </span>
@@ -762,6 +777,18 @@ export default function EmployeesPage() {
               <div>
                 <label className="label font-bold text-slate-700 mb-1">Email Address *</label>
                 <input type="email" className="input" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="label font-bold text-slate-700">Employee ID</label>
+                  <span className="text-[10px] text-slate-400 font-medium">e.g. EMP-0001 (auto if empty)</span>
+                </div>
+                <input
+                  className="input uppercase font-mono tracking-wider"
+                  placeholder="e.g. EMP-0001"
+                  value={form.employeeId}
+                  onChange={e => setForm({ ...form, employeeId: e.target.value.toUpperCase() })}
+                />
               </div>
               <div>
                 <label className="label font-bold text-slate-700 mb-1">Phone Number</label>

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const IntegrationCredential = require('../models/IntegrationCredential');
 const { writeAuditLog } = require('./audit.service');
+const { validateAudienceInput } = require('../utils/audienceValidation');
 
 const KEY_REGEX = /^shk_(live|test)_([0-9a-f]{16})_([0-9a-f]{64})$/;
 const LOCK_TIMEOUT_MS = 30 * 1000; // 30 seconds lock TTL
@@ -583,6 +584,118 @@ async function revokeCredential({ keyId, reason = 'manual', adminUser }) {
 }
 
 /**
+ * Updates audience configuration for an active integration key.
+ * Enforces:
+ * - Fail-closed status checks: only active, unexpired keys can be updated.
+ * - Concurrency protection: keys being rotated or already rotated cannot have audience altered.
+ * - Audience versioning: bumps audienceVersion by 1 and updates audienceChangedAt ONLY when audience expands
+ *   (restricted -> all, or restricted -> restricted with added employees).
+ *   Audience reductions do not increment audienceVersion.
+ * - Audit logging with comprehensive before/after metadata.
+ *
+ * @param {Object} params
+ * @param {string} params.keyId
+ * @param {'all' | 'restricted'} params.employeeScope
+ * @param {Array<string>} params.allowedEmployees
+ * @param {Object} params.adminUser
+ * @returns {Promise<IntegrationCredential>}
+ */
+async function updateAudience({ keyId, employeeScope, allowedEmployees, adminUser }) {
+  const cred = await IntegrationCredential.findOne({ keyId });
+  if (!cred) {
+    const err = new Error('Integration key not found.');
+    err.statusCode = 404;
+    err.code = 'KEY_NOT_FOUND';
+    throw err;
+  }
+
+  if (cred.status !== 'active') {
+    const err = new Error('Cannot update audience of an inactive or revoked key.');
+    err.statusCode = 400;
+    err.code = 'KEY_NOT_ACTIVE';
+    throw err;
+  }
+
+  const now = new Date();
+  if (now >= cred.expiresAt) {
+    const err = new Error('Cannot update audience of an expired key.');
+    err.statusCode = 400;
+    err.code = 'KEY_EXPIRED';
+    throw err;
+  }
+
+  if (cred.rotatedToKeyId) {
+    const err = new Error('Audience cannot be modified because this key has already been rotated.');
+    err.statusCode = 409;
+    err.code = 'KEY_ROTATION_IN_PROGRESS';
+    throw err;
+  }
+
+  if (
+    cred.rotationLock &&
+    cred.rotationLock.lockedAt &&
+    now.getTime() - new Date(cred.rotationLock.lockedAt).getTime() < LOCK_TIMEOUT_MS
+  ) {
+    const err = new Error('Audience cannot be modified while key rotation is active.');
+    err.statusCode = 409;
+    err.code = 'KEY_ROTATION_IN_PROGRESS';
+    throw err;
+  }
+
+  const validation = await validateAudienceInput({ employeeScope, allowedEmployees });
+  if (!validation.valid) {
+    const err = new Error(validation.message);
+    err.statusCode = 400;
+    err.code = validation.code;
+    err.details = validation.details;
+    throw err;
+  }
+
+  const newScope = employeeScope;
+  const newEmployeeIds = validation.sanitizedIds || [];
+
+  let isExpansion = false;
+  const existingScope = cred.employeeScope || 'all';
+  const existingEmployeeIds = (cred.allowedEmployees || []).map((id) => id.toString());
+
+  if (existingScope === 'restricted' && newScope === 'all') {
+    isExpansion = true;
+  } else if (existingScope === 'restricted' && newScope === 'restricted') {
+    const addedAny = newEmployeeIds.some((id) => !existingEmployeeIds.includes(id));
+    if (addedAny) {
+      isExpansion = true;
+    }
+  }
+
+  if (isExpansion) {
+    cred.audienceVersion = (cred.audienceVersion || 1) + 1;
+    cred.audienceChangedAt = now;
+  }
+
+  cred.employeeScope = newScope;
+  cred.allowedEmployees = newScope === 'restricted' ? newEmployeeIds : [];
+
+  await cred.save();
+
+  await writeAuditLog({
+    action: 'INTEGRATION_KEY_AUDIENCE_UPDATED',
+    performedBy: adminUser,
+    targetCollection: 'integration_credentials',
+    metadata: {
+      keyId,
+      oldScope: existingScope,
+      newScope,
+      isExpansion,
+      audienceVersion: cred.audienceVersion,
+      audienceChangedAt: cred.audienceChangedAt,
+      allowedEmployeeCount: cred.allowedEmployees.length,
+    },
+  });
+
+  return cred;
+}
+
+/**
  * Asynchronously updates usage metrics without blocking response.
  */
 async function recordUsageMetrics({ keyId, wasSuccess }) {
@@ -614,5 +727,6 @@ module.exports = {
   verifyKey,
   rotateCredential,
   revokeCredential,
+  updateAudience,
   recordUsageMetrics,
 };

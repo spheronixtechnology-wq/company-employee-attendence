@@ -3,9 +3,11 @@ const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const managerController = require('../controllers/manager.controller');
 const overtimeController = require('../controllers/overtime.controller');
+const adminIntegrationController = require('../controllers/adminIntegration.controller');
 
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
+const requireStepUp = require('../middleware/requireStepUp');
 
 const isAdmin = [authenticate, authorize('admin')];
 const isAdminOrManager = [authenticate, authorize('admin', 'manager')];
@@ -66,5 +68,14 @@ router.post('/leave/:id/decision', isAdmin, adminController.handleLeaveDecision)
 
 // Overtime Oversight
 router.get('/overtime', isAdmin, overtimeController.getAllCompanyOvertime);
+
+// ── Step-Up Authentication & Frappe HRMS Integration Keys ─────────────────────
+router.post('/auth/step-up', isAdmin, adminIntegrationController.stepUpLimiter, adminIntegrationController.stepUpChallenge);
+router.get('/integrations/frappe-hrms/keys', isAdmin, adminIntegrationController.listKeys);
+router.post('/integrations/frappe-hrms/keys', isAdmin, requireStepUp('integration_key:create'), adminIntegrationController.createKey);
+router.post('/integrations/keys/:keyId/rotate', isAdmin, requireStepUp('integration_key:rotate'), adminIntegrationController.rotateKey);
+router.post('/integrations/keys/:keyId/revoke', isAdmin, requireStepUp('integration_key:revoke'), adminIntegrationController.revokeKey);
+router.put('/integrations/keys/:keyId/audience', isAdmin, requireStepUp('integration_key:update_audience'), adminIntegrationController.updateKeyAudience);
+router.get('/integrations/keys/:keyId/activity', isAdmin, adminIntegrationController.getKeyActivity);
 
 module.exports = router;

@@ -3,7 +3,7 @@ import {
   X, Loader2, Calendar, Clock, FileText, CheckCircle2,
   AlertCircle, ChevronLeft, ChevronRight, ExternalLink,
   Eye, Download, Shield, Smartphone, Mail, Phone,
-  Timer, XCircle, Info, ChevronDown, Check, User
+  Timer, XCircle, Info, ChevronDown, Check, User, Pencil
 } from 'lucide-react';
 import api from '../lib/api';
 import DocumentPreviewModal from './DocumentPreviewModal';
@@ -46,6 +46,28 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
 
   // Security audit toggle
   const [showSecurityAudit, setShowSecurityAudit] = useState(false);
+
+  // Employee ID Edit Modal State
+  const [isEditingId, setIsEditingId] = useState(false);
+  const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [idSubmitting, setIdSubmitting] = useState(false);
+  const [idError, setIdError] = useState(null);
+
+  const handleUpdateEmployeeId = async (e) => {
+    e.preventDefault();
+    if (!memberId) return;
+    setIdSubmitting(true);
+    setIdError(null);
+    try {
+      await api.patch(`/admin/users/${memberId}`, { employeeId: newEmployeeId });
+      setIsEditingId(false);
+      fetchProfile();
+    } catch (err) {
+      setIdError(err.response?.data?.message || 'Failed to update Employee ID.');
+    } finally {
+      setIdSubmitting(false);
+    }
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -183,6 +205,23 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                   <h2 className="text-xl font-extrabold text-slate-900 truncate">
                     {member?.name || (loading ? 'Loading…' : 'Employee Profile')}
                   </h2>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-md border border-violet-200">
+                      #{member?.employeeId || 'NO-ID'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setNewEmployeeId(member?.employeeId || '');
+                        setIdError(null);
+                        setIsEditingId(true);
+                      }}
+                      className="p-1 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors"
+                      title="Edit Employee ID"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </div>
                   
                   {/* Live Attendance Status Pill */}
                   {liveStatus.status && (
@@ -240,8 +279,8 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                   onChange={(e) => setPreset(e.target.value)}
                   className="bg-transparent text-xs font-bold text-slate-800 outline-none border-none cursor-pointer pr-1"
                 >
-                  <option value="current_month">Current Month (Sep 2026)</option>
-                  <option value="last_month">Previous Month (Aug 2026)</option>
+                  <option value="current_month">Current Month ({new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' })})</option>
+                  <option value="last_month">Previous Month ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' })})</option>
                   <option value="all_time">All Time</option>
                 </select>
               </div>
@@ -420,6 +459,23 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                       Job Information
                     </h3>
                     <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Employee ID</p>
+                        <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2">
+                          <span className="text-sm font-mono font-bold text-slate-900">{member?.employeeId || '—'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewEmployeeId(member?.employeeId || '');
+                              setIdError(null);
+                              setIsEditingId(true);
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold text-violet-700 hover:text-violet-800 bg-white hover:bg-violet-50 rounded-lg border border-slate-200 shadow-2xs transition-colors flex items-center gap-1"
+                          >
+                            <Pencil size={11} /> Edit ID
+                          </button>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Designation</p>
@@ -1270,6 +1326,69 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
           </button>
         </div>
       </div>
+
+      {/* Edit Employee ID Modal */}
+      {isEditingId && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 w-full max-w-sm shadow-2xl animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                  <Pencil size={13} />
+                </div>
+                Edit Employee ID
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setIsEditingId(false)} 
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateEmployeeId} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                  Employee ID (e.g. EMP-0001)
+                </label>
+                <input
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider outline-none focus:border-violet-500 focus:bg-white transition-all"
+                  value={newEmployeeId}
+                  onChange={(e) => setNewEmployeeId(e.target.value.toUpperCase())}
+                  placeholder="EMP-0001"
+                  autoFocus
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Must be unique across all company staff.</p>
+              </div>
+
+              {idError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle size={14} className="flex-shrink-0" />
+                  <span>{idError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={idSubmitting}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  {idSubmitting ? <Loader2 size={14} className="animate-spin" /> : 'Save Employee ID'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingId(false)}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Embedded Document Previewer */}
       {previewDoc && (

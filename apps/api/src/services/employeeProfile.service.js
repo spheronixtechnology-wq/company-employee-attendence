@@ -123,7 +123,7 @@ function enrichAttendanceRecord(att) {
 const getEmployeeProfile = async (employeeId, queryParams = {}) => {
   const query = typeof queryParams === 'string' ? { preset: queryParams } : (queryParams || {});
   const member = await User.findById(employeeId)
-    .select('name middleName lastName dob gender email companyEmail phone currentAddress emergencyContactName emergencyContactNumber emergencyContactRelation designation department jobType joinedDate workLocation country officeBranch teamShift avatarUrl teamId role isActive createdAt registeredDevice')
+    .select('name middleName lastName dob gender email companyEmail phone currentAddress emergencyContactName emergencyContactNumber emergencyContactRelation designation department jobType joinedDate workLocation country officeBranch teamShift avatarUrl teamId role isActive employeeId createdAt registeredDevice')
     .populate('teamId', 'name description')
     .lean();
 

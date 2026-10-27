@@ -305,6 +305,7 @@ const EmployeeCreationModal = ({ onClose, onSuccess, teams = [] }) => {
     emergencyContactName: '', emergencyContactNumber: '', emergencyContactRelation: '',
     department: '', designation: '', jobType: 'Full-Time', dateOfJoining: '',
     workLocation: '', country: '', officeBranch: '', teamShift: '',
+    employeeId: '',
     teamId: teams && teams.length > 0 ? (teams[0]._id || teams[0].id) : '', password: '', role: 'employee'
   });
 
@@ -523,6 +524,17 @@ const EmployeeCreationModal = ({ onClose, onSuccess, teams = [] }) => {
                   Job Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Employee ID <span className="text-slate-400 font-normal lowercase">(optional)</span></label>
+                    <input
+                      type="text"
+                      name="employeeId"
+                      value={form.employeeId}
+                      onChange={(e) => setForm({ ...form, employeeId: e.target.value.toUpperCase() })}
+                      className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:ring-4 focus:ring-violet-600/10 focus:border-violet-600 transition-all rounded-xl px-4 py-3 text-sm text-slate-800 font-mono font-medium placeholder:text-slate-400"
+                      placeholder="Auto (e.g. EMP-0001)"
+                    />
+                  </div>
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Department <span className="text-rose-500">*</span></label>
                     <input type="text" name="department" value={form.department} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:ring-4 focus:ring-violet-600/10 focus:border-violet-600 transition-all rounded-xl px-4 py-3 text-sm text-slate-800 font-medium placeholder:text-slate-400" placeholder="e.g. Engineering" />
