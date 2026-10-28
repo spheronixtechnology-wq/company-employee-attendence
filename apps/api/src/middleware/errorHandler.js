@@ -42,6 +42,16 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // Integration key compromise partial failure error
+  if (err.code === 'KEY_REVOKED_REPLACEMENT_FAILED') {
+    return res.status(500).json({
+      success: false,
+      code: 'KEY_REVOKED_REPLACEMENT_FAILED',
+      message: err.message,
+      data: err.data,
+    });
+  }
+
   // Default error
   res.status(err.statusCode || 500).json({
     success: false,

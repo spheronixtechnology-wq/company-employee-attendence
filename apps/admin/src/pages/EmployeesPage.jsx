@@ -848,9 +848,11 @@ export default function EmployeesPage() {
       )}
 
       {/* ── 360 Degree Performance & Profile Modal ── */}
-      <EmployeeProfileModal isOpen={!!selectedMemberId}
+      <EmployeeProfileModal
+        isOpen={!!selectedMemberId}
         memberId={selectedMemberId}
         onClose={() => setSelectedMemberId(null)}
+        onUpdate={fetchData}
       />
 
       {showCreationModal && (

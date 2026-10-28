@@ -2,11 +2,12 @@ const jwt = require('jsonwebtoken');
 const StepUpGrant = require('../models/StepUpGrant');
 const User = require('../models/User');
 const { validateAudienceInput } = require('../utils/audienceValidation');
+const { validateScopesInput } = require('../utils/scopeValidation');
 
 /**
  * Middleware factory: requireStepUp(operation)
  * Enforces single-use, atomic step-up authorization for critical integration key actions.
- * @param {'integration_key:create' | 'integration_key:rotate' | 'integration_key:revoke' | 'integration_key:update_audience'} operation
+ * @param {'integration_key:create' | 'integration_key:rotate' | 'integration_key:revoke' | 'integration_key:update_audience' | 'integration_key:update_scopes'} operation
  */
 const requireStepUp = (operation) => {
   return async (req, res, next) => {
@@ -104,6 +105,11 @@ const requireStepUp = (operation) => {
           message: validation.message,
           ...(validation.details ? { details: validation.details } : {}),
         });
+      }
+    } else if (operation === 'integration_key:update_scopes') {
+      const validation = validateScopesInput(req.body.scopes);
+      if (!validation.valid) {
+        return res.status(400).json({ success: false, code: validation.code, message: validation.message });
       }
     } else if (operation === 'integration_key:rotate') {
       const { overlapHours, expiresInDays } = req.body;

@@ -513,13 +513,14 @@ const checkIn = async (req, res) => {
       if (!Array.isArray(attendance.attendanceMethodAttempts)) {
         attendance.attendanceMethodAttempts = [];
       }
-      attendance.attendanceMethodAttempts.push(...attemptsToRecord);
+      attendance.updatedAt = new Date();
       await attendance.save();
     } else {
+      const now = new Date();
       attendance = new Attendance({
         userId,
         date: today,
-        checkInTime: new Date(),
+        checkInTime: now,
         status: 'present',
         checkInMethod: activeMethod,
         checkInIp: clientIp,
@@ -527,9 +528,11 @@ const checkIn = async (req, res) => {
           lat: Number(lat),
           lng: Number(lng),
           accuracy: accuracy !== undefined ? Number(accuracy) : undefined,
-          capturedAt: new Date(),
+          capturedAt: now,
         } : undefined,
         attendanceMethodAttempts: attemptsToRecord,
+        createdAt: now,
+        updatedAt: now,
       });
       await attendance.save();
     }
@@ -742,6 +745,7 @@ const checkOut = async (req, res) => {
       };
     }
     
+    attendance.updatedAt = checkOutTime;
     await attendance.save();
 
     // Cancel any active geofence session — attendance is now closed
@@ -953,6 +957,7 @@ const startBreak = async (req, res) => {
       startedAt: new Date()
     });
 
+    attendance.updatedAt = new Date();
     await attendance.save();
 
     const teamId = req.user.teamId?._id || req.user.teamId;
@@ -1005,6 +1010,7 @@ const endBreak = async (req, res) => {
     attendance.completedBreakMinutes = (attendance.completedBreakMinutes || 0) + breakDurationMinutes;
     attendance.totalBreakMinutes = attendance.completedBreakMinutes;
 
+    attendance.updatedAt = now;
     await attendance.save();
 
     const teamId = req.user.teamId?._id || req.user.teamId;

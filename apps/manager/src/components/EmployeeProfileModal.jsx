@@ -257,8 +257,8 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
                   onChange={(e) => setPreset(e.target.value)}
                   className="bg-transparent text-xs font-bold text-slate-800 outline-none border-none cursor-pointer pr-1"
                 >
-                  <option value="current_month">Current Month (Sep 2026)</option>
-                  <option value="last_month">Previous Month (Aug 2026)</option>
+                  <option value="current_month">Current Month ({new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' })})</option>
+                  <option value="last_month">Previous Month ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' })})</option>
                   <option value="all_time">All Time</option>
                 </select>
               </div>

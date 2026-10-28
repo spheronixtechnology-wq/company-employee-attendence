@@ -1,12 +1,46 @@
+const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const LeaveBalance = require('../models/LeaveBalance');
 const LeaveType = require('../models/LeaveType');
 const User = require('../models/User');
 const { writeAuditLog } = require('./audit.service');
 const { createNotification } = require('./notification.service');
-const { countDaysBetween, getCurrentYear } = require('../utils/dateUtils');
+const { leaveFractionFor } = require('./attendanceAbsence.service');
+const { countDaysBetween, getCurrentYear, getTodayDateString } = require('../utils/dateUtils');
 
 const { emitToTeam, emitToManagers, emitToAdmins } = require('../socket');
+
+/**
+ * Keeps already-written attendance rows in step with a leave decision (dates up to today only).
+ * - approved: unpunched `absent` rows in range become `leave`
+ * - reversed: `leave` rows written for THIS leave go back to `absent`, so an overlapping
+ *   leave's rows are never touched
+ */
+const syncAttendanceForLeave = async (leave, approved) => {
+  const today = getTodayDateString('Asia/Kolkata');
+  const userId = leave.userId?._id || leave.userId;
+  const date = { $gte: leave.startDate, $lte: leave.endDate < today ? leave.endDate : today };
+
+  if (approved) {
+    const leaveType = await LeaveType.findById(leave.leaveTypeId).select('name').lean();
+    return Attendance.updateMany(
+      { userId, date, status: 'absent', checkInTime: null },
+      {
+        $set: {
+          status: 'leave',
+          leaveRequestId: leave._id,
+          leaveTypeName: leaveType?.name || null,
+          leaveFraction: leaveFractionFor(leave),
+        },
+      }
+    );
+  }
+
+  return Attendance.updateMany(
+    { userId, date, status: 'leave', checkInTime: null, leaveRequestId: leave._id },
+    { $set: { status: 'absent', leaveRequestId: null, leaveTypeName: null, leaveFraction: null } }
+  );
+};
 
 /**
  * Employee applies for leave.
@@ -123,6 +157,7 @@ const makeLeaveDecision = async ({ leaveId, decidedBy, decision, decisionNote })
       { userId: leave.userId, leaveTypeId: leave.leaveTypeId, year: new Date(leave.startDate).getFullYear() },
       { $inc: { used: leave.totalDays } }
     );
+    await syncAttendanceForLeave(leave, true);
   }
 
   // Notify employee
@@ -135,7 +170,7 @@ const makeLeaveDecision = async ({ leaveId, decidedBy, decision, decisionNote })
   });
 
   await writeAuditLog({
-    action: decision === 'approved' ? AUDIT_ACTIONS.LEAVE_APPROVED : AUDIT_ACTIONS.LEAVE_REJECTED,
+    action: decision === 'approved' ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
     performedBy: decidedBy,
     targetCollection: 'leave_requests',
     targetId: leave._id,
@@ -177,6 +212,12 @@ const overrideLeaveDecision = async ({ leaveId, adminUser, newDecision, override
   leave.overriddenAt = new Date();
   await leave.save();
 
+  if (previousStatus !== 'approved' && newDecision === 'approved') {
+    await syncAttendanceForLeave(leave, true);
+  } else if (previousStatus === 'approved' && newDecision !== 'approved') {
+    await syncAttendanceForLeave(leave, false);
+  }
+
   await createNotification({
     userId: leave.userId,
     type: 'leave_overridden',
@@ -186,7 +227,7 @@ const overrideLeaveDecision = async ({ leaveId, adminUser, newDecision, override
   });
 
   await writeAuditLog({
-    action: AUDIT_ACTIONS.LEAVE_DECISION_OVERRIDDEN,
+    action: 'LEAVE_DECISION_OVERRIDDEN',
     performedBy: adminUser,
     targetCollection: 'leave_requests',
     targetId: leave._id,
@@ -227,4 +268,4 @@ const initializeLeaveBalances = async (userId) => {
   }
 };
 
-module.exports = { applyLeave, makeLeaveDecision, overrideLeaveDecision, initializeLeaveBalances };
+module.exports = { applyLeave, makeLeaveDecision, overrideLeaveDecision, initializeLeaveBalances, syncAttendanceForLeave };

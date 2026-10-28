@@ -46,6 +46,7 @@ const stepUpChallenge = async (req, res) => {
     'integration_key:rotate',
     'integration_key:revoke',
     'integration_key:update_audience',
+    'integration_key:update_scopes',
   ];
   if (!validOperations.includes(operation)) {
     return res.status(400).json({
@@ -55,7 +56,7 @@ const stepUpChallenge = async (req, res) => {
   }
 
   // Pre-validate targetKeyId if rotating, revoking, or updating audience
-  if (['integration_key:rotate', 'integration_key:revoke', 'integration_key:update_audience'].includes(operation)) {
+  if (['integration_key:rotate', 'integration_key:revoke', 'integration_key:update_audience', 'integration_key:update_scopes'].includes(operation)) {
     if (!targetKeyId) {
       return res.status(400).json({
         success: false,
@@ -452,6 +453,40 @@ const updateKeyAudience = async (req, res, next) => {
 };
 
 /**
+ * PUT /api/admin/integrations/keys/:keyId/scopes
+ * Replaces the scope list of an active integration key without rotating its secret.
+ * Protected by step-up MFA ('integration_key:update_scopes').
+ */
+const updateKeyScopes = async (req, res, next) => {
+  try {
+    const updated = await integrationCredentialService.updateScopes({
+      keyId: req.params.keyId,
+      scopes: req.body.scopes,
+      adminUser: req.user,
+    });
+
+    res.json({
+      success: true,
+      message: 'Integration key scopes updated successfully.',
+      data: {
+        keyId: updated.keyId,
+        name: updated.name,
+        scopes: updated.scopes,
+      },
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        code: err.code || 'SCOPE_UPDATE_FAILED',
+        message: err.message,
+      });
+    }
+    next(err);
+  }
+};
+
+/**
  * GET /api/admin/integrations/frappe-hrms/keys/sync-health
  * Batched sync health evaluation for all Frappe HRMS integration keys.
  */
@@ -548,6 +583,7 @@ module.exports = {
   revokeKey,
   getKeyActivity,
   updateKeyAudience,
+  updateKeyScopes,
   getSyncHealth,
   updateKeySettings,
 };

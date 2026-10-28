@@ -22,11 +22,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor — redirect to login on 401
+// Response interceptor — redirect to login on 401 (excluding step-up challenge failures)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isStepUpChallenge = error.config?.url?.includes('/auth/step-up');
+    if (error.response?.status === 401 && !isStepUpChallenge) {
       // Clear any local state and redirect to login if not already there
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';

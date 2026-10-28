@@ -415,6 +415,7 @@ const getEmployeeProfile = async (employeeId, queryParams = {}) => {
   return {
     member: {
       _id: member._id,
+      employeeId: member.employeeId || null,
       name: member.name,
       middleName: member.middleName,
       lastName: member.lastName,

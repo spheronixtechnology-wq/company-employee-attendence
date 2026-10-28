@@ -222,6 +222,7 @@ const approveSessionReactivation = async ({ attendanceId, reviewerUser, notes = 
     reactivatedAt,
   });
 
+  attendance.updatedAt = reactivatedAt;
   await attendance.save();
 
 
@@ -304,6 +305,7 @@ const rejectSessionReactivation = async ({ attendanceId, reviewerUser, notes = '
     reactivatedAt: null,
   });
 
+  attendance.updatedAt = decisionAt;
   await attendance.save();
 
   const userIdStr = attendance.userId.toString();

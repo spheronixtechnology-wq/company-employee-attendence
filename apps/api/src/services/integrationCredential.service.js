@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const IntegrationCredential = require('../models/IntegrationCredential');
 const { writeAuditLog } = require('./audit.service');
 const { validateAudienceInput } = require('../utils/audienceValidation');
+const { validateScopesInput } = require('../utils/scopeValidation');
 
 const KEY_REGEX = /^shk_(live|test)_([0-9a-f]{16})_([0-9a-f]{64})$/;
 const LOCK_TIMEOUT_MS = 30 * 1000; // 30 seconds lock TTL
@@ -696,6 +697,79 @@ async function updateAudience({ keyId, employeeScope, allowedEmployees, adminUse
 }
 
 /**
+ * Replaces the scope list of an active integration key in place (no secret rotation).
+ * Used to grant or withdraw the sensitive scopes (employees:pii:read, attendance-audit:read).
+ * @param {Object} params
+ * @param {string} params.keyId
+ * @param {string[]} params.scopes
+ * @param {Object} params.adminUser
+ * @returns {Promise<IntegrationCredential>}
+ */
+async function updateScopes({ keyId, scopes, adminUser }) {
+  const cred = await IntegrationCredential.findOne({ keyId });
+  if (!cred) {
+    const err = new Error('Integration key not found.');
+    err.statusCode = 404;
+    err.code = 'KEY_NOT_FOUND';
+    throw err;
+  }
+
+  if (cred.status !== 'active') {
+    const err = new Error('Cannot update scopes of an inactive or revoked key.');
+    err.statusCode = 400;
+    err.code = 'KEY_NOT_ACTIVE';
+    throw err;
+  }
+
+  const now = new Date();
+  if (now >= cred.expiresAt) {
+    const err = new Error('Cannot update scopes of an expired key.');
+    err.statusCode = 400;
+    err.code = 'KEY_EXPIRED';
+    throw err;
+  }
+
+  if (
+    cred.rotatedToKeyId ||
+    (cred.rotationLock &&
+      cred.rotationLock.lockedAt &&
+      now.getTime() - new Date(cred.rotationLock.lockedAt).getTime() < LOCK_TIMEOUT_MS)
+  ) {
+    const err = new Error('Scopes cannot be modified while key rotation is active or completed.');
+    err.statusCode = 409;
+    err.code = 'KEY_ROTATION_IN_PROGRESS';
+    throw err;
+  }
+
+  const validation = validateScopesInput(scopes);
+  if (!validation.valid) {
+    const err = new Error(validation.message);
+    err.statusCode = 400;
+    err.code = validation.code;
+    throw err;
+  }
+
+  const oldScopes = [...cred.scopes];
+  cred.scopes = validation.scopes;
+  await cred.save();
+
+  await writeAuditLog({
+    action: 'INTEGRATION_KEY_SCOPES_UPDATED',
+    performedBy: adminUser,
+    targetCollection: 'integration_credentials',
+    metadata: {
+      keyId,
+      oldScopes,
+      newScopes: cred.scopes,
+      added: cred.scopes.filter((s) => !oldScopes.includes(s)),
+      removed: oldScopes.filter((s) => !cred.scopes.includes(s)),
+    },
+  });
+
+  return cred;
+}
+
+/**
  * Asynchronously updates usage metrics without blocking response.
  */
 async function recordUsageMetrics({ keyId, wasSuccess }) {
@@ -728,5 +802,6 @@ module.exports = {
   rotateCredential,
   revokeCredential,
   updateAudience,
+  updateScopes,
   recordUsageMetrics,
 };

@@ -2,8 +2,10 @@ const mongoose = require('mongoose');
 
 const SCOPES_ENUM = [
   'employees:read',
+  'employees:pii:read',
   'attendance-events:read',
   'attendance-daily:read',
+  'attendance-audit:read',
   'attendance-history:read',
 ];
 
@@ -177,3 +179,4 @@ integrationCredentialSchema.virtual('isExpired').get(function () {
 });
 
 module.exports = mongoose.model('IntegrationCredential', integrationCredentialSchema);
+module.exports.SCOPES_ENUM = SCOPES_ENUM;

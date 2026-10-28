@@ -35,8 +35,9 @@ describe('QR Utilities (HMAC-SHA256)', () => {
     it('should reject a QR code if the signature is altered (Tamper Test)', () => {
       const { payload } = generateOfficeQrPayload({ officeId: dummyOfficeId, validityMinutes: 5 });
       
-      // Tamper with the signature
-      payload.sig = 'a' + payload.sig.slice(1); 
+      // Tamper with the signature (flip first character to guarantee mismatch)
+      const firstChar = payload.sig[0] === 'a' ? 'b' : 'a';
+      payload.sig = firstChar + payload.sig.slice(1); 
       const tamperedQrString = JSON.stringify(payload);
       
       const verification = verifyOfficeQrPayload(tamperedQrString);

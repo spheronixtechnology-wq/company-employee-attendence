@@ -9,7 +9,7 @@ import {
   QrCode, Wifi, MapPin, Fingerprint, Settings, ScrollText,
   TrendingUp, LogOut, Menu, X, ChevronRight, BarChart3,
   UserCog, GitBranch, Building2, Smartphone, Monitor, Clock, UserCircle2,
-  ShieldAlert
+  ShieldAlert, KeyRound
 } from 'lucide-react';
 
 const navSections = [
@@ -43,6 +43,7 @@ const navSections = [
       { path: '/attendance-method', label: 'Attendance Method', icon: Settings, id: 'nav-method' },
       { path: '/wifi-settings', label: 'WiFi / IP Settings', icon: Wifi, id: 'nav-wifi' },
       { path: '/office-locations', label: 'Office Locations', icon: Building2, id: 'nav-locations' },
+      { path: '/integrations', label: 'Integrations', icon: KeyRound, id: 'nav-integrations' },
       { path: '/profile', label: 'My Profile', icon: UserCircle2, id: 'nav-profile' },
     ],
   },
@@ -237,6 +238,7 @@ export default function AdminLayout({ children }) {
               { path: '/device-requests', label: 'Devices', id: 'nav-md-devices' },
               { path: '/leave-requests', label: 'Leaves', id: 'nav-md-leaves' },
               { path: '/attendance-method', label: 'Settings', id: 'nav-md-settings' },
+              { path: '/integrations', label: 'Integrations', id: 'nav-md-integrations' },
             ].map((item) => {
               const active = location.pathname === item.path;
               return (

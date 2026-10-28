@@ -14,6 +14,7 @@ const {
   calcAttendanceStatus,
 } = require('../utils/dateUtils');
 const { autoSubmitMissingDailyLog } = require('../services/dailyLog.service');
+const { runDailyAbsentMarking, catchUpMissedAbsentRuns } = require('../services/attendanceAbsence.service');
 const { writeAuditLog } = require('../services/audit.service');
 const { emitToUser, emitToManagers, emitToTeam } = require('../socket');
 
@@ -479,6 +480,31 @@ const startPresenceMonitoringJob = () => {
 };
 
 /**
+ * Job 5: EOD Absence Marking
+ * Runs at 6:30 PM IST Mon-Fri (after the 6:00 PM shift-end auto-checkout).
+ * Writes `absent` / `leave` rows for employees with no attendance row so integration
+ * feeds carry explicit absences. Holidays are skipped inside runDailyAbsentMarking.
+ */
+const startDailyAbsentMarkingJob = () => {
+  cron.schedule('30 18 * * 1-5', async () => {
+    try {
+      const today = getTodayDateString('Asia/Kolkata');
+      const result = await runDailyAbsentMarking(today);
+      console.log('[CRON 6:30PM] Absence marking:', result);
+    } catch (err) {
+      console.error('[CRON 6:30PM] Absence marking failed:', err.message);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+
+  // Catch up recent working days whose run was missed (server asleep or down at 6:30 PM)
+  catchUpMissedAbsentRuns()
+    .then((dates) => dates.length && console.log('[startup] Absence marking caught up:', dates))
+    .catch((err) => console.error('[startup] Absence catch-up error:', err.message));
+
+  console.log('✅ EOD absence marking job scheduled (Mon-Fri at 6:30 PM IST)');
+};
+
+/**
  * Start all cron jobs.
  */
 const initCronJobs = () => {
@@ -487,6 +513,7 @@ const initCronJobs = () => {
   startAutoCheckoutJob();
   startTemporaryAccessCleanupJob();
   startPresenceMonitoringJob();
+  startDailyAbsentMarkingJob();
   console.log('✅ All cron jobs initialized.');
 };
 
@@ -499,4 +526,5 @@ module.exports = {
   runMidnightAutoCheckout,
   startTemporaryAccessCleanupJob,
   startPresenceMonitoringJob,
+  startDailyAbsentMarkingJob,
 };

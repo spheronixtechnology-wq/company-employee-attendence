@@ -25,6 +25,7 @@ const stepUpGrantSchema = new mongoose.Schema(
         'integration_key:rotate',
         'integration_key:revoke',
         'integration_key:update_audience',
+        'integration_key:update_scopes',
       ],
       required: true,
     },

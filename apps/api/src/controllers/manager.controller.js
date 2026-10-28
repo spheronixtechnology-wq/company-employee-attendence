@@ -678,7 +678,7 @@ const submitTeamMemberDailyLog = async (req, res) => {
 
     await Attendance.updateOne(
       { userId, date: logDate },
-      { $set: attUpdate },
+      { $set: attUpdate, $currentDate: { updatedAt: true } },
       { upsert: true }
     );
 
@@ -797,7 +797,7 @@ const updateTeamMemberDailyLog = async (req, res) => {
 
     await Attendance.updateOne(
       { userId: log.userId, date: log.logDate },
-      { $set: attUpdate },
+      { $set: attUpdate, $currentDate: { updatedAt: true } },
       { upsert: true }
     );
 
@@ -1168,6 +1168,7 @@ const handleManualAttendanceDecision = async (req, res) => {
       if (!attendance.checkInTime) {
         attendance.checkInTime = isToday ? now : new Date(`${request.requestDate}T09:30:00.000Z`);
       }
+      attendance.updatedAt = now;
       await attendance.save();
 
       await writeAuditLog({
@@ -1192,6 +1193,7 @@ const handleManualAttendanceDecision = async (req, res) => {
       // action === 'reject'
       if (attendance && attendance.status === 'manual_pending') {
         attendance.status = 'absent';
+        attendance.updatedAt = new Date();
         await attendance.save();
       }
 

@@ -14,6 +14,7 @@ import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import AdminOvertimePage from './pages/AdminOvertimePage';
 import SessionReactivationsPage from './pages/SessionReactivationsPage';
 import ProfilePage from './pages/ProfilePage';
+import IntegrationsPage from './pages/IntegrationsPage';
 import { Loader2, QrCode, Wifi, Smartphone, Fingerprint, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from './lib/api';
@@ -241,6 +242,7 @@ function AppRoutes() {
 
               <Route path="/device-requests" element={<DeviceRequestsPage />} />
               <Route path="/office-locations" element={<OfficeLocationsPage />} />
+              <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

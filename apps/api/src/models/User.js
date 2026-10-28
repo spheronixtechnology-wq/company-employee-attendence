@@ -154,5 +154,6 @@ userSchema.methods.toSafeObject = function () {
 userSchema.index({ role: 1, teamId: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ reportingManager: 1 });
+userSchema.index({ updatedAt: 1, _id: 1 });
 
 module.exports = mongoose.model('User', userSchema);

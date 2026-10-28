@@ -167,10 +167,10 @@ const submitDailyLog = async ({ user, logData, file }) => {
     throw err;
   }
 
-  // Update attendance dailyLogSubmitted cache
+  // Update attendance dailyLogSubmitted cache and bump updatedAt for instant API key sync
   await Attendance.updateOne(
     { userId: user._id, date: today },
-    { $set: { dailyLogSubmitted: true } }
+    { $set: { dailyLogSubmitted: true }, $currentDate: { updatedAt: true } }
   );
 
   return log;
@@ -293,10 +293,10 @@ const autoSubmitMissingDailyLog = async ({ user, attendance, logDate }) => {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  // Update attendance cache
+  // Update attendance cache and bump updatedAt for instant API key sync
   await Attendance.updateOne(
     { userId: user._id, date: logDate },
-    { $set: { dailyLogSubmitted: true } }
+    { $set: { dailyLogSubmitted: true }, $currentDate: { updatedAt: true } }
   );
 
   return log;

@@ -1,10 +1,179 @@
 const mongoose = require('mongoose');
 const Attendance = require('../models/Attendance');
+const DailyLog = require('../models/DailyLog');
 const User = require('../models/User');
+const Team = require('../models/Team');
 const { signCursor, verifyAndDecodeCursor } = require('../utils/cursorUtils');
 
 const VALID_EMPLOYEE_SCOPES = ['all', 'restricted'];
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes max future clock skew
+
+// employees:read. phone/gender/dob stay here because Frappe's Employee DocType requires
+// gender and date_of_birth, and existing connectors already map all three.
+const EMPLOYEE_STANDARD_FIELDS =
+  '_id employeeId name email companyEmail role phone department designation jobType workLocation officeBranch country teamShift teamId reportingManager gender dob joinedDate isActive deletedAt updatedAt';
+// employees:pii:read (additive)
+const EMPLOYEE_PII_FIELDS =
+  'middleName lastName currentAddress emergencyContactName emergencyContactRelation emergencyContactNumber avatarUrl';
+
+/**
+ * Shapes a populated User document into the /employees feed item.
+ * For restricted keys, a reporting manager outside the key's audience is reduced to { _id }
+ * so the feed never discloses the name or email of a non-permitted employee.
+ */
+function toEmployeeFeedItem(rec, { includePii, credential }) {
+  const allowedIds =
+    credential.employeeScope === 'restricted' ? new Set((credential.allowedEmployees || []).map(String)) : null;
+  const mgr = rec.reportingManager;
+
+  let reportingManager = null;
+  if (mgr) {
+    reportingManager =
+      allowedIds && !allowedIds.has(String(mgr._id))
+        ? { _id: mgr._id }
+        : { _id: mgr._id, employeeId: mgr.employeeId || null, name: mgr.name, email: mgr.email };
+  }
+
+  const item = {
+    _id: rec._id,
+    employeeId: rec.employeeId || null,
+    name: rec.name,
+    email: rec.email,
+    companyEmail: rec.companyEmail ?? null,
+    role: rec.role,
+    phone: rec.phone ?? null,
+    department: rec.department ?? null,
+    designation: rec.designation ?? null,
+    jobType: rec.jobType ?? null,
+    workLocation: rec.workLocation ?? null,
+    officeBranch: rec.officeBranch ?? null,
+    country: rec.country ?? null,
+    teamShift: rec.teamShift ?? null,
+    team: rec.teamId ? { _id: rec.teamId._id, name: rec.teamId.name } : null,
+    reportingManager,
+    gender: rec.gender ?? null,
+    dob: rec.dob ?? null,
+    joinedDate: rec.joinedDate ?? null,
+    isActive: rec.isActive,
+    deletedAt: rec.deletedAt ?? null,
+    updatedAt: rec.updatedAt,
+  };
+
+  if (includePii) {
+    item.middleName = rec.middleName ?? null;
+    item.lastName = rec.lastName ?? null;
+    item.currentAddress = rec.currentAddress ?? null;
+    item.emergencyContact = {
+      name: rec.emergencyContactName ?? null,
+      relation: rec.emergencyContactRelation ?? null,
+      phone: rec.emergencyContactNumber ?? null,
+    };
+    item.avatarUrl = rec.avatarUrl ?? null;
+  }
+
+  return item;
+}
+
+// attendance-daily:read
+const ATTENDANCE_STANDARD_FIELDS =
+  '_id userId date status checkInTime checkOutTime totalDurationMinutes totalBreakMinutes actualWorkMinutes dailyLogSubmitted autoCheckedOut leaveTypeName leaveFraction updatedAt';
+// attendance-audit:read (additive)
+const ATTENDANCE_AUDIT_FIELDS =
+  'checkInMethod checkInIp checkOutIp checkInLocation checkOutLocation distanceFromOffice geofenceStatus breaks';
+
+const formatWorkHours = (minutes) => {
+  const total = Math.max(0, Math.round(minutes || 0));
+  return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, '0')}m`;
+};
+
+const toLocation = (loc) =>
+  loc && typeof loc.lat === 'number' && typeof loc.lng === 'number'
+    ? { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy ?? null }
+    : null;
+
+const toBreak = (b) => ({
+  type: b.type,
+  startedAt: b.startedAt || null,
+  endedAt: b.endedAt || null,
+  // null while the break is still open
+  durationMinutes:
+    b.startedAt && b.endedAt
+      ? Math.max(0, Math.round((new Date(b.endedAt) - new Date(b.startedAt)) / 60000))
+      : null,
+});
+
+async function loadAttendanceContext(records) {
+  const withUser = records.filter((r) => r.userId);
+  if (withUser.length === 0) return { userMap: new Map(), dailyLogMap: new Map() };
+
+  const userIds = [...new Set(withUser.map((r) => String(r.userId)))];
+  const [users, logs] = await Promise.all([
+    User.find({ _id: { $in: userIds } })
+      .select('_id employeeId name department designation teamId')
+      .populate('teamId', 'name')
+      .lean(),
+    DailyLog.find({ $or: withUser.map((r) => ({ userId: r.userId, logDate: r.date })) })
+      .select('userId logDate hoursSpent projectName taskTitle blockers')
+      .lean(),
+  ]);
+
+  return {
+    userMap: new Map(users.map((u) => [String(u._id), u])),
+    dailyLogMap: new Map(logs.map((l) => [`${l.userId}_${l.logDate}`, l])),
+  };
+}
+
+/**
+ * Shapes an Attendance row into the /attendance feed item: employee context flattened beside a
+ * plain-string userId (existing connector mappings unchanged), daily log summary, and the
+ * forensic fields only when the key holds attendance-audit:read.
+ */
+function toAttendanceFeedItem(rec, { userMap, dailyLogMap, includeAudit }) {
+  const user = rec.userId ? userMap.get(String(rec.userId)) : null;
+  const log = rec.userId ? dailyLogMap.get(`${rec.userId}_${rec.date}`) : null;
+
+  const item = {
+    _id: rec._id,
+    userId: rec.userId ? String(rec.userId) : null,
+    employeeId: user?.employeeId || null,
+    employeeName: user?.name || null,
+    department: user?.department ?? null,
+    designation: user?.designation ?? null,
+    teamName: user?.teamId?.name || null,
+    date: rec.date,
+    status: rec.status,
+    checkInTime: rec.checkInTime || null,
+    checkOutTime: rec.checkOutTime || null,
+    totalDurationMinutes: rec.totalDurationMinutes ?? 0,
+    totalBreakMinutes: rec.totalBreakMinutes ?? 0,
+    actualWorkMinutes: rec.actualWorkMinutes ?? 0,
+    formattedWorkHours: formatWorkHours(rec.actualWorkMinutes),
+    leaveTypeName: rec.leaveTypeName ?? null,
+    leaveFraction: rec.leaveFraction ?? null,
+    dailyLog: {
+      submitted: Boolean(log) || Boolean(rec.dailyLogSubmitted),
+      hoursSpent: log?.hoursSpent ?? 0,
+      projectName: log?.projectName ?? null,
+      taskTitle: log?.taskTitle ?? null,
+      blockers: log?.blockers ?? null,
+    },
+    autoCheckedOut: Boolean(rec.autoCheckedOut),
+    updatedAt: rec.updatedAt,
+  };
+
+  if (includeAudit) {
+    item.checkInMethod = rec.checkInMethod ?? null;
+    item.checkInIp = rec.checkInIp ?? null;
+    item.checkOutIp = rec.checkOutIp ?? null;
+    item.checkInLocation = toLocation(rec.checkInLocation);
+    item.checkOutLocation = toLocation(rec.checkOutLocation);
+    item.distanceFromOffice = rec.distanceFromOffice ?? null;
+    item.geofenceStatus = rec.geofenceStatus ?? null;
+    item.breaks = (rec.breaks || []).map(toBreak);
+  }
+
+  return item;
+}
 
 /**
  * Validates or generates sync watermark and lower boundary parameters.
@@ -285,20 +454,24 @@ exports.getAttendanceFeed = async (req, res, next) => {
     });
 
     // 4. Query with deterministic compound index { updatedAt: 1, _id: 1 }
+    const includeAudit = req.integration.scopes.includes('attendance-audit:read');
     const records = await Attendance.find(filter)
       .sort({ updatedAt: 1, _id: 1 })
       .limit(limit + 1)
-      .select(
-        '_id userId date status checkInTime checkOutTime totalDurationMinutes totalBreakMinutes actualWorkMinutes autoCheckedOut updatedAt'
-      )
+      .select(includeAudit ? `${ATTENDANCE_STANDARD_FIELDS} ${ATTENDANCE_AUDIT_FIELDS}` : ATTENDANCE_STANDARD_FIELDS)
       .lean();
 
     const hasNextPage = records.length > limit;
-    const items = hasNextPage ? records.slice(0, limit) : records;
+    const pageRecords = hasNextPage ? records.slice(0, limit) : records;
+
+    // 5. Batch-load employee context and daily logs for this page (2 queries, no populate,
+    //    so userId survives even if the user document no longer exists)
+    const { userMap, dailyLogMap } = await loadAttendanceContext(pageRecords);
+    const items = pageRecords.map((rec) => toAttendanceFeedItem(rec, { userMap, dailyLogMap, includeAudit }));
 
     let nextCursor = null;
     if (hasNextPage) {
-      const lastItem = items[items.length - 1];
+      const lastItem = pageRecords[pageRecords.length - 1];
       nextCursor = signCursor(
         {
           keyId: tenantId,
@@ -371,20 +544,22 @@ exports.getEmployeesFeed = async (req, res, next) => {
     });
 
     // 4. Strict projection excluding passwords, tokens, and MFA secrets
+    const includePii = req.integration.scopes.includes('employees:pii:read');
     const records = await User.find(filter)
       .sort({ updatedAt: 1, _id: 1 })
       .limit(limit + 1)
-      .select(
-        '_id employeeId name email role phone department designation jobType workLocation gender dob joinedDate isActive deletedAt updatedAt'
-      )
+      .select(includePii ? `${EMPLOYEE_STANDARD_FIELDS} ${EMPLOYEE_PII_FIELDS}` : EMPLOYEE_STANDARD_FIELDS)
+      .populate('teamId', 'name')
+      .populate('reportingManager', 'employeeId name email')
       .lean();
 
     const hasNextPage = records.length > limit;
-    const items = hasNextPage ? records.slice(0, limit) : records;
+    const pageRecords = hasNextPage ? records.slice(0, limit) : records;
+    const items = pageRecords.map((rec) => toEmployeeFeedItem(rec, { includePii, credential: req.integration.credential }));
 
     let nextCursor = null;
     if (hasNextPage) {
-      const lastItem = items[items.length - 1];
+      const lastItem = pageRecords[pageRecords.length - 1];
       nextCursor = signCursor(
         {
           keyId: tenantId,

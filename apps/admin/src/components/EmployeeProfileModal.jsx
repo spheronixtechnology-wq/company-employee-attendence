@@ -19,7 +19,7 @@ const formatAuditTime = (d) => {
   }).toLowerCase();
 };
 
-export default function EmployeeProfileModal({ isOpen = true, memberId, onClose }) {
+export default function EmployeeProfileModal({ isOpen = true, memberId, onClose, onUpdate }) {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -59,9 +59,23 @@ export default function EmployeeProfileModal({ isOpen = true, memberId, onClose 
     setIdSubmitting(true);
     setIdError(null);
     try {
-      await api.patch(`/admin/users/${memberId}`, { employeeId: newEmployeeId });
+      const res = await api.patch(`/admin/users/${memberId}`, { employeeId: newEmployeeId });
+      const updatedUser = res.data?.data?.user;
+      const updatedId = updatedUser?.employeeId || newEmployeeId.trim();
+      setProfileData((prev) =>
+        prev
+          ? {
+              ...prev,
+              member: {
+                ...prev.member,
+                employeeId: updatedId,
+              },
+            }
+          : prev
+      );
       setIsEditingId(false);
       fetchProfile();
+      if (onUpdate) onUpdate();
     } catch (err) {
       setIdError(err.response?.data?.message || 'Failed to update Employee ID.');
     } finally {

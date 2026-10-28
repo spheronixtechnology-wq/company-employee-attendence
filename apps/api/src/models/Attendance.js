@@ -15,7 +15,7 @@ const attendanceSchema = new mongoose.Schema({
     enum: ['qr_code', 'wifi_ip', 'device_fingerprint', 'biometric', 'manual'],
     default: 'qr_code',
   },
-  checkInIp: {
+  checkInIp: {  
     type: String,
     default: null,
   },
@@ -74,6 +74,10 @@ const attendanceSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Approved leave context, set by the EOD absence job or retroactive leave approval
+  leaveRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeaveRequest', default: null },
+  leaveTypeName: { type: String, default: null },
+  leaveFraction: { type: Number, enum: [0.5, 1, null], default: null },
   distanceFromOffice: { type: Number, default: null },
   geofenceRadius: { type: Number, default: null },
   geofenceStatus: { type: String, enum: ['VERIFIED', 'UNCERTAIN', 'OUTSIDE'], default: null },
@@ -134,7 +138,32 @@ const attendanceSchema = new mongoose.Schema({
       timestamp: { type: Date, default: Date.now },
     },
   ],
+}, {
+  timestamps: true,
 });
+
+// Universal timestamp guarantee for all document mutations
+attendanceSchema.pre('save', function (next) {
+  this.updatedAt = new Date();
+  if (!this.createdAt) {
+    this.createdAt = this.updatedAt;
+  }
+  next();
+});
+
+// Universal timestamp guarantee for all query mutations (updateOne, updateMany, findOneAndUpdate, etc.)
+attendanceSchema.pre(['updateOne', 'updateMany', 'findOneAndUpdate', 'findByIdAndUpdate'], function (next) {
+  if (this.options && this.options.timestamps === false) {
+    return next();
+  }
+  this.set({ updatedAt: new Date() });
+  next();
+});
+
+// Deterministic compound index for integration cursor streaming & sync watermarks
+attendanceSchema.index({ updatedAt: 1, _id: 1 });
+// Compound index for employee date lookup and deduplication
+attendanceSchema.index({ userId: 1, date: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
 

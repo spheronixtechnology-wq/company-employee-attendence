@@ -9,6 +9,47 @@ import { useAuth } from '../contexts/AuthContext';
 import SyncHealthBadge from '../components/integrations/SyncHealthBadge';
 import EmployeeAudiencePicker from '../components/integrations/EmployeeAudiencePicker';
 
+// Shared by Create Key and Edit Scopes. `sensitive` scopes expose personal or forensic data.
+const SCOPE_OPTIONS = [
+  { id: 'employees:read', label: 'Employees: Read directory and metadata' },
+  { id: 'employees:pii:read', label: 'Employees PII: Address, emergency contact, full name, avatar', sensitive: true },
+  { id: 'attendance-daily:read', label: 'Attendance Daily: Read daily check-in logs' },
+  { id: 'attendance-audit:read', label: 'Attendance Audit: IPs, GPS, geofence, breaks', sensitive: true },
+  { id: 'attendance-history:read', label: 'Attendance History: Read historical records' },
+  { id: 'attendance-events:read', label: 'Attendance Events: Read live punch events' },
+];
+
+function ScopeCheckboxList({ scopes, onToggle }) {
+  return (
+    <div className="space-y-1.5 border border-slate-200 rounded-xl p-2.5 max-h-48 overflow-y-auto">
+      {SCOPE_OPTIONS.map((scope) => (
+        <label key={scope.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer p-1 rounded hover:bg-slate-50">
+          <input
+            type="checkbox"
+            checked={scopes.includes(scope.id)}
+            onChange={() => onToggle(scope.id)}
+            className="rounded text-violet-600 focus:ring-violet-500"
+          />
+          <span className="flex-1">{scope.label}</span>
+          {scope.sensitive && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+              <ShieldAlert size={10} />
+              Sensitive
+            </span>
+          )}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+const toggleScopeIn = (scopes, scopeId) => {
+  if (scopes.includes(scopeId)) {
+    return scopes.length === 1 ? scopes : scopes.filter((s) => s !== scopeId); // Keep at least one
+  }
+  return [...scopes, scopeId];
+};
+
 export default function IntegrationsPage() {
   const { user } = useAuth();
 
@@ -23,7 +64,7 @@ export default function IntegrationsPage() {
 
   // Modals & Flow States
   const [stepUpOpen, setStepUpOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null); // { type: 'create'|'rotate'|'revoke'|'update_audience', payload?: any }
+  const [pendingAction, setPendingAction] = useState(null); // { type: 'create'|'rotate'|'revoke'|'update_audience'|'update_scopes', payload?: any }
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [rotateModalOpen, setRotateModalOpen] = useState(false);
   const [targetRotateKey, setTargetRotateKey] = useState(null);
@@ -36,6 +77,7 @@ export default function IntegrationsPage() {
   const [rosterModalKey, setRosterModalKey] = useState(null);
   const [editAudienceKey, setEditAudienceKey] = useState(null);
   const [audienceModalOpen, setAudienceModalOpen] = useState(false);
+  const [editScopesKey, setEditScopesKey] = useState(null);
   const [pollIntervalKey, setPollIntervalKey] = useState(null);
   const [pollIntervalModalOpen, setPollIntervalModalOpen] = useState(false);
 
@@ -121,6 +163,12 @@ export default function IntegrationsPage() {
       }
     } else if (type === 'update_audience') {
       const ok = await executeUpdateAudience(payload, stepUpToken);
+      if (ok) {
+        setStepUpOpen(false);
+        setPendingAction(null);
+      }
+    } else if (type === 'update_scopes') {
+      const ok = await executeUpdateScopes(payload, stepUpToken);
       if (ok) {
         setStepUpOpen(false);
         setPendingAction(null);
@@ -212,6 +260,24 @@ export default function IntegrationsPage() {
       return true;
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update key audience.');
+      return false;
+    }
+  };
+
+  // Execution: Update Scopes
+  const executeUpdateScopes = async (payload, stepUpToken) => {
+    try {
+      const { keyId, scopes } = payload;
+      await api.put(
+        `/admin/integrations/keys/${keyId}/scopes`,
+        { scopes },
+        { headers: { 'X-Step-Up-Token': stepUpToken } }
+      );
+      setEditScopesKey(null);
+      await Promise.all([fetchKeys(), fetchSyncHealth()]);
+      return true;
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update key scopes.');
       return false;
     }
   };
@@ -420,15 +486,31 @@ export default function IntegrationsPage() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {k.scopes.map((s) => (
-                            <span
-                              key={s}
-                              className="bg-slate-100 text-slate-600 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        <div className="flex items-start gap-1.5">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {k.scopes.map((s) => (
+                              <span
+                                key={s}
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                  SCOPE_OPTIONS.find((o) => o.id === s)?.sensitive
+                                    ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                          {isActive && (
+                            <button
+                              type="button"
+                              onClick={() => setEditScopesKey(k)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors shrink-0"
+                              title="Edit permission scopes"
                             >
-                              {s}
-                            </span>
-                          ))}
+                              <Edit3 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -652,6 +734,17 @@ export default function IntegrationsPage() {
         />
       )}
 
+      {/* 4c-2. Edit Scopes Modal (z-50) */}
+      {editScopesKey && (
+        <EditScopesModal
+          keyRecord={editScopesKey}
+          onClose={() => setEditScopesKey(null)}
+          onSubmit={(scopes) =>
+            initiateActionWithStepUp('update_scopes', { keyId: editScopesKey.keyId, scopes })
+          }
+        />
+      )}
+
       {/* 4d. Configure Poll Interval Modal (z-50) */}
       {pollIntervalModalOpen && pollIntervalKey && (
         <ConfigurePollIntervalModal
@@ -845,21 +938,7 @@ function CreateKeyModal({ onClose, onSubmit }) {
     return () => { isMounted = false; };
   }, []);
 
-  const availableScopes = [
-    { id: 'employees:read', label: 'Employees: Read directory and metadata' },
-    { id: 'attendance-daily:read', label: 'Attendance Daily: Read daily check-in logs' },
-    { id: 'attendance-history:read', label: 'Attendance History: Read historical records' },
-    { id: 'attendance-events:read', label: 'Attendance Events: Read live punch events' },
-  ];
-
-  const handleToggleScope = (scopeId) => {
-    if (scopes.includes(scopeId)) {
-      if (scopes.length === 1) return; // Keep at least one
-      setScopes(scopes.filter((s) => s !== scopeId));
-    } else {
-      setScopes([...scopes, scopeId]);
-    }
-  };
+  const handleToggleScope = (scopeId) => setScopes(toggleScopeIn(scopes, scopeId));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -955,19 +1034,7 @@ function CreateKeyModal({ onClose, onSubmit }) {
           {/* Permission Scopes */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Permission Scopes</label>
-            <div className="space-y-1.5 border border-slate-200 rounded-xl p-2.5 max-h-36 overflow-y-auto">
-              {availableScopes.map((scope) => (
-                <label key={scope.id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer p-1 rounded hover:bg-slate-50">
-                  <input
-                    type="checkbox"
-                    checked={scopes.includes(scope.id)}
-                    onChange={() => handleToggleScope(scope.id)}
-                    className="rounded text-violet-600 focus:ring-violet-500"
-                  />
-                  <span>{scope.label}</span>
-                </label>
-              ))}
-            </div>
+            <ScopeCheckboxList scopes={scopes} onToggle={handleToggleScope} />
           </div>
 
           {/* Employee Audience Scope */}
@@ -1141,6 +1208,88 @@ function EditAudienceModal({ keyRecord, onClose, onSubmit }) {
               disabled={isSubmitDisabled}
               className={`px-4 py-2 text-xs font-semibold rounded-xl shadow-sm transition-all ${
                 isSubmitDisabled
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'text-white bg-violet-600 hover:bg-violet-700'
+              }`}
+            >
+              Verify Step-Up & Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * EditScopesModal: Changes an active key's permission scopes in place (same secret) under Step-Up protection
+ */
+function EditScopesModal({ keyRecord, onClose, onSubmit }) {
+  const [scopes, setScopes] = useState(keyRecord.scopes || []);
+
+  const unchanged =
+    scopes.length === keyRecord.scopes.length && scopes.every((s) => keyRecord.scopes.includes(s));
+  const addedSensitive = scopes.filter(
+    (s) => !keyRecord.scopes.includes(s) && SCOPE_OPTIONS.find((o) => o.id === s)?.sensitive
+  );
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (unchanged) return;
+    onSubmit(scopes);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2">
+            <Shield size={18} className="text-violet-600" />
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Edit Permission Scopes</h3>
+              <p className="font-mono text-xs text-slate-400">Key: {keyRecord.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4 overflow-y-auto pr-1 flex-1">
+          <div className="p-3 bg-violet-50/70 border border-violet-200/80 rounded-xl text-xs text-violet-900 flex items-start gap-2.5">
+            <Info size={16} className="text-violet-600 shrink-0 mt-0.5" />
+            <div>
+              Scope changes apply on the connector&apos;s next request. The key secret is unchanged, so nothing needs to be
+              reconfigured in Frappe HRMS.
+            </div>
+          </div>
+
+          <ScopeCheckboxList scopes={scopes} onToggle={(id) => setScopes(toggleScopeIn(scopes, id))} />
+
+          {addedSensitive.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+              <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Sensitive data: </span>
+                granting {addedSensitive.join(', ')} sends personal or location data to the external system holding this
+                key. Confirm it is covered by your data-processing agreement.
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={unchanged}
+              className={`px-4 py-2 text-xs font-semibold rounded-xl shadow-sm transition-all ${
+                unchanged
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   : 'text-white bg-violet-600 hover:bg-violet-700'
               }`}
