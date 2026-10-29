@@ -5,6 +5,7 @@ const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const { initCronJobs } = require('./src/jobs/allJobs');
 const { initSocket } = require('./src/socket');
+const { migrateAttendanceTimestamps } = require('./src/migrations/migrate_attendance_timestamps');
 
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
@@ -47,6 +48,7 @@ connectDB().then(() => {
   
   // Initialize cron jobs
   initCronJobs();
+  migrateAttendanceTimestamps().then(({ backfilledCount }) => { if (backfilledCount > 0) console.log(`[Migration] Backfilled timestamps for ${backfilledCount} legacy attendance records.`); }).catch(err => console.error('[Migration] Failed to run attendance timestamp migration:', err));
 }).catch((err) => {
   console.error('❌ Failed to start server:', err);
   process.exit(1);
