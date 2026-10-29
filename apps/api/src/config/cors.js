@@ -45,13 +45,13 @@ const corsOptions = {
     // Allow non-browser requests (mobile apps, Postman, curl, server-to-server)
     // In development mode, allow all origins to easily support mobile / network testing
     
-    // Original logic:
-    // if (!origin || allowed.includes(origin) || process.env.NODE_ENV === 'development') {
-    
     // Automatically accept the 'www.' version if the base domain is allowed
     const normalizedOrigin = origin ? origin.replace(/^https?:\/\/www\./, 'https://') : origin;
     
-    if (!origin || allowed.includes(origin) || allowed.includes(normalizedOrigin) || process.env.NODE_ENV === 'development') {
+    // Accept onrender.com preview and deployment origins for Spheronix services
+    const isRenderDomain = Boolean(origin && /^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin));
+
+    if (!origin || allowed.includes(origin) || allowed.includes(normalizedOrigin) || isRenderDomain || process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       callback(new Error(`CORS: Origin ${origin} not allowed.`));
@@ -65,7 +65,14 @@ const corsOptions = {
     'x-device-fingerprint',
     'x-portal-role',
     'x-device-token',
+    'x-step-up-token',
+    'X-Step-Up-Token',
+    'x-api-key',
+    'X-Api-Key',
+    'x-request-id',
+    'X-Request-Id',
   ],
+  exposedHeaders: ['X-Request-Id'],
 };
 
 module.exports = {
